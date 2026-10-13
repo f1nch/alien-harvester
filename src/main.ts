@@ -8,7 +8,7 @@ import type { CargoDrop } from "./domain/progress";
 import { UPGRADE_IDS } from "./content/upgrades";
 import { capAtTier, tableCostForLevels } from "./domain/economy";
 import { devCompleteActive } from "./domain/quests";
-import { buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
+import { buildStructure, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
 import { inBase } from "./game/systems/deposit";
@@ -92,6 +92,13 @@ async function boot(): Promise<void> {
         void save();
         // Stay open while more choices are queued.
         if (world.progress.pendingPerks.length === 0) setPerksOpen(false);
+      }
+    },
+    onBuildStructure: (kind) => {
+      if (!ready) return;
+      if (buildStructure(world, kind).ok) {
+        refreshHud();
+        void save();
       }
     },
     onToggleHand: () => {
@@ -280,6 +287,13 @@ async function boot(): Promise<void> {
           saveNow = true;
         } else if (e.type === "evolved") {
           hud.toast(`Evolved into ${FORM_NAMES[e.tier] ?? "a new form"}!`, 3.5);
+          saveNow = true;
+        } else if (e.type === "structureBuilt") {
+          const name = e.kind === "vat" ? "Biomass vat" : "Delivery drone";
+          hud.toast(e.level === 1 ? `${name} built` : `${name} upgraded to level ${e.level}`);
+          saveNow = true;
+        } else if (e.type === "droneDeposited") {
+          // The drone banked cargo: persist it like a player deposit.
           saveNow = true;
         } else if (e.type === "doorUnlocked" || e.type === "purchased") saveNow = true;
       }

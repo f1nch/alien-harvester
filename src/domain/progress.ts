@@ -3,11 +3,15 @@ import type { MapDef } from "../content/map";
 import type { PerkId } from "../content/perks";
 import type { TargetTypeId } from "../content/targets";
 import type { PerkChoice } from "./perks";
+import { newStructures, type StructuresState } from "./structures";
 import { UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
+
+/** Where a drop came from: a captured target, or a batch from the biomass vat. */
+export type DropType = TargetTypeId | "vat";
 
 /** A captured, not-yet-banked drop. Cargo is not a spendable wallet. */
 export interface CargoDrop {
-  type: TargetTypeId;
+  type: DropType;
   weight: number;
   reward: Reward;
 }
@@ -45,6 +49,8 @@ export interface ProgressState {
   perks: Partial<Record<PerkId, number>>;
   /** Level-up choices not yet made, oldest first. Options are fixed when rolled. */
   pendingPerks: PerkChoice[];
+  /** Built structures and helpers, including cargo the drone is carrying. */
+  structures: StructuresState;
 }
 
 export function newProgress(map: MapDef): ProgressState {
@@ -71,6 +77,7 @@ export function newProgress(map: MapDef): ProgressState {
     firstDeathForgiven: false,
     perks: {},
     pendingPerks: [],
+    structures: newStructures(map.base),
   };
 }
 

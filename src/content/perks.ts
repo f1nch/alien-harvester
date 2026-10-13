@@ -9,13 +9,14 @@ export type PerkId =
   | "regen"
   | "yield"
   | "biomassCache"
-  | "geneSample";
+  | "geneSample"
+  | "farm";
 
 export type PerkEffect =
   /** Percent bonus to a stat, added to other perks on the same stat (never compounded). */
   | { kind: "percent"; stat: "cargoCapacity" | "capturePower" | "moveSpeed" | "captureRadius" | "maxHealth"; percent: number }
   /** Flat bonus to a stat. */
-  | { kind: "flat"; stat: "regeneration" | "yieldPercent"; amount: number }
+  | { kind: "flat"; stat: "regeneration" | "yieldPercent" | "farmPercent"; amount: number }
   /** One-time grant, scaled by the level the choice was earned at. */
   | { kind: "grant"; currency: Currency; base: number; perLevel: number };
 
@@ -28,6 +29,8 @@ export interface PerkDef {
   maxStacks: number | null;
   /** Door that must be open before this perk can be offered. */
   requiresDoor?: string;
+  /** Only offered once the biomass vat is built. */
+  requiresVat?: boolean;
 }
 
 /** Persistent IDs: saves reference them. */
@@ -46,6 +49,7 @@ export const PERKS: Record<PerkId, PerkDef> = {
     effect: { kind: "grant", currency: "genetic", base: 5, perLevel: 3 }, maxStacks: null,
     requiresDoor: "door-service",
   },
+  farm: { id: "farm", name: "Fertile vats", icon: "⚗", effect: { kind: "flat", stat: "farmPercent", amount: 10 }, maxStacks: 3, requiresVat: true },
 };
 
 export const PERK_IDS = Object.keys(PERKS) as PerkId[];

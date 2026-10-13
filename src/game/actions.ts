@@ -4,9 +4,11 @@ import { unlockDoor, type UnlockResult } from "../domain/doors";
 import { purchaseUpgrade, respecUpgrades, type PurchaseResult, type RespecResult } from "../domain/economy";
 import { evolve, type EvolveResult } from "../domain/evolution";
 import { choosePerk, claimFallback, type ChooseResult } from "../domain/perks";
-import { dist2 } from "./geometry";
+import { VAT } from "../content/structures";
+import { advanceStructure, type StructureKind, type StructureResult } from "../domain/structures";
+import { dist2, resolveCircle } from "./geometry";
 import { inBase } from "./systems/deposit";
-import { questEvent, refreshObstacles, refreshStats, type World } from "./world";
+import { PLAYER_RADIUS, TARGET_RADIUS, questEvent, refreshObstacles, refreshStats, type World } from "./world";
 
 /** Player-initiated actions. Each applies its domain transaction, then quest and event bookkeeping. */
 
@@ -72,6 +74,27 @@ export function evolveCreature(w: World): EvolveResult {
   refreshStats(w);
   w.events.push({ type: "evolved", tier: r.tier });
   questEvent(w, { kind: "evolve" });
+  return r;
+}
+
+/** Build or upgrade a structure; one transaction, then obstacles, quests and events. */
+export function buildStructure(w: World, kind: StructureKind): StructureResult {
+  const r = advanceStructure(w.progress, kind);
+  if (!r.ok) return r;
+  if (kind === "drone" && r.built) {
+    // A new drone starts at the base.
+    const d = w.progress.structures.drone;
+    d.x = w.dronePrev.x = w.map.base.x;
+    d.z = w.dronePrev.z = w.map.base.z;
+  }
+  refreshObstacles(w);
+  // The vat's footprint may now cover a target or the player: push them clear.
+  resolveCircle(w.player, PLAYER_RADIUS, w.map.bounds, w.obstacles);
+  for (const target of w.targets) resolveCircle(target, TARGET_RADIUS, target.zoneRect, w.obstacles);
+  w.progress.player.x = w.player.x;
+  w.progress.player.z = w.player.z;
+  w.events.push({ type: "structureBuilt", kind, level: r.level });
+  if (r.built && kind === "vat") questEvent(w, { kind: "build", structure: VAT.id });
   return r;
 }
 

@@ -15,6 +15,8 @@ export interface PlayerStats {
   regeneration: number;
   /** Whole percent of each drop's reward that is banked (100 = no bonus). */
   yieldPercent: number;
+  /** Vat production speed multiplier (1 = base). */
+  farmRate: number;
 }
 
 /**
@@ -50,6 +52,7 @@ export function computeStats(p: ProgressState): PlayerStats {
     regeneration: v("regeneration") + perk.regeneration,
     // Applied only in the deposit system.
     yieldPercent: v("resourceYield") + perk.yieldPercent,
+    farmRate: (100 + perk.farmPercent) / 100,
   };
 }
 

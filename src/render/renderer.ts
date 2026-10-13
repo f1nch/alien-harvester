@@ -7,6 +7,7 @@ import { inBase } from "../game/systems/deposit";
 import type { GameEvent, World } from "../game/world";
 import { CreatureView } from "./creature";
 import { CrowdView } from "./crowd";
+import { StructuresView } from "./structures";
 import { buildEnvironment, updateDoors, type Environment } from "./environment";
 
 const CAMERA_OFFSET = new Vector3(0, 16, -11.5);
@@ -29,6 +30,7 @@ export class GameRenderer {
   private cameraZone: Rect;
   private creature: CreatureView;
   private crowd: CrowdView;
+  private structures: StructuresView;
   private env: Environment;
   private bars: Bar[] = [];
   private radiusRing: Mesh;
@@ -81,6 +83,7 @@ export class GameRenderer {
     this.glow?.addExcludedMesh(this.env.basePad);
     this.creature = new CreatureView(scene, shadows);
     this.crowd = new CrowdView(scene, shadows);
+    this.structures = new StructuresView(scene, shadows);
 
     const ringMat = new StandardMaterial("radiusMat", scene);
     ringMat.diffuseColor = Color3.Black();
@@ -163,6 +166,7 @@ export class GameRenderer {
     this.creaturePos.set(x, 0, z);
 
     this.crowd.update(dt, w.targets, alpha, this.creaturePos);
+    this.structures.update(w, alpha, dt);
 
     this.goals.length = w.tentacles.length;
     w.tentacles.forEach((t, i) => {

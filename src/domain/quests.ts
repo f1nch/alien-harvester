@@ -98,6 +98,8 @@ function stateGoalHolds(p: ProgressState, q: QuestDef): boolean {
   switch (q.goal.kind) {
     case "unlockDoor":
       return p.unlockedDoors.includes(q.goal.door);
+    case "build":
+      return q.goal.structure === "vat" && p.structures.vat.built;
     case "evolve":
       // Repairs saves that evolved without the quest being active (e.g. after content changes).
       return p.evolution >= q.goal.count;

@@ -4,6 +4,8 @@ import { UPGRADES, UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 import { doorRequirements } from "../domain/doors";
 import { FORM_NAMES } from "../content/evolution";
 import { CHOICES_PER_LEVEL, PERKS } from "../content/perks";
+import { DRONE, VAT } from "../content/structures";
+import { droneCapacity, nextStep, stepRequirements, vatLevel, type StructureKind } from "../domain/structures";
 import { describePerk, isLegal, perkStacks } from "../domain/perks";
 import { CURRENCY_LABEL, type Currency } from "../content/currencies";
 import { cappedByEvolution, maxLevel, nextCost, upgradeValue } from "../domain/economy";
@@ -26,6 +28,12 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return e;
 }
 
+/** Only values the structures UI shows; never the vat timer or drone position, which change every tick. */
+function structureKey(w: World): string {
+  const { vat, drone } = w.progress.structures;
+  return [vat.built, vat.level, vat.stock, drone.built, drone.level, cargoWeight(drone.cargo), w.droneMode, w.stats.farmRate].join(",");
+}
+
 function chip(icon: string, iconCls: string, label: string): { root: HTMLElement; value: HTMLElement } {
   const root = el("div", "chip");
   root.setAttribute("aria-label", label);
@@ -43,6 +51,7 @@ export interface HudCallbacks {
   onUnlockDoor(door: DoorDef): void;
   onEvolve(): void;
   onRespec(): void;
+  onBuildStructure(kind: StructureKind): void;
   onOpenPerks(): void;
   onClosePerks(): void;
   /** Pick an option of the pending choice for `level`, or the fallback. */
@@ -106,6 +115,8 @@ export class Hud {
   private evoDesc: HTMLElement;
   private evoList: HTMLElement;
   private evoBtn: HTMLButtonElement;
+  private structureRows = new Map<StructureKind, { status: HTMLElement; reqs: HTMLElement; btn: HTMLButtonElement }>();
+  private droneStatus: HTMLElement;
   private respecBtn: HTMLButtonElement;
   private respecArmedAt = 0;
   private respecArmedUntil = 0;
@@ -164,7 +175,8 @@ export class Hud {
     this.quests = el("div", "quests");
     this.quests.setAttribute("aria-live", "polite");
     this.hint = el("div", "hint");
-    sub.append(this.quests, this.hint);
+    this.droneStatus = el("div", "drone-status hidden");
+    sub.append(this.quests, this.hint, this.droneStatus);
     top.append(sub);
 
     this.doorCard = el("div", "door-card hidden");
@@ -237,6 +249,23 @@ export class Hud {
     this.evoBtn.addEventListener("click", () => cb.onEvolve());
     evo.append(evoHead, this.evoNext, this.evoDesc, this.evoList, this.evoBtn);
     card.append(evo);
+
+    // Structures: build and upgrade the vat and the drone.
+    const structures = el("section", "structures");
+    structures.setAttribute("aria-label", "Structures");
+    structures.append(el("h3", undefined, "Structures"));
+    for (const kind of ["vat", "drone"] as const) {
+      const row = el("div", "structure-row");
+      const name = el("div", "up-name", kind === "vat" ? VAT.name : DRONE.name);
+      const status = el("div", "up-value");
+      const reqs = el("ul", "door-reqs");
+      const btn = el("button", "btn btn-buy");
+      btn.addEventListener("click", () => cb.onBuildStructure(kind));
+      row.append(name, status, reqs, btn);
+      structures.append(row);
+      this.structureRows.set(kind, { status, reqs, btn });
+    }
+    card.append(structures);
 
     // Free respec, two-tap confirm, only at base.
     const respec = el("section", "respec");
@@ -341,7 +370,7 @@ export class Hud {
     const cap = w.stats.cargoCapacity;
     const key = [
       p.banked.biomass, p.banked.genetic, p.xp, cargo, cap, s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
-      this.upgradesOpen, this.perksOpen, JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
+      this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
     if (key === this.last) return;
     this.last = key;
@@ -369,6 +398,7 @@ export class Hud {
     this.cargoBox.classList.toggle("full", w.cargoFull);
 
     this.renderQuests(w);
+    this.renderStructures(w);
     this.renderPerks(w);
     this.renderDoor(w, s.door);
 
@@ -430,6 +460,48 @@ export class Hud {
     // A double-tap must not land on the next queued choice's freshly rendered cards.
     if (performance.now() - this.perkShownAt < 350) return;
     this.perkCb.onPickPerk(this.perkShownLevel, option);
+  }
+
+  private renderStructures(w: World): void {
+    const p = w.progress;
+    for (const kind of ["vat", "drone"] as const) {
+      const row = this.structureRows.get(kind)!;
+      const s = p.structures[kind];
+      if (kind === "vat") {
+        const v = p.structures.vat;
+        const lvl = vatLevel(v);
+        row.status.textContent = v.built
+          ? `Level ${v.level} · ${v.stock}/${lvl.storage} batches · one every ${fmt(lvl.batchSeconds / w.stats.farmRate)}s`
+          : "Not built. Produces biomass batches in the service wing while you play.";
+      } else {
+        const d = p.structures.drone;
+        row.status.textContent = d.built
+          ? `Level ${d.level} · carries ${droneCapacity(d)}`
+          : "Not built. Ferries your cargo back to base, and collects from the vat.";
+      }
+      const next = nextStep(p, kind);
+      if (!next) {
+        row.reqs.replaceChildren();
+        row.btn.textContent = "Max level";
+        row.btn.disabled = true;
+        continue;
+      }
+      const reqs = stepRequirements(p, kind);
+      requirementList(row.reqs, reqs);
+      const ok = reqs.every((r) => r.met);
+      row.btn.disabled = !ok;
+      row.btn.textContent = s.built ? `Upgrade to level ${s.level + 1}` : "Build";
+      const name = kind === "vat" ? VAT.name : DRONE.name;
+      row.btn.setAttribute("aria-label", s.built ? `Upgrade ${name} to level ${s.level + 1}` : `Build ${name}`);
+    }
+
+    const d = p.structures.drone;
+    this.droneStatus.classList.toggle("hidden", !d.built);
+    if (d.built) {
+      const load = `${fmt(cargoWeight(d.cargo))}/${droneCapacity(d)}`;
+      const label = { idle: "waiting at base", toPlayer: "coming to you", toVat: "collecting from the vat", toBase: "delivering" }[w.droneMode];
+      this.droneStatus.textContent = `Drone: ${label} (${load})`;
+    }
   }
 
   private renderPerks(w: World): void {

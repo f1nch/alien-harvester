@@ -1,5 +1,8 @@
 import { zoneAt, type MapDef, type Rect } from "../content/map";
 import type { PerkId } from "../content/perks";
+import { VAT } from "../content/structures";
+import type { StructureKind } from "../domain/structures";
+import type { DroneMode } from "./systems/structures";
 import type { QuestDef } from "../content/quests";
 import { TARGETS, type TargetDef } from "../content/targets";
 import { computeStats, type PlayerStats } from "../domain/economy";
@@ -58,6 +61,9 @@ export type GameEvent =
   | { type: "doorUnlocked"; door: string }
   | { type: "evolved"; tier: number }
   | { type: "perkChosen"; perk: PerkId }
+  | { type: "structureBuilt"; kind: StructureKind; level: number }
+  | { type: "droneLoaded" }
+  | { type: "droneDeposited" }
   | { type: "playerHit"; damage: number; by: TargetEntity }
   | { type: "strike"; by: TargetEntity; hit: boolean }
   | { type: "died"; lost: CargoDrop[]; forgiven: boolean };
@@ -66,8 +72,16 @@ export interface World {
   map: MapDef;
   progress: ProgressState;
   stats: PlayerStats;
-  /** Walls, props, and locked doors. Rebuilt when a door opens. */
+  /** Walls, props, locked doors, and built structures. Rebuilt when any of those change. */
   obstacles: Rect[];
+  /** What the hovering drone collides with: walls and locked doors only. */
+  droneObstacles: Rect[];
+  vatCollectTimer: number;
+  droneMode: DroneMode;
+  /** Cargo units the drone may still move this transfer. */
+  droneBudget: number;
+  /** Drone position at the start of the tick, for render interpolation. */
+  dronePrev: { x: number; z: number };
   player: {
     x: number; z: number; prevX: number; prevZ: number; vx: number; vz: number;
     /** Seconds of post-respawn invulnerability remaining. */
@@ -97,6 +111,11 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
     progress,
     stats: computeStats(progress),
     obstacles: [],
+    droneObstacles: [],
+    vatCollectTimer: 0,
+    droneMode: "idle",
+    droneBudget: 0,
+    dronePrev: { x: progress.structures.drone.x, z: progress.structures.drone.z },
     player: {
       x: progress.player.x, z: progress.player.z,
       prevX: progress.player.x, prevZ: progress.player.z, vx: 0, vz: 0,
@@ -128,11 +147,15 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
 
 export function refreshObstacles(w: World): void {
   const open = new Set(w.progress.unlockedDoors);
-  w.obstacles = [
-    ...w.map.walls,
-    ...w.map.props,
-    ...w.map.doors.filter((d) => !open.has(d.id)).map((d) => d.rect),
-  ];
+  const lockedDoors = w.map.doors.filter((d) => !open.has(d.id)).map((d) => d.rect);
+  const built: Rect[] = [];
+  if (w.progress.structures.vat.built) {
+    const { x, z } = VAT.site;
+    const h = VAT.halfSize;
+    built.push({ minX: x - h, maxX: x + h, minZ: z - h, maxZ: z + h });
+  }
+  w.obstacles = [...w.map.walls, ...w.map.props, ...built, ...lockedDoors];
+  w.droneObstacles = [...w.map.walls, ...lockedDoors];
 }
 
 export function spawnTarget(w: World, spawnId: string): TargetEntity | null {

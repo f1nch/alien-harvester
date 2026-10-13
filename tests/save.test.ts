@@ -23,7 +23,20 @@ describe("save schema", () => {
   });
 
   it("contains no wall-clock timestamps", () => {
-    expect(JSON.stringify(valid())).not.toMatch(/time|date|at"/i);
+    // Durations are stored as remaining seconds; nothing records when something happened.
+    const keys: string[] = [];
+    const nums: number[] = [];
+    const walk = (v: unknown, key = ""): void => {
+      if (typeof v === "number") nums.push(v);
+      else if (Array.isArray(v)) v.forEach((x) => walk(x));
+      else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { keys.push(k); walk(x, k); }
+      void key;
+    };
+    walk(valid());
+    // camelCase "...At" is case-sensitive so words like "vat" don't match.
+    expect(keys.filter((k) => /timestamp|date|lastseen/i.test(k) || /At$|^at$/.test(k))).toEqual([]);
+    // Epoch milliseconds or seconds would be enormous next to any game value.
+    expect(nums.every((n) => Math.abs(n) < 1e8)).toBe(true);
   });
 
   it.each([

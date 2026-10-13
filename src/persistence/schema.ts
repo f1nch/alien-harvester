@@ -9,10 +9,12 @@ import { CHOICES_PER_LEVEL, isPerkId, PERKS } from "../content/perks";
 import { capAtTier, computeStats, tableCostForLevels } from "../domain/economy";
 import { levelForXp } from "../domain/levels";
 import { queuePerkChoices } from "../domain/perks";
+import { droneCapacity, vatBatchDrop, vatLevel } from "../domain/structures";
+import { DRONE, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 export const CONTENT_VERSION = 1;
 
 export interface Settings {
@@ -91,9 +93,23 @@ function migrate(raw: Obj): Obj | null {
     const progress = isObj(m.progress) ? { ...m.progress, perks: {}, pendingPerks: [] } : m.progress;
     m = { ...m, schemaVersion: 6, progress };
   }
+  if (m.schemaVersion === 6) {
+    // v7 adds structures (vat, drone); nothing is built yet.
+    const progress = isObj(m.progress) ? { ...m.progress, structures: null } : m.progress;
+    m = { ...m, schemaVersion: 7, progress };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
+
+/** Rebuild a cargo drop from content definitions rather than trusting stored numbers. */
+function parseDrop(d: unknown): CargoDrop | null {
+  if (!isObj(d)) return null;
+  if (d.type === "vat") return vatBatchDrop();
+  if (!isTargetType(d.type)) return null;
+  const def = TARGETS[d.type];
+  return { type: def.id, weight: def.weight, reward: { ...def.reward } };
+}
 
 /**
  * Validate an untrusted save (from storage or an import). Returns null if it
@@ -158,13 +174,14 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   const cargo: CargoDrop[] = [];
   let weight = 0;
   for (const d of p.cargo) {
-    if (!isObj(d) || !isTargetType(d.type)) return null;
-    const def = TARGETS[d.type];
-    if (weight + def.weight > capacity) break;
-    weight += def.weight;
-    cargo.push({ type: def.id, weight: def.weight, reward: { ...def.reward } });
+    const drop = parseDrop(d);
+    if (!drop) return null;
+    if (weight + drop.weight > capacity) break;
+    weight += drop.weight;
+    cargo.push(drop);
   }
   progress.cargo = cargo;
+
 
   if (!isObj(p.player) || !isNum(p.player.x) || !isNum(p.player.z) || !isNonNeg(p.player.health)) return null;
   const b = room.bounds;
@@ -200,6 +217,45 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   if (!zone || !reachableZones(room, progress.unlockedDoors).has(zone.id)) {
     progress.player.x = room.playerSpawn.x;
     progress.player.z = room.playerSpawn.z;
+  }
+
+  // After doors are parsed: the drone's position is checked against reachable zones.
+  // Structures. A null value (fresh from the v6 migration) means nothing is built.
+  if (p.structures !== null) {
+    if (!isObj(p.structures) || !isObj(p.structures.vat) || !isObj(p.structures.drone)) return null;
+    const v = p.structures.vat;
+    if (typeof v.built !== "boolean" || !Number.isInteger(v.level) || !isNonNeg(v.stock) || !isNonNeg(v.timer)) return null;
+    const vat = progress.structures.vat;
+    vat.built = v.built;
+    vat.level = v.built ? Math.min(Math.max(1, v.level as number), VAT.levels.length) : 0;
+    if (vat.built) {
+      const lvl = vatLevel(vat);
+      vat.stock = Math.min(Math.floor(v.stock as number), lvl.storage);
+      vat.timer = Math.min(v.timer as number, lvl.batchSeconds);
+    }
+
+    const dr = p.structures.drone;
+    if (typeof dr.built !== "boolean" || !Number.isInteger(dr.level) || !isNum(dr.x) || !isNum(dr.z) || !Array.isArray(dr.cargo)) return null;
+    const drone = progress.structures.drone;
+    drone.built = dr.built;
+    drone.level = dr.built ? Math.min(Math.max(1, dr.level as number), DRONE.levels.length) : 0;
+    // Cargo in transit is kept (rebuilt from content), up to the drone's capacity.
+    if (drone.built) {
+      const cap = droneCapacity(drone);
+      let load = 0;
+      for (const d of dr.cargo) {
+        const drop = parseDrop(d);
+        if (!drop) return null;
+        if (load + drop.weight > cap) break;
+        load += drop.weight;
+        drone.cargo.push(drop);
+      }
+      const dz = zoneAtOrDoorway(room, dr.x as number, dr.z as number, progress.unlockedDoors);
+      if (dz && reachableZones(room, progress.unlockedDoors).has(dz.id)) {
+        drone.x = dr.x as number;
+        drone.z = dr.z as number;
+      }
+    }
   }
 
   if (!isObj(p.spawnCooldowns)) return null;

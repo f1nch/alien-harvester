@@ -16,6 +16,7 @@ export function perkStacks(p: ProgressState, id: PerkId): number {
 export function isLegal(p: ProgressState, id: PerkId): boolean {
   const def = PERKS[id];
   if (def.requiresDoor && !p.unlockedDoors.includes(def.requiresDoor)) return false;
+  if (def.requiresVat && !p.structures.vat.built) return false;
   return def.maxStacks === null || perkStacks(p, id) < def.maxStacks;
 }
 
@@ -50,7 +51,9 @@ export function describePerk(def: PerkDef, level: number): string {
       return `+${e.percent}% ${stat}`;
     }
     case "flat":
-      return e.stat === "regeneration" ? `+${e.amount} health/s regeneration` : `+${e.amount}% resource yield`;
+      if (e.stat === "regeneration") return `+${e.amount} health/s regeneration`;
+      if (e.stat === "farmPercent") return `+${e.amount}% vat production`;
+      return `+${e.amount}% resource yield`;
     case "grant":
       return `Gain ${grantAmount(def, level)} ${CURRENCY_LABEL[e.currency].toLowerCase()} now`;
   }
@@ -103,11 +106,13 @@ export function perkBonuses(p: ProgressState): {
   percent: Record<"cargoCapacity" | "capturePower" | "moveSpeed" | "captureRadius" | "maxHealth", number>;
   regeneration: number;
   yieldPercent: number;
+  farmPercent: number;
 } {
   const out = {
     percent: { cargoCapacity: 0, capturePower: 0, moveSpeed: 0, captureRadius: 0, maxHealth: 0 },
     regeneration: 0,
     yieldPercent: 0,
+    farmPercent: 0,
   };
   for (const id of PERK_IDS) {
     const n = perkStacks(p, id);
