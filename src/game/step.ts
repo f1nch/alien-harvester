@@ -9,6 +9,7 @@ import { SIM_DT, type World } from "./world";
 /** One fixed simulation tick. The only place game time advances. */
 export function stepWorld(w: World, dt = SIM_DT): void {
   w.tick++;
+  w.progress.playSeconds += dt;
   updatePlayer(w, dt);
   updateTargets(w, dt);
   updateSpawns(w, dt);

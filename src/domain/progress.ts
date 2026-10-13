@@ -51,6 +51,10 @@ export interface ProgressState {
   pendingPerks: PerkChoice[];
   /** Built structures and helpers, including cargo the drone is carrying. */
   structures: StructuresState;
+  /** The completion condition; play continues freely afterwards. */
+  reactorRepaired: boolean;
+  /** Total simulated play time in seconds (never wall-clock), for the completion screen. */
+  playSeconds: number;
 }
 
 export function newProgress(map: MapDef): ProgressState {
@@ -78,6 +82,8 @@ export function newProgress(map: MapDef): ProgressState {
     perks: {},
     pendingPerks: [],
     structures: newStructures(map.base),
+    reactorRepaired: false,
+    playSeconds: 0,
   };
 }
 

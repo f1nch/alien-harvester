@@ -174,9 +174,10 @@ export class GameRenderer {
       const out = this.goalStore[i]!;
       this.goals[i] = t ? this.crowd.grabPoint(t.id, out) : null;
       if (!bar) return;
-      if (t && this.goals[i]) {
+      // A target held by several tentacles shows one bar, at its first slot.
+      if (t && this.goals[i] && w.tentacles.indexOf(t) === i) {
         bar.bg.setEnabled(true);
-        bar.bg.position.set(out.x, 2.0, out.z);
+        bar.bg.position.set(out.x, t.def.behavior === "boss" ? 3.6 : 2.0, out.z);
         const k = Math.max(0, Math.min(1, t.progress));
         bar.fill.scaling.x = Math.max(0.001, k);
         bar.fill.position.x = -(1 - k) * 0.38;

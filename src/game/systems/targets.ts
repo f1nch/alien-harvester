@@ -1,5 +1,6 @@
 import { hasLineOfSight, resolveCircle } from "../geometry";
 import { spawnTarget, TARGET_RADIUS, type World } from "../world";
+import { updateBoss } from "./boss";
 import { updateGuard } from "./combat";
 import { pickGoal, wanderStep } from "./wander";
 
@@ -12,6 +13,10 @@ export function updateTargets(w: World, dt: number): void {
     // Guards keep thinking while held: they can't move, but they can still strike.
     if (t.def.behavior === "guard") {
       updateGuard(w, t, dt);
+      continue;
+    }
+    if (t.def.behavior === "boss") {
+      updateBoss(w, t, dt);
       continue;
     }
     if (t.held) {

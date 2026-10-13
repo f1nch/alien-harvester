@@ -4,15 +4,18 @@ import type { UpgradeId } from "./content/upgrades";
 import { newProgress } from "./domain/progress";
 import { CURRENCIES, CURRENCY_LABEL, emptyWallet } from "./content/currencies";
 import { FORM_NAMES } from "./content/evolution";
+import { pointInRect } from "./game/geometry";
+import { QUESTS } from "./content/quests";
+import { levelForXp } from "./domain/levels";
 import type { CargoDrop } from "./domain/progress";
 import { UPGRADE_IDS } from "./content/upgrades";
 import { capAtTier, tableCostForLevels } from "./domain/economy";
 import { devCompleteActive } from "./domain/quests";
-import { buildStructure, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
+import { buildStructure, nearReactor, repair, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
 import { inBase } from "./game/systems/deposit";
-import { createWorld, gainXp, pushQuestOutcome, refreshStats, SIM_HZ, type World } from "./game/world";
+import { createWorld, gainXp, pushQuestOutcome, refreshStats, SIM_HZ, type TargetEntity, type World } from "./game/world";
 import { defaultSettings, toSaveFile, type Settings } from "./persistence/schema";
 import { acquireActiveTabLock, SaveStore } from "./persistence/store";
 import { GameRenderer } from "./render/renderer";
@@ -20,6 +23,14 @@ import { Hud } from "./ui/hud";
 import { InputController } from "./ui/input";
 
 const AUTOSAVE_TICKS = SIM_HZ * 10;
+
+/** The warden, if the player is in its hall and it's alive (drives the boss bar). */
+function engagedBoss(w: World): TargetEntity | null {
+  const boss = w.targets.find((t) => t.def.behavior === "boss");
+  if (!boss) return null;
+  if (boss.held) return boss;
+  return pointInRect(w.player.x, w.player.z, boss.zoneRect, 4.5) ? boss : null;
+}
 
 /** Tells the player exactly what a death cost them. */
 function deathMessage(forgiven: boolean, lost: readonly CargoDrop[]): string {
@@ -100,6 +111,18 @@ async function boot(): Promise<void> {
         refreshHud();
         void save();
       }
+    },
+    onRepair: () => {
+      if (!ready) return;
+      if (repair(world).ok) {
+        refreshHud();
+        void save();
+      }
+    },
+    onCloseCompletion: () => {
+      if (!ready) return;
+      hud.showCompletion(null);
+      loop.resume("completion");
     },
     onToggleHand: () => {
       if (!ready) return;
@@ -189,7 +212,27 @@ async function boot(): Promise<void> {
   }
 
   function refreshHud(): void {
-    hud.update(world, { inBase: inBase(world), door: nearbyLockedDoor(world), respecBlocker: respecBlocker(world) });
+    hud.update(world, {
+      inBase: inBase(world),
+      door: nearbyLockedDoor(world),
+      respecBlocker: respecBlocker(world),
+      boss: engagedBoss(world),
+      atReactor: nearReactor(world),
+    });
+  }
+
+  function showCompletion(): void {
+    const p = world.progress;
+    loop.pause("completion");
+    input.reset();
+    hud.showCompletion({
+      level: levelForXp(p.xp),
+      form: FORM_NAMES[p.evolution] ?? "Unknown",
+      playSeconds: p.playSeconds,
+      questsDone: QUESTS.filter((q) => p.quests[q.id]?.done).length,
+      questsTotal: QUESTS.length,
+      perksTaken: Object.values(p.perks).reduce((a, n) => a + (n ?? 0), 0),
+    });
   }
 
   function applySettings(): void {
@@ -287,6 +330,12 @@ async function boot(): Promise<void> {
           saveNow = true;
         } else if (e.type === "evolved") {
           hud.toast(`Evolved into ${FORM_NAMES[e.tier] ?? "a new form"}!`, 3.5);
+          saveNow = true;
+        } else if (e.type === "bossDefeated") {
+          hud.toast("The reactor warden is down! Bank its parts and repair the reactor.", 4);
+          saveNow = true;
+        } else if (e.type === "reactorRepaired") {
+          showCompletion();
           saveNow = true;
         } else if (e.type === "structureBuilt") {
           const name = e.kind === "vat" ? "Biomass vat" : "Delivery drone";

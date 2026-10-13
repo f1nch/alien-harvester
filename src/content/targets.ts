@@ -1,8 +1,8 @@
 import type { Reward } from "./currencies";
 
-export type TargetTypeId = "worker" | "runner" | "technician" | "guard" | "armoredGuard";
+export type TargetTypeId = "worker" | "runner" | "technician" | "guard" | "armoredGuard" | "boss";
 
-export type TargetBehavior = "wander" | "flee" | "guard";
+export type TargetBehavior = "wander" | "flee" | "guard" | "boss";
 
 /** Hostile behaviour tuning. Attacks are telegraphed: windup, then a strike that only lands if the player is still in range. */
 export interface CombatDef {
@@ -37,6 +37,10 @@ export interface TargetDef {
   /** Distance at which a fleeing target notices the player. */
   fleeRadius?: number;
   combat?: CombatDef;
+  /** Several tentacles may hold it at once, stacking their capture power. */
+  multiGrab?: boolean;
+  /** Seconds for full capture progress to decay once out of reach (default 1). */
+  captureDecaySeconds?: number;
   respawnSeconds: number;
 }
 
@@ -117,6 +121,21 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       heldCreepSpeed: 0.25,
     },
     respawnSeconds: 22,
+  },
+  // The reactor warden. Weightless so it never competes for cargo space; one kill is
+  // enough for progression, and it returns after a while for optional farming.
+  boss: {
+    id: "boss",
+    name: "Reactor warden",
+    behavior: "boss",
+    resistance: 900,
+    weight: 0,
+    reward: { parts: 5, biomass: 120, genetic: 10 },
+    xp: 400,
+    speed: 1.1,
+    multiGrab: true,
+    captureDecaySeconds: 20,
+    respawnSeconds: 180,
   },
 };
 

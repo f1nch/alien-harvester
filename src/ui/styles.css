@@ -410,3 +410,31 @@ html, body {
   color: var(--muted);
   align-self: flex-start;
 }
+
+/* Boss bar, reactor card, completion */
+.boss-bar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top) + 196px);
+  width: min(320px, calc(100% - 24px));
+  background: var(--panel);
+  border: 1px solid #ff6a3d;
+  border-radius: 12px;
+  padding: 6px 10px;
+  pointer-events: none !important;
+}
+.boss-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+.boss-name { font-weight: 700; }
+.boss-state { color: var(--muted); font-variant-numeric: tabular-nums; }
+.boss-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--violet), var(--accent)); }
+.boss-bar.stunned { border-color: var(--accent); }
+.boss-bar.stunned .boss-state { color: var(--accent); font-weight: 700; }
+.boss-bar.danger .boss-state { color: #ff8a6a; font-weight: 700; }
+.reactor-card { border-color: #ff6a3d; }
+.completion { align-items: center; z-index: 8; }
+.completion h2 { margin: 0; font-size: 24px; }
+.completion-stats { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 12px 0 16px; }
+.completion-stats dt { color: var(--muted); }
+.completion-stats dd { margin: 0; font-weight: 700; text-align: right; }
+.completion .btn { width: 100%; }

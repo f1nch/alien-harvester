@@ -4,7 +4,9 @@ import { unlockDoor, type UnlockResult } from "../domain/doors";
 import { purchaseUpgrade, respecUpgrades, type PurchaseResult, type RespecResult } from "../domain/economy";
 import { evolve, type EvolveResult } from "../domain/evolution";
 import { choosePerk, claimFallback, type ChooseResult } from "../domain/perks";
+import { REACTOR } from "../content/reactor";
 import { VAT } from "../content/structures";
+import { repairReactor, type RepairResult } from "../domain/reactor";
 import { advanceStructure, type StructureKind, type StructureResult } from "../domain/structures";
 import { dist2, resolveCircle } from "./geometry";
 import { inBase } from "./systems/deposit";
@@ -95,6 +97,17 @@ export function buildStructure(w: World, kind: StructureKind): StructureResult {
   w.progress.player.z = w.player.z;
   w.events.push({ type: "structureBuilt", kind, level: r.level });
   if (r.built && kind === "vat") questEvent(w, { kind: "build", structure: VAT.id });
+  return r;
+}
+
+export function nearReactor(w: World): boolean {
+  return dist2(w.player.x, w.player.z, REACTOR.x, REACTOR.z) <= REACTOR.interactRadius ** 2;
+}
+
+export function repair(w: World): RepairResult | { ok: false; reason: "notAtConsole" } {
+  if (!nearReactor(w)) return { ok: false, reason: "notAtConsole" };
+  const r = repairReactor(w.progress);
+  if (r.ok) w.events.push({ type: "reactorRepaired" });
   return r;
 }
 

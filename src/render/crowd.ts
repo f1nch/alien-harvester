@@ -1,6 +1,7 @@
 import {
   Color3, InstancedMesh, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3,
 } from "@babylonjs/core";
+import { WARDEN } from "../content/reactor";
 import { TARGETS, type TargetTypeId } from "../content/targets";
 import type { TargetEntity } from "../game/world";
 
@@ -8,6 +9,8 @@ interface Visual {
   type: TargetTypeId;
   /** Attack telegraph for hostile types: an outline at strike range and a fill that grows during the windup. */
   telegraph?: { ring: Mesh; fill: Mesh };
+  /** The warden's charge lane. */
+  lane?: { outline: Mesh; fill: Mesh };
   node: TransformNode;
   parts: InstancedMesh[];
   phase: number;
@@ -63,6 +66,26 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Mesh[] {
     const baton = MeshBuilder.CreateCylinder("guardBaton", { height: 0.6, diameter: 0.06, tessellation: 6 }, scene);
     baton.rotation.x = Math.PI / 2.4;
     add(baton, mat(scene, "guardBaton", 0.9, 0.85, 0.2, 0.6), 0.75, 0.26, 0.22);
+  } else if (type === "boss") {
+    // The reactor warden: a hulking armored figure with horns and a glowing reactor core.
+    const plate = mat(scene, "wardenPlate", 0.32, 0.3, 0.36, 0.7);
+    const dark = mat(scene, "wardenDark", 0.12, 0.1, 0.14, 0.4);
+    const core = mat(scene, "wardenCore", 0, 0, 0);
+    core.emissiveColor = new Color3(1, 0.35, 0.1);
+    add(MeshBuilder.CreateCapsule("wardenBody", { height: 2.2, radius: 0.75, tessellation: 14 }, scene), dark, 1.15);
+    add(MeshBuilder.CreateBox("wardenChest", { width: 1.7, height: 1.1, depth: 1.1 }, scene), plate, 1.55);
+    add(MeshBuilder.CreateSphere("wardenCore", { diameter: 0.5, segments: 12 }, scene), core, 1.55, 0, 0.55);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateSphere("wardenShoulder", { diameter: 0.85, segments: 10 }, scene), plate, 2.05, side * 0.95);
+      const horn = MeshBuilder.CreateCylinder("wardenHorn", { diameterTop: 0, diameterBottom: 0.22, height: 0.7, tessellation: 8 }, scene);
+      horn.rotation.z = -side * 0.5;
+      add(horn, plate, 2.85, side * 0.35);
+      add(MeshBuilder.CreateCapsule("wardenArm", { height: 1.5, radius: 0.28, tessellation: 10 }, scene), dark, 1.25, side * 1.05);
+    }
+    add(MeshBuilder.CreateSphere("wardenHelm", { diameter: 0.8, segments: 12 }, scene), plate, 2.5);
+    const visor = mat(scene, "wardenVisor", 0, 0, 0);
+    visor.emissiveColor = new Color3(1, 0.1, 0.05);
+    add(MeshBuilder.CreateBox("wardenVisor", { width: 0.55, height: 0.1, depth: 0.12 }, scene), visor, 2.52, 0, 0.36);
   } else if (type === "armoredGuard") {
     // Armored guard: broad and plated with a visored helmet; reads as heavy at a glance.
     const plate = mat(scene, "armorPlate", 0.42, 0.45, 0.5, 0.6);
@@ -103,7 +126,20 @@ export class CrowdView {
   private ringMat: StandardMaterial | null = null;
   private fillMat: StandardMaterial | null = null;
 
-  private makeTelegraph(range: number): { ring: Mesh; fill: Mesh } {
+  /** A ground strip the warden's charge will run along, filling as the windup completes. */
+  private makeLane(): { outline: Mesh; fill: Mesh } {
+    this.ensureTelegraphMaterials();
+    const width = WARDEN.chargeHitRadius * 2;
+    const outline = MeshBuilder.CreateGround("laneOutline", { width, height: WARDEN.chargeDistance }, this.scene);
+    outline.material = this.ringMat!;
+    const fill = MeshBuilder.CreateGround("laneFill", { width, height: WARDEN.chargeDistance }, this.scene);
+    fill.material = this.fillMat!;
+    outline.setEnabled(false);
+    fill.setEnabled(false);
+    return { outline, fill };
+  }
+
+  private ensureTelegraphMaterials(): void {
     if (!this.ringMat || !this.fillMat) {
       this.ringMat = new StandardMaterial("telegraphRing", this.scene);
       this.ringMat.diffuseColor = Color3.Black();
@@ -116,6 +152,10 @@ export class CrowdView {
       this.fillMat.disableLighting = true;
       this.fillMat.alpha = 0.3;
     }
+  }
+
+  private makeTelegraph(range: number): { ring: Mesh; fill: Mesh } {
+    this.ensureTelegraphMaterials();
     const ring = MeshBuilder.CreateTorus("telegraphRing", { diameter: range * 2, thickness: 0.05, tessellation: 40 }, this.scene);
     ring.material = this.ringMat;
     const fill = MeshBuilder.CreateDisc("telegraphFill", { radius: range, tessellation: 40 }, this.scene);
@@ -153,8 +193,13 @@ export class CrowdView {
       inst.parent = node;
       return inst;
     });
-    const range = TARGETS[type].combat?.attackRange;
-    return { type, node, parts, phase: Math.random() * 10, telegraph: range ? this.makeTelegraph(range) : undefined };
+    const isBoss = type === "boss";
+    const range = isBoss ? WARDEN.slamRadius : TARGETS[type].combat?.attackRange;
+    return {
+      type, node, parts, phase: Math.random() * 10,
+      telegraph: range ? this.makeTelegraph(range) : undefined,
+      lane: isBoss ? this.makeLane() : undefined,
+    };
   }
 
   private releaseVisual(v: Visual): void {
@@ -173,6 +218,8 @@ export class CrowdView {
     this.live.delete(t.id);
     v.telegraph?.ring.setEnabled(false);
     v.telegraph?.fill.setEnabled(false);
+    v.lane?.outline.setEnabled(false);
+    v.lane?.fill.setEnabled(false);
     this.dissolving.push({ visual: v, t: 0, from: v.node.position.clone() });
   }
 
@@ -205,6 +252,41 @@ export class CrowdView {
         rotZ = Math.sin(this.time * 22 + t.id) * 0.18;
         rotX = -0.15 - t.progress * 0.2;
         y += t.progress * 0.25;
+      }
+      if (t.boss && v.telegraph && v.lane) {
+        const bs = t.boss;
+        const slam = bs.state === "slamWindup";
+        const charge = bs.state === "chargeWindup";
+        v.telegraph.ring.setEnabled(slam);
+        v.telegraph.fill.setEnabled(slam);
+        if (slam) {
+          const k = 1 - Math.max(0, bs.timer) / WARDEN.slamWindup;
+          v.telegraph.ring.position.set(x, 0.04, z);
+          v.telegraph.fill.position.set(x, 0.035, z);
+          v.telegraph.fill.scaling.set(Math.max(0.05, k), Math.max(0.05, k), 1);
+          rotX = -0.3 * k;
+        }
+        v.lane.outline.setEnabled(charge);
+        v.lane.fill.setEnabled(charge);
+        if (charge) {
+          const k = 1 - Math.max(0, bs.timer) / WARDEN.chargeWindup;
+          const yaw = Math.atan2(bs.dirX, bs.dirZ);
+          const half = WARDEN.chargeDistance / 2;
+          for (const m of [v.lane.outline, v.lane.fill]) {
+            m.rotation.y = yaw;
+            m.position.set(x + bs.dirX * half, m === v.lane.fill ? 0.035 : 0.03, z + bs.dirZ * half);
+          }
+          v.lane.fill.scaling.set(1, 1, Math.max(0.05, k));
+          v.lane.fill.position.set(x + bs.dirX * half * k, 0.035, z + bs.dirZ * half * k);
+          rotX = 0.35 * k; // crouch forward before the rush
+        }
+        if (bs.state === "stunned") {
+          rotZ = Math.sin(this.time * 6) * 0.15;
+          rotX = -0.2;
+        }
+        v.node.position.set(x, y, z);
+        v.node.rotation.set(rotX, t.heading, rotZ);
+        continue;
       }
       const combat = t.def.combat;
       let facing = t.held ? Math.atan2(creature.x - x, creature.z - z) : t.heading;

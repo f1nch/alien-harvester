@@ -3,6 +3,7 @@ import type { PerkId } from "../content/perks";
 import { VAT } from "../content/structures";
 import type { StructureKind } from "../domain/structures";
 import type { DroneMode } from "./systems/structures";
+import { newBossRuntime, type BossRuntime } from "./systems/boss";
 import type { QuestDef } from "../content/quests";
 import { TARGETS, type TargetDef } from "../content/targets";
 import { computeStats, type PlayerStats } from "../domain/economy";
@@ -47,6 +48,8 @@ export interface TargetEntity {
   ai: GuardState;
   /** Seconds left in the current AI state (windup or recovery). */
   aiTimer: number;
+  /** Boss state machine (the warden only). */
+  boss?: BossRuntime;
 }
 
 export type GuardState = "patrol" | "chase" | "windup" | "recover" | "return";
@@ -64,6 +67,9 @@ export type GameEvent =
   | { type: "structureBuilt"; kind: StructureKind; level: number }
   | { type: "droneLoaded" }
   | { type: "droneDeposited" }
+  | { type: "bossStunned" }
+  | { type: "bossDefeated" }
+  | { type: "reactorRepaired" }
   | { type: "playerHit"; damage: number; by: TargetEntity }
   | { type: "strike"; by: TargetEntity; hit: boolean }
   | { type: "died"; lost: CargoDrop[]; forgiven: boolean };
@@ -178,6 +184,7 @@ export function spawnTarget(w: World, spawnId: string): TargetEntity | null {
     zoneRect: zoneAt(w.map, s.x, s.z)?.rect ?? w.map.bounds,
     ai: "patrol",
     aiTimer: 0,
+    boss: s.type === "boss" ? newBossRuntime() : undefined,
   };
   w.targets.push(t);
   w.progress.spawnCooldowns[spawnId] = 0;

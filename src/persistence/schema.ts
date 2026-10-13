@@ -14,7 +14,7 @@ import { DRONE, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 export const CONTENT_VERSION = 1;
 
 export interface Settings {
@@ -97,6 +97,11 @@ function migrate(raw: Obj): Obj | null {
     // v7 adds structures (vat, drone); nothing is built yet.
     const progress = isObj(m.progress) ? { ...m.progress, structures: null } : m.progress;
     m = { ...m, schemaVersion: 7, progress };
+  }
+  if (m.schemaVersion === 7) {
+    // v8 adds the reactor completion flag and simulated play time (unknown before: 0).
+    const progress = isObj(m.progress) ? { ...m.progress, reactorRepaired: false, playSeconds: 0 } : m.progress;
+    m = { ...m, schemaVersion: 8, progress };
   }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
@@ -282,6 +287,10 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
     for (let l = 2; l <= levelForXp(progress.xp); l++) levels.push(l);
     queuePerkChoices(progress, levels, mulberry32(0x9e3779b9 ^ Math.floor(progress.xp)));
   }
+
+  if (typeof p.reactorRepaired !== "boolean" || !isNonNeg(p.playSeconds)) return null;
+  progress.reactorRepaired = p.reactorRepaired;
+  progress.playSeconds = p.playSeconds;
 
   const settings = defaultSettings();
   if (isObj(m.settings)) {

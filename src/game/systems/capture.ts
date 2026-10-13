@@ -1,17 +1,28 @@
 import { cargoWeight } from "../../domain/progress";
 import { dist2, hasLineOfSight } from "../geometry";
+import { WARDEN } from "../../content/reactor";
 import { gainXp, questEvent, type TargetEntity, type World } from "../world";
+import { bossStunned } from "./boss";
 
 /** Seconds a target may be out of reach before its progress starts to decay. */
 export const GRACE_SECONDS = 0.3;
 /** Full progress decays to zero over this many seconds once grace expires. */
 export const DECAY_SECONDS = 1;
 
-/** Cargo already in the hold plus weight reserved by active tentacles. */
+/** Cargo already in the hold plus weight reserved by held targets (each counted once). */
 export function committedCargo(w: World): number {
   let reserved = 0;
-  for (const t of w.tentacles) if (t) reserved += t.def.weight;
+  for (const t of new Set(w.tentacles)) if (t) reserved += t.def.weight;
   return cargoWeight(w.progress.cargo) + reserved;
+}
+
+/**
+ * Effective number of tentacles' worth of power on one target. Extra tentacles on a
+ * multi-grab target help, but with diminishing returns so a late-game creature
+ * still has to work the fight rather than delete it.
+ */
+export function holderPower(count: number): number {
+  return count <= 1 ? count : count ** 0.6;
 }
 
 function inReach(w: World, t: TargetEntity): boolean {
@@ -20,14 +31,23 @@ function inReach(w: World, t: TargetEntity): boolean {
   return dist2(p.x, p.z, t.x, t.z) <= r * r && hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles);
 }
 
+/** Free every tentacle holding `t`, and reset its capture state. */
+function releaseTarget(w: World, t: TargetEntity): void {
+  t.held = false;
+  t.progress = 0;
+  t.outOfReach = 0;
+  for (let i = 0; i < w.tentacles.length; i++) if (w.tentacles[i] === t) w.tentacles[i] = null;
+}
+
 function release(w: World, slot: number): void {
   const t = w.tentacles[slot];
-  if (t) {
+  w.tentacles[slot] = null;
+  // A multi-grab target stays held while any other tentacle still has it.
+  if (t && !w.tentacles.includes(t)) {
     t.held = false;
     t.progress = 0;
     t.outOfReach = 0;
   }
-  w.tentacles[slot] = null;
 }
 
 export function updateCapture(w: World, dt: number): void {
@@ -40,29 +60,41 @@ export function updateCapture(w: World, dt: number): void {
   }
   while (w.tentacles.length < stats.tentacles) w.tentacles.push(null);
 
-  // 1. Advance existing assignments; they stay stable while valid.
-  for (let slot = 0; slot < w.tentacles.length; slot++) {
-    const t = w.tentacles[slot];
-    if (!t) continue;
+  // 1. Advance existing assignments; they stay stable while valid. Each target is
+  //    processed once; a multi-grab target gains progress from every tentacle on it.
+  const holders = new Map<TargetEntity, number>();
+  for (const t of w.tentacles) if (t) holders.set(t, (holders.get(t) ?? 0) + 1);
+  for (const [t, count] of holders) {
     if (!w.targets.includes(t)) {
-      w.tentacles[slot] = null;
+      for (let i = 0; i < w.tentacles.length; i++) if (w.tentacles[i] === t) w.tentacles[i] = null;
       continue;
     }
     if (inReach(w, t)) {
       t.held = true;
       t.outOfReach = 0;
-      t.progress += (stats.capturePower / t.def.resistance) * dt;
+      const bonus = bossStunned(t) ? WARDEN.stunnedCaptureBonus : 1;
+      t.progress += ((stats.capturePower * holderPower(count) * bonus) / t.def.resistance) * dt;
     } else {
       t.held = false;
       t.outOfReach += dt;
       if (t.outOfReach <= GRACE_SECONDS) continue;
-      t.progress -= dt / DECAY_SECONDS;
+      // Past grace, a multi-grab target keeps a single tentacle (to carry its decaying
+      // progress) and hands the rest back for other targets.
+      if (count > 1) {
+        let kept = false;
+        for (let i = 0; i < w.tentacles.length; i++) {
+          if (w.tentacles[i] !== t) continue;
+          if (kept) w.tentacles[i] = null;
+          kept = true;
+        }
+      }
+      t.progress -= dt / (t.def.captureDecaySeconds ?? DECAY_SECONDS);
       if (t.progress <= 0) {
-        release(w, slot);
+        releaseTarget(w, t);
         continue;
       }
     }
-    if (t.progress >= 1) complete(w, slot, t);
+    if (t.progress >= 1) complete(w, t);
   }
 
   // 2. Fill empty slots with the nearest eligible targets.
@@ -74,7 +106,7 @@ export function updateCapture(w: World, dt: number): void {
 
 function lightestTarget(w: World): number {
   let min = Infinity;
-  for (const t of w.targets) min = Math.min(min, t.def.weight);
+  for (const t of w.targets) if (t.def.weight > 0) min = Math.min(min, t.def.weight);
   return Number.isFinite(min) ? min : 0;
 }
 
@@ -82,14 +114,15 @@ function assignTentacles(w: World): void {
   const { stats, player: p } = w;
   w.hash.clear();
   for (const t of w.targets) w.hash.insert(t);
-  const candidates = w.hash
+  const inRange = w.hash
     .query(p.x, p.z, stats.captureRadius)
-    .filter((t) => !w.tentacles.includes(t) && hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles))
+    .filter((t) => hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles))
     .sort((a, b) => dist2(p.x, p.z, a.x, a.z) - dist2(p.x, p.z, b.x, b.z));
 
   // Reserve cargo on assignment so simultaneous completions can never overflow.
   let committed = committedCargo(w);
-  for (const t of candidates) {
+  for (const t of inRange) {
+    if (w.tentacles.includes(t)) continue;
     const slot = w.tentacles.indexOf(null);
     if (slot < 0) break;
     if (committed + t.def.weight > stats.cargoCapacity) continue;
@@ -99,14 +132,24 @@ function assignTentacles(w: World): void {
     t.held = true;
     w.tentacles[slot] = t;
   }
+  // Spare tentacles join a multi-grab target (the warden) without resetting its progress.
+  for (const t of inRange) {
+    if (!t.def.multiGrab || !w.tentacles.includes(t)) continue;
+    for (let slot = w.tentacles.indexOf(null); slot >= 0; slot = w.tentacles.indexOf(null)) w.tentacles[slot] = t;
+  }
 }
 
-function complete(w: World, slot: number, t: TargetEntity): void {
-  w.tentacles[slot] = null;
+function complete(w: World, t: TargetEntity): void {
+  const slot = w.tentacles.indexOf(t);
+  for (let i = 0; i < w.tentacles.length; i++) if (w.tentacles[i] === t) w.tentacles[i] = null;
   w.targets.splice(w.targets.indexOf(t), 1);
   w.progress.cargo.push({ type: t.def.id, weight: t.def.weight, reward: { ...t.def.reward } });
   w.progress.spawnCooldowns[t.spawnId] = t.def.respawnSeconds;
   w.events.push({ type: "captured", target: t, slot });
   gainXp(w, t.def.xp);
   questEvent(w, { kind: "capture", target: t.def.id });
+  if (t.def.behavior === "boss") {
+    w.events.push({ type: "bossDefeated" });
+    questEvent(w, { kind: "defeatBoss" });
+  }
 }

@@ -1,6 +1,7 @@
 import {
   Color3, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, TransformNode,
 } from "@babylonjs/core";
+import { REACTOR } from "../content/reactor";
 import { VAT } from "../content/structures";
 import { cargoWeight } from "../domain/progress";
 import { droneCapacity, vatLevel } from "../domain/structures";
@@ -24,6 +25,8 @@ export class StructuresView {
   private payload: Mesh;
   private droneRing: Mesh;
   private time = 0;
+  private coreMat: StandardMaterial;
+  private reactorRing: Mesh;
 
   constructor(scene: Scene, shadows: ShadowGenerator | null) {
     const { x, z } = VAT.site;
@@ -73,10 +76,30 @@ export class StructuresView {
     this.payload.material = material(scene, "dronePayloadMat", new Color3(0.3, 0.6, 0.2), new Color3(0.25, 0.6, 0.15));
     this.payload.parent = this.drone;
     shadows?.addShadowCaster(hull);
+
+    // Reactor console: flickers red while broken, steady teal once repaired.
+    const consoleBase = MeshBuilder.CreateBox("reactorBase", { width: 1.8, depth: 1.8, height: 1.1 }, scene);
+    consoleBase.position.set(REACTOR.x, 0.55, REACTOR.z);
+    consoleBase.material = metal;
+    shadows?.addShadowCaster(consoleBase);
+    this.coreMat = material(scene, "reactorCoreMat", Color3.Black(), new Color3(1, 0.2, 0.1));
+    const core = MeshBuilder.CreateCylinder("reactorCore", { diameter: 0.9, height: 1.6, tessellation: 16 }, scene);
+    core.position.set(REACTOR.x, 1.9, REACTOR.z);
+    core.material = this.coreMat;
+    this.reactorRing = MeshBuilder.CreateTorus("reactorRing", { diameter: 1.6, thickness: 0.08, tessellation: 32 }, scene);
+    this.reactorRing.position.set(REACTOR.x, 1.9, REACTOR.z);
+    this.reactorRing.material = this.coreMat;
   }
 
   update(w: World, alpha: number, dt: number): void {
     this.time += dt;
+    if (w.progress.reactorRepaired) {
+      this.coreMat.emissiveColor.set(0.2, 1, 0.85);
+      this.reactorRing.rotation.x += dt * 1.5;
+    } else {
+      const flicker = 0.5 + 0.5 * Math.abs(Math.sin(this.time * 7) * Math.sin(this.time * 2.3));
+      this.coreMat.emissiveColor.set(flicker, 0.12 * flicker, 0.06);
+    }
     const { vat, drone } = w.progress.structures;
 
     this.vatBuilt.setEnabled(vat.built);

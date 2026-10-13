@@ -109,6 +109,13 @@ export const FACILITY: MapDef = {
     box(-3, 62, 1.4, 1.4),
     box(5, 66, 3, 1.2),
     box(-7, 69, 1.6, 2.6),
+    // Reactor hall pillars: cover, and something for the warden's charge to ram.
+    box(-5.5, 81, 1.4, 1.4),
+    box(5.5, 81, 1.4, 1.4),
+    box(-5.5, 89, 1.4, 1.4),
+    box(5.5, 89, 1.4, 1.4),
+    // Reactor console (see content/reactor.ts).
+    box(0, 93.5, 1.8, 1.8),
   ],
   doors: [
     {
@@ -155,6 +162,7 @@ export const FACILITY: MapDef = {
     ]),
     ...spawns("security-a", "armoredGuard", [[-5, 64], [7, 59], [0, 73], [9, 70]], 1.5),
     ...spawns("security-t", "technician", [[-10, 53], [10, 66], [2, 48]], 2),
+    ...spawns("reactor-boss", "boss", [[0, 85]], 0),
   ],
 };
 

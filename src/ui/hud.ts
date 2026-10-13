@@ -14,7 +14,8 @@ import type { Requirement } from "../domain/requirements";
 import { levelProgress } from "../domain/levels";
 import { cargoWeight } from "../domain/progress";
 import { activeQuests, questCount } from "../domain/quests";
-import type { World } from "../game/world";
+import type { TargetEntity, World } from "../game/world";
+import { reactorRequirements } from "../domain/reactor";
 
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
 export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢" };
@@ -52,6 +53,8 @@ export interface HudCallbacks {
   onEvolve(): void;
   onRespec(): void;
   onBuildStructure(kind: StructureKind): void;
+  onRepair(): void;
+  onCloseCompletion(): void;
   onOpenPerks(): void;
   onClosePerks(): void;
   /** Pick an option of the pending choice for `level`, or the fallback. */
@@ -75,6 +78,19 @@ export interface HudState {
   door: DoorDef | null;
   /** Why a respec isn't allowed right now, or null if it is. */
   respecBlocker: "notAtBase" | "cargoAboard" | null;
+  /** The warden, when the player is in its hall and it is alive. */
+  boss: TargetEntity | null;
+  /** Standing at the reactor console. */
+  atReactor: boolean;
+}
+
+export interface CompletionStats {
+  level: number;
+  form: string;
+  playSeconds: number;
+  questsDone: number;
+  questsTotal: number;
+  perksTaken: number;
 }
 
 export class Hud {
@@ -117,6 +133,15 @@ export class Hud {
   private evoBtn: HTMLButtonElement;
   private structureRows = new Map<StructureKind, { status: HTMLElement; reqs: HTMLElement; btn: HTMLButtonElement }>();
   private droneStatus: HTMLElement;
+  private bossBar: HTMLElement;
+  private bossFill: HTMLElement;
+  private bossState: HTMLElement;
+  private reactorCard: HTMLElement;
+  private reactorList: HTMLElement;
+  private reactorBtn: HTMLButtonElement;
+  private reactorTitle: HTMLElement;
+  private completion: HTMLElement;
+  private completionStats: HTMLElement;
   private respecBtn: HTMLButtonElement;
   private respecArmedAt = 0;
   private respecArmedUntil = 0;
@@ -191,6 +216,38 @@ export class Hud {
 
     this.upgradeBtn = el("button", "btn btn-upgrade", "Upgrades");
     this.upgradeBtn.addEventListener("click", () => cb.onOpenUpgrades());
+
+    // Warden capture bar: progress plus a text state (not colour alone).
+    this.bossBar = el("div", "boss-bar hidden");
+    this.bossBar.setAttribute("role", "status");
+    const bossHead = el("div", "boss-head");
+    bossHead.append(el("span", "boss-name", "Reactor warden"));
+    this.bossState = el("span", "boss-state");
+    bossHead.append(this.bossState);
+    const bossTrack = el("div", "cargo-bar");
+    this.bossFill = el("div", "boss-fill");
+    bossTrack.append(this.bossFill);
+    this.bossBar.append(bossHead, bossTrack);
+
+    // Reactor console card (like a door card).
+    this.reactorCard = el("div", "door-card reactor-card hidden");
+    this.reactorTitle = el("h3", undefined, "Reactor console");
+    this.reactorList = el("ul", "door-reqs");
+    this.reactorBtn = el("button", "btn btn-buy", "Repair the reactor");
+    this.reactorBtn.addEventListener("click", () => cb.onRepair());
+    this.reactorCard.append(this.reactorTitle, this.reactorList, this.reactorBtn);
+
+    // Completion screen.
+    this.completion = el("div", "panel completion hidden");
+    this.completion.setAttribute("role", "dialog");
+    this.completion.setAttribute("aria-label", "Facility harvested");
+    const cc = el("div", "panel-card");
+    cc.append(el("h2", undefined, "Reactor repaired"), el("p", "panel-note", "The facility is yours. Everything you harvested is kept, and you can keep playing."));
+    this.completionStats = el("dl", "completion-stats");
+    const keep = el("button", "btn btn-buy", "Keep playing");
+    keep.addEventListener("click", () => cb.onCloseCompletion());
+    cc.append(this.completionStats, keep);
+    this.completion.append(cc);
 
     // Level-up perks: opened deliberately (never auto-popped mid-fight), and pausing while open.
     this.perkCb = cb;
@@ -303,7 +360,7 @@ export class Hud {
     this.vignette = el("div", "vignette");
     this.vignette.setAttribute("aria-hidden", "true");
 
-    root.append(this.vignette, top, this.doorCard, this.upgradeBtn, this.perkBtn, this.perkPanel, this.panel, this.toastEl, this.overlay);
+    root.append(this.vignette, top, this.bossBar, this.reactorCard, this.completion, this.doorCard, this.upgradeBtn, this.perkBtn, this.perkPanel, this.panel, this.toastEl, this.overlay);
   }
 
   setLeftHanded(left: boolean): void {
@@ -369,7 +426,8 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.xp, cargo, cap, s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
+      p.banked.biomass, p.banked.genetic, p.banked.parts, p.xp, cargo, cap, s.atReactor, p.reactorRepaired,
+      s.boss ? `${Math.round(s.boss.progress * 100)}:${s.boss.boss?.state}` : "", s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
     if (key === this.last) return;
@@ -398,6 +456,8 @@ export class Hud {
     this.cargoBox.classList.toggle("full", w.cargoFull);
 
     this.renderQuests(w);
+    this.renderBoss(s.boss);
+    this.renderReactor(w, s.atReactor);
     this.renderStructures(w);
     this.renderPerks(w);
     this.renderDoor(w, s.door);
@@ -460,6 +520,59 @@ export class Hud {
     // A double-tap must not land on the next queued choice's freshly rendered cards.
     if (performance.now() - this.perkShownAt < 350) return;
     this.perkCb.onPickPerk(this.perkShownLevel, option);
+  }
+
+  private renderBoss(boss: TargetEntity | null): void {
+    this.bossBar.classList.toggle("hidden", boss === null);
+    if (!boss) return;
+    const pct = Math.round(Math.max(0, Math.min(1, boss.progress)) * 100);
+    this.bossFill.style.width = `${pct}%`;
+    const state = boss.boss?.state;
+    const label = state === "stunned" ? "STUNNED · capture ×2"
+      : state === "chargeWindup" ? "Charge incoming"
+      : state === "slamWindup" ? "Slam incoming"
+      : `Captured ${pct}%`;
+    this.bossState.textContent = label;
+    this.bossBar.classList.toggle("stunned", state === "stunned");
+    this.bossBar.classList.toggle("danger", state === "chargeWindup" || state === "slamWindup");
+  }
+
+  private renderReactor(w: World, near: boolean): void {
+    this.reactorCard.classList.toggle("hidden", !near);
+    if (!near) return;
+    const p = w.progress;
+    if (p.reactorRepaired) {
+      this.reactorTitle.textContent = "Reactor online";
+      this.reactorList.replaceChildren();
+      this.reactorBtn.classList.add("hidden");
+      return;
+    }
+    this.reactorTitle.textContent = "Reactor console — damaged";
+    const reqs = reactorRequirements(p);
+    requirementList(this.reactorList, reqs);
+    const ok = reqs.every((r) => r.met);
+    this.reactorBtn.classList.remove("hidden");
+    this.reactorBtn.disabled = !ok;
+    this.reactorBtn.textContent = ok ? "Repair the reactor" : "Requirements not met";
+  }
+
+  get completionOpen(): boolean {
+    return !this.completion.classList.contains("hidden");
+  }
+
+  showCompletion(stats: CompletionStats | null): void {
+    this.completion.classList.toggle("hidden", stats === null);
+    if (!stats) return;
+    const h = Math.floor(stats.playSeconds / 3600);
+    const m = Math.floor((stats.playSeconds % 3600) / 60);
+    const rows: Array<[string, string]> = [
+      ["Level", String(stats.level)],
+      ["Form", stats.form],
+      ["Play time", h > 0 ? `${h} h ${m} min` : `${m} min`],
+      ["Objectives", `${stats.questsDone} / ${stats.questsTotal}`],
+      ["Perks taken", String(stats.perksTaken)],
+    ];
+    this.completionStats.replaceChildren(...rows.flatMap(([k, v]) => [el("dt", undefined, k), el("dd", undefined, v)]));
   }
 
   private renderStructures(w: World): void {
