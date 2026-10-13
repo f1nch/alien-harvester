@@ -1,11 +1,13 @@
 import {
   Color3, InstancedMesh, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3,
 } from "@babylonjs/core";
-import type { TargetTypeId } from "../content/targets";
+import { TARGETS, type TargetTypeId } from "../content/targets";
 import type { TargetEntity } from "../game/world";
 
 interface Visual {
   type: TargetTypeId;
+  /** Attack telegraph for hostile types: an outline at strike range and a fill that grows during the windup. */
+  telegraph?: { ring: Mesh; fill: Mesh };
   node: TransformNode;
   parts: InstancedMesh[];
   phase: number;
@@ -52,6 +54,25 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Mesh[] {
     add(MeshBuilder.CreateSphere("runnerHead", { diameter: 0.3, segments: 10 }, scene), skin, 1.22);
     add(MeshBuilder.CreateTorus("runnerBand", { diameter: 0.3, thickness: 0.06, tessellation: 16 }, scene), mat(scene, "runnerBand", 1, 0.25, 0.4), 1.27);
     add(MeshBuilder.CreateCapsule("runnerTail", { height: 0.32, radius: 0.05, tessellation: 6 }, scene), mat(scene, "runnerHair", 0.25, 0.15, 0.1), 1.18, 0, -0.17);
+  } else if (type === "guard") {
+    // Security guard: navy uniform, peaked cap, baton held forward.
+    add(MeshBuilder.CreateCapsule("guardBody", { height: 1.0, radius: 0.24, tessellation: 10 }, scene), mat(scene, "guardSuit", 0.12, 0.17, 0.38), 0.52);
+    add(MeshBuilder.CreateSphere("guardHead", { diameter: 0.33, segments: 10 }, scene), skin, 1.15);
+    add(MeshBuilder.CreateCylinder("guardCap", { height: 0.1, diameter: 0.38, tessellation: 14 }, scene), mat(scene, "guardCap", 0.08, 0.1, 0.22, 0.3), 1.29);
+    add(MeshBuilder.CreateBox("guardVisor", { width: 0.3, height: 0.03, depth: 0.14 }, scene), mat(scene, "guardVisor", 0.05, 0.05, 0.07, 0.5), 1.25, 0, 0.17);
+    const baton = MeshBuilder.CreateCylinder("guardBaton", { height: 0.6, diameter: 0.06, tessellation: 6 }, scene);
+    baton.rotation.x = Math.PI / 2.4;
+    add(baton, mat(scene, "guardBaton", 0.9, 0.85, 0.2, 0.6), 0.75, 0.26, 0.22);
+  } else if (type === "armoredGuard") {
+    // Armored guard: broad and plated with a visored helmet; reads as heavy at a glance.
+    const plate = mat(scene, "armorPlate", 0.42, 0.45, 0.5, 0.6);
+    add(MeshBuilder.CreateCapsule("armorBody", { height: 1.05, radius: 0.33, tessellation: 12 }, scene), mat(scene, "armorSuit", 0.2, 0.22, 0.26, 0.3), 0.55);
+    add(MeshBuilder.CreateBox("armorChest", { width: 0.6, height: 0.42, depth: 0.42 }, scene), plate, 0.75);
+    for (const side of [-1, 1]) add(MeshBuilder.CreateSphere("armorShoulder", { diameter: 0.3, segments: 8 }, scene), plate, 0.98, side * 0.36);
+    add(MeshBuilder.CreateSphere("armorHelmet", { diameter: 0.4, segments: 12 }, scene), plate, 1.2);
+    const visor = mat(scene, "armorVisor", 0, 0, 0);
+    visor.emissiveColor = new Color3(0.9, 0.15, 0.1);
+    add(MeshBuilder.CreateBox("armorVisorStrip", { width: 0.28, height: 0.06, depth: 0.08 }, scene), visor, 1.22, 0, 0.18);
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     add(MeshBuilder.CreateCylinder("techCoat", { height: 0.8, diameterTop: 0.36, diameterBottom: 0.56, tessellation: 12 }, scene), mat(scene, "techCoat", 0.92, 0.95, 0.97), 0.42);
@@ -79,6 +100,32 @@ export class CrowdView {
   private dissolving: Dissolve[] = [];
   private time = 0;
   private seen = new Set<number>();
+  private ringMat: StandardMaterial | null = null;
+  private fillMat: StandardMaterial | null = null;
+
+  private makeTelegraph(range: number): { ring: Mesh; fill: Mesh } {
+    if (!this.ringMat || !this.fillMat) {
+      this.ringMat = new StandardMaterial("telegraphRing", this.scene);
+      this.ringMat.diffuseColor = Color3.Black();
+      this.ringMat.emissiveColor = new Color3(1, 0.25, 0.15);
+      this.ringMat.disableLighting = true;
+      this.ringMat.alpha = 0.55;
+      this.fillMat = new StandardMaterial("telegraphFill", this.scene);
+      this.fillMat.diffuseColor = Color3.Black();
+      this.fillMat.emissiveColor = new Color3(1, 0.2, 0.1);
+      this.fillMat.disableLighting = true;
+      this.fillMat.alpha = 0.3;
+    }
+    const ring = MeshBuilder.CreateTorus("telegraphRing", { diameter: range * 2, thickness: 0.05, tessellation: 40 }, this.scene);
+    ring.material = this.ringMat;
+    const fill = MeshBuilder.CreateDisc("telegraphFill", { radius: range, tessellation: 40 }, this.scene);
+    fill.rotation.x = Math.PI / 2;
+    fill.material = this.fillMat;
+    ring.isPickable = fill.isPickable = false;
+    ring.setEnabled(false);
+    fill.setEnabled(false);
+    return { ring, fill };
+  }
 
   constructor(private scene: Scene, private shadows: ShadowGenerator | null) {}
 
@@ -106,11 +153,14 @@ export class CrowdView {
       inst.parent = node;
       return inst;
     });
-    return { type, node, parts, phase: Math.random() * 10 };
+    const range = TARGETS[type].combat?.attackRange;
+    return { type, node, parts, phase: Math.random() * 10, telegraph: range ? this.makeTelegraph(range) : undefined };
   }
 
   private releaseVisual(v: Visual): void {
     v.node.setEnabled(false);
+    v.telegraph?.ring.setEnabled(false);
+    v.telegraph?.fill.setEnabled(false);
     let pool = this.pools.get(v.type);
     if (!pool) this.pools.set(v.type, (pool = []));
     pool.push(v);
@@ -121,6 +171,8 @@ export class CrowdView {
     const v = this.live.get(t.id);
     if (!v) return;
     this.live.delete(t.id);
+    v.telegraph?.ring.setEnabled(false);
+    v.telegraph?.fill.setEnabled(false);
     this.dissolving.push({ visual: v, t: 0, from: v.node.position.clone() });
   }
 
@@ -154,8 +206,29 @@ export class CrowdView {
         rotX = -0.15 - t.progress * 0.2;
         y += t.progress * 0.25;
       }
+      const combat = t.def.combat;
+      let facing = t.held ? Math.atan2(creature.x - x, creature.z - z) : t.heading;
+      if (combat && v.telegraph) {
+        const winding = t.ai === "windup";
+        // Rear back through the windup, then lunge at the start of recovery.
+        if (winding) {
+          const k = 1 - Math.max(0, t.aiTimer) / combat.windupSeconds;
+          rotX = -0.45 * k;
+          facing = t.heading;
+          v.telegraph.fill.scaling.set(Math.max(0.05, k), Math.max(0.05, k), 1);
+        } else if (t.ai === "recover" && t.aiTimer > combat.cooldownSeconds - 0.25) {
+          rotX = 0.5;
+          facing = t.heading;
+        }
+        v.telegraph.ring.setEnabled(winding);
+        v.telegraph.fill.setEnabled(winding);
+        if (winding) {
+          v.telegraph.ring.position.set(x, 0.04, z);
+          v.telegraph.fill.position.set(x, 0.035, z);
+        }
+      }
       v.node.position.set(x, y, z);
-      v.node.rotation.set(rotX, t.held ? Math.atan2(creature.x - x, creature.z - z) : t.heading, rotZ);
+      v.node.rotation.set(rotX, facing, rotZ);
     }
     for (const [id, v] of this.live) {
       if (this.seen.has(id)) continue;

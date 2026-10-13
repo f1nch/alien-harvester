@@ -327,3 +327,23 @@ html, body {
 .btn-evolve:disabled { background: #241b40; border-color: var(--line); }
 /* Dev panel opens upward from its toggle so it never covers the Upgrades button. */
 .dev-panel { top: auto; bottom: calc(45% + 6px); max-height: 50%; overflow-y: auto; }
+
+/* Health, damage feedback */
+.hud-bars { flex-basis: 100%; display: flex; gap: 8px; }
+.hud-bars .cargo { flex: 1 1 0; }
+.health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff5a6e, #ff9a6e); transition: width 0.15s; }
+.health.low { border-color: #ff5a6e; }
+.health.low .cargo-value { color: #ff8a9a; }
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none !important;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(255, 30, 60, 0.55) 100%);
+}
+.vignette.low { opacity: 0.45; }
+.vignette.hit { animation: hit-flash 0.45s ease-out; }
+@keyframes hit-flash { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .vignette.hit { animation-duration: 0.01s; } }
+/* Toasts sit above the creature (screen centre) rather than on top of it. */
+.toast { top: 28%; }

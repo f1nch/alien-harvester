@@ -2,7 +2,7 @@ import type { Currency, Reward } from "./currencies";
 import type { TargetTypeId } from "./targets";
 
 export type QuestGoal =
-  | { kind: "capture"; target: TargetTypeId | "any"; count: number }
+  | { kind: "capture"; target: TargetTypeId | readonly TargetTypeId[] | "any"; count: number }
   | { kind: "bank"; currency: Currency; count: number }
   | { kind: "buyUpgrade"; count: number }
   | { kind: "unlockDoor"; door: string }
@@ -84,7 +84,13 @@ export const QUESTS: QuestDef[] = [
     prereqs: ["q-genetic"],
     reward: { biomass: 60, xp: 60 },
   },
-  // q-guards (capture 10 guards) returns with the guard target type in step 3.
+  {
+    id: "q-guards",
+    title: "Capture 10 guards",
+    goal: { kind: "capture", target: ["guard", "armoredGuard"], count: 10 },
+    prereqs: ["q-open-security"],
+    reward: { genetic: 15, xp: 120 },
+  },
   {
     id: "q-open-reactor",
     title: "Enter the reactor hall",

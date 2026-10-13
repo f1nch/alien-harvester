@@ -33,6 +33,8 @@ export interface ProgressState {
   unlockedDoors: string[];
   /** Evolution tier; 0 is the starting form. */
   evolution: number;
+  /** The first death keeps cargo (tutorial exemption); set once it has been used. */
+  firstDeathForgiven: boolean;
 }
 
 export function newProgress(map: MapDef): ProgressState {
@@ -50,6 +52,7 @@ export function newProgress(map: MapDef): ProgressState {
     quests: {},
     unlockedDoors: [],
     evolution: 0,
+    firstDeathForgiven: false,
   };
 }
 

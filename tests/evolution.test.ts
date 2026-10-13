@@ -9,7 +9,7 @@ import { isDone } from "../src/domain/quests";
 import { evolveCreature } from "../src/game/actions";
 import { stepWorld } from "../src/game/step";
 import { createWorld } from "../src/game/world";
-import { defaultSettings, parseSave, toSaveFile } from "../src/persistence/schema";
+import { defaultSettings, parseSave, SCHEMA_VERSION, toSaveFile } from "../src/persistence/schema";
 
 /** A player who has met every requirement for the first evolution. */
 function ready() {
@@ -125,7 +125,7 @@ describe("evolution saves", () => {
     v2.schemaVersion = 2;
     delete v2.progress.evolution;
     const parsed = parseSave(v2, FACILITY)!;
-    expect(parsed.schemaVersion).toBe(3);
+    expect(parsed.schemaVersion).toBe(SCHEMA_VERSION);
     expect(parsed.progress.evolution).toBe(0);
     expect(parsed.progress.banked.genetic).toBe(30);
   });

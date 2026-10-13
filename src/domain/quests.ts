@@ -38,7 +38,10 @@ function contribution(q: QuestDef, e: QuestEvent): number {
   const g = q.goal;
   switch (e.kind) {
     case "capture":
-      return g.kind === "capture" && (g.target === "any" || g.target === e.target) ? 1 : 0;
+      if (g.kind !== "capture") return 0;
+      if (g.target === "any") return 1;
+      if (typeof g.target === "string") return g.target === e.target ? 1 : 0;
+      return g.target.includes(e.target) ? 1 : 0;
     case "bank":
       return g.kind === "bank" && g.currency === e.currency ? e.amount : 0;
     case "buyUpgrade":

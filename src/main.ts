@@ -2,7 +2,9 @@ import "./ui/styles.css";
 import { FACILITY } from "./content/map";
 import type { UpgradeId } from "./content/upgrades";
 import { newProgress } from "./domain/progress";
+import { CURRENCIES, CURRENCY_LABEL, emptyWallet } from "./content/currencies";
 import { FORM_NAMES } from "./content/evolution";
+import type { CargoDrop } from "./domain/progress";
 import { UPGRADE_IDS } from "./content/upgrades";
 import { capAtTier } from "./domain/economy";
 import { devCompleteActive } from "./domain/quests";
@@ -18,6 +20,16 @@ import { Hud } from "./ui/hud";
 import { InputController } from "./ui/input";
 
 const AUTOSAVE_TICKS = SIM_HZ * 10;
+
+/** Tells the player exactly what a death cost them. */
+function deathMessage(forgiven: boolean, lost: readonly CargoDrop[]): string {
+  if (forgiven) return "You were overwhelmed — first defeat forgiven, your cargo was kept. Next time, unbanked cargo is lost.";
+  if (lost.length === 0) return "You were overwhelmed and returned to base. Nothing was lost.";
+  const totals = emptyWallet();
+  for (const d of lost) for (const c of CURRENCIES) totals[c] += d.reward[c] ?? 0;
+  const parts = CURRENCIES.filter((c) => totals[c] > 0).map((c) => `${totals[c]} ${CURRENCY_LABEL[c].toLowerCase()}`);
+  return `You were overwhelmed and returned to base. Lost unbanked cargo: ${parts.join(", ")}.`;
+}
 
 async function boot(): Promise<void> {
   const canvas = document.getElementById("scene") as HTMLCanvasElement;
@@ -226,6 +238,11 @@ async function boot(): Promise<void> {
           saveNow = true;
         } else if (e.type === "levelUp") {
           hud.toast(`Level ${e.level} reached`);
+          saveNow = true;
+        } else if (e.type === "playerHit") {
+          hud.flashDamage();
+        } else if (e.type === "died") {
+          hud.toast(deathMessage(e.forgiven, e.lost), 6);
           saveNow = true;
         } else if (e.type === "evolved") {
           hud.toast(`Evolved into ${FORM_NAMES[e.tier] ?? "a new form"}!`, 3.5);

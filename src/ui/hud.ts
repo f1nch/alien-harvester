@@ -62,6 +62,10 @@ export class Hud {
   private level: HTMLElement;
   private levelFill: HTMLElement;
   private levelText: HTMLElement;
+  private healthBox: HTMLElement;
+  private healthText: HTMLElement;
+  private healthFill: HTMLElement;
+  private vignette: HTMLElement;
   private cargoText: HTMLElement;
   private cargoFill: HTMLElement;
   private cargoBox: HTMLElement;
@@ -104,6 +108,17 @@ export class Hud {
     lvlCol.append(lvlBar, this.levelText);
     lvl.append(this.level, lvlCol);
 
+    this.healthBox = el("div", "cargo health");
+    this.healthBox.setAttribute("aria-label", "Health");
+    const healthLabel = el("div", "cargo-label");
+    healthLabel.append(el("span", undefined, "♥ Health"));
+    this.healthText = el("span", "cargo-value", "100 / 100");
+    healthLabel.append(this.healthText);
+    const hbar = el("div", "cargo-bar");
+    this.healthFill = el("div", "health-fill");
+    hbar.append(this.healthFill);
+    this.healthBox.append(healthLabel, hbar);
+
     this.cargoBox = el("div", "cargo");
     const cargoLabel = el("div", "cargo-label");
     cargoLabel.append(el("span", undefined, "Cargo"));
@@ -113,7 +128,9 @@ export class Hud {
     this.cargoFill = el("div", "cargo-fill");
     bar.append(this.cargoFill);
     this.cargoBox.append(cargoLabel, bar);
-    top.append(bio.root, gen.root, lvl, this.cargoBox);
+    const bars = el("div", "hud-bars");
+    bars.append(this.healthBox, this.cargoBox);
+    top.append(bio.root, gen.root, lvl, bars);
 
     // Objectives and hints flow under the HUD so they never overlap it as it wraps.
     const sub = el("div", "hud-sub");
@@ -185,8 +202,10 @@ export class Hud {
     this.toastEl = el("div", "toast hidden");
     this.toastEl.setAttribute("role", "status");
     this.overlay = el("div", "overlay hidden");
+    this.vignette = el("div", "vignette");
+    this.vignette.setAttribute("aria-hidden", "true");
 
-    root.append(top, this.doorCard, this.upgradeBtn, this.panel, this.toastEl, this.overlay);
+    root.append(this.vignette, top, this.doorCard, this.upgradeBtn, this.panel, this.toastEl, this.overlay);
   }
 
   setLeftHanded(left: boolean): void {
@@ -221,6 +240,14 @@ export class Hud {
     window.setTimeout(() => this.nextToast(seconds), seconds * 1000);
   }
 
+  /** Brief red flash at the screen edges when the player takes damage. */
+  flashDamage(): void {
+    this.vignette.classList.remove("hit");
+    // Force a reflow so the animation restarts on rapid hits.
+    void this.vignette.offsetWidth;
+    this.vignette.classList.add("hit");
+  }
+
   /** Full-screen blocking message (e.g. game open in another tab). */
   block(title: string, body: string): void {
     this.overlay.replaceChildren(el("h2", undefined, title), el("p", undefined, body));
@@ -232,7 +259,7 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.xp, cargo, cap, w.cargoFull, s.inBase, s.door?.id,
+      p.banked.biomass, p.banked.genetic, p.xp, cargo, cap, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
     if (key === this.last) return;
@@ -247,6 +274,14 @@ export class Hud {
     this.level.textContent = `Lv ${lp.level}`;
     this.levelFill.style.width = lp.span === null ? "100%" : `${(lp.into / lp.span) * 100}%`;
     this.levelText.textContent = lp.span === null ? "Max level" : `${fmt(lp.into)} / ${lp.span} XP`;
+
+    const hp = Math.ceil(p.player.health);
+    const maxHp = w.stats.maxHealth;
+    const low = hp <= maxHp * 0.3;
+    this.healthText.textContent = low ? `LOW ${hp} / ${maxHp}` : `${hp} / ${maxHp}`;
+    this.healthFill.style.width = `${Math.max(0, Math.min(100, (hp / maxHp) * 100))}%`;
+    this.healthBox.classList.toggle("low", low);
+    this.vignette.classList.toggle("low", low);
 
     this.cargoText.textContent = `${fmt(cargo)} / ${fmt(cap)}`;
     this.cargoFill.style.width = `${Math.min(100, (cargo / cap) * 100)}%`;

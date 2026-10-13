@@ -103,6 +103,12 @@ export const FACILITY: MapDef = {
     box(7, 24.5, 1.6, 3),
     box(-2.5, 33, 1.4, 1.4),
     box(5.5, 37.5, 3, 1.2),
+    // Security sector barricades: cover for kiting guards.
+    box(-6, 52, 3, 1.2),
+    box(6, 55, 1.4, 3),
+    box(-3, 62, 1.4, 1.4),
+    box(5, 66, 3, 1.2),
+    box(-7, 69, 1.6, 2.6),
   ],
   doors: [
     {
@@ -144,6 +150,11 @@ export const FACILITY: MapDef = {
       [-2, 23], [3, 31], [-9, 35], [11, 41], [0, 39], [-4, 42],
     ], 2),
     ...spawns("service-w", "worker", [[12, 21], [-12, 38], [4, 42]]),
+    ...spawns("security-g", "guard", [
+      [-9, 49], [8, 50], [0, 55], [-9, 58], [9, 61], [-2, 67], [3, 71], [-9, 73],
+    ]),
+    ...spawns("security-a", "armoredGuard", [[-5, 64], [7, 59], [0, 73], [9, 70]], 1.5),
+    ...spawns("security-t", "technician", [[-10, 53], [10, 66], [2, 48]], 2),
   ],
 };
 

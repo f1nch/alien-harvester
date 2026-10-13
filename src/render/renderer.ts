@@ -41,6 +41,7 @@ export class GameRenderer {
   private depositPulse = 0;
   /** Evolution tier currently shown by the creature model. */
   private shownForm = 0;
+  private snapNext = false;
 
   constructor(canvas: HTMLCanvasElement, private map: MapDef, opts: RenderOptions) {
     this.engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false, powerPreference: "high-performance" }, false);
@@ -141,6 +142,11 @@ export class GameRenderer {
         this.creature.gulp();
       } else if (e.type === "deposited") {
         this.depositPulse = 1;
+      } else if (e.type === "playerHit") {
+        this.creature.gulp();
+      } else if (e.type === "died") {
+        // Respawn is a teleport: cut the camera instead of panning across the map.
+        this.snapNext = true;
       } else if (e.type === "evolved") {
         this.creature.setForm(e.tier, true);
         this.shownForm = e.tier;
@@ -205,7 +211,8 @@ export class GameRenderer {
 
     updateDoors(this.env, w.progress.unlockedDoors, dt);
 
-    this.updateCamera(x, z, dt);
+    this.updateCamera(x, z, this.snapNext ? 0 : dt);
+    this.snapNext = false;
     this.scene.render();
   }
 

@@ -37,7 +37,13 @@ export interface TargetEntity {
   fleeing: boolean;
   /** Targets never leave the zone they spawned in. */
   zoneRect: Rect;
+  /** Guard state machine (guards only). */
+  ai: GuardState;
+  /** Seconds left in the current AI state (windup or recovery). */
+  aiTimer: number;
 }
+
+export type GuardState = "patrol" | "chase" | "windup" | "recover" | "return";
 
 export type GameEvent =
   | { type: "captured"; target: TargetEntity; slot: number }
@@ -47,7 +53,10 @@ export type GameEvent =
   | { type: "questComplete"; quest: QuestDef }
   | { type: "levelUp"; level: number }
   | { type: "doorUnlocked"; door: string }
-  | { type: "evolved"; tier: number };
+  | { type: "evolved"; tier: number }
+  | { type: "playerHit"; damage: number; by: TargetEntity }
+  | { type: "strike"; by: TargetEntity; hit: boolean }
+  | { type: "died"; lost: CargoDrop[]; forgiven: boolean };
 
 export interface World {
   map: MapDef;
@@ -55,7 +64,13 @@ export interface World {
   stats: PlayerStats;
   /** Walls, props, and locked doors. Rebuilt when a door opens. */
   obstacles: Rect[];
-  player: { x: number; z: number; prevX: number; prevZ: number; vx: number; vz: number };
+  player: {
+    x: number; z: number; prevX: number; prevZ: number; vx: number; vz: number;
+    /** Seconds of post-respawn invulnerability remaining. */
+    invulnerable: number;
+    /** Seconds since last taking damage; regeneration waits for this. */
+    sinceHit: number;
+  };
   /** Desired movement, already normalised to length <= 1. */
   input: { x: number; z: number };
   targets: TargetEntity[];
@@ -90,6 +105,7 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
     player: {
       x: progress.player.x, z: progress.player.z,
       prevX: progress.player.x, prevZ: progress.player.z, vx: 0, vz: 0,
+      invulnerable: 0, sinceHit: 99,
     },
     input: { x: 0, z: 0 },
     targets: [],
@@ -138,6 +154,8 @@ export function spawnTarget(w: World, spawnId: string): TargetEntity | null {
     held: false,
     fleeing: false,
     zoneRect: zoneAt(w.map, s.x, s.z)?.rect ?? w.map.bounds,
+    ai: "patrol",
+    aiTimer: 0,
   };
   w.targets.push(t);
   w.progress.spawnCooldowns[spawnId] = 0;

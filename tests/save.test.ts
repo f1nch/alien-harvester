@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FACILITY } from "../src/content/map";
 import { newProgress } from "../src/domain/progress";
 import { createWorld } from "../src/game/world";
-import { defaultSettings, parseSave, toSaveFile } from "../src/persistence/schema";
+import { defaultSettings, parseSave, SCHEMA_VERSION, toSaveFile } from "../src/persistence/schema";
 
 const valid = () => {
   const p = newProgress(FACILITY);
@@ -89,7 +89,7 @@ describe("save hardening", () => {
     delete v1.progress.quests;
     delete v1.progress.unlockedDoors;
     const parsed = parseSave(v1, FACILITY)!;
-    expect(parsed.schemaVersion).toBe(3);
+    expect(parsed.schemaVersion).toBe(SCHEMA_VERSION);
     expect(parsed.progress.evolution).toBe(0);
     expect(parsed.progress.banked.biomass).toBe(42);
     expect(parsed.progress.upgrades.cargoCapacity).toBe(2);

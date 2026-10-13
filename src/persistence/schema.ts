@@ -7,7 +7,7 @@ import { MAX_TIER } from "../content/evolution";
 import { capAtTier, computeStats } from "../domain/economy";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const CONTENT_VERSION = 1;
 
 export interface Settings {
@@ -58,6 +58,11 @@ function migrate(raw: Obj): Obj | null {
     // v3 adds the evolution tier; everyone starts in the base form.
     const progress = isObj(m.progress) ? { ...m.progress, evolution: 0 } : m.progress;
     m = { ...m, schemaVersion: 3, progress };
+  }
+  if (m.schemaVersion === 3) {
+    // v4 adds the first-death exemption flag; existing players still get it.
+    const progress = isObj(m.progress) ? { ...m.progress, firstDeathForgiven: false } : m.progress;
+    m = { ...m, schemaVersion: 4, progress };
   }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
@@ -118,8 +123,12 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   progress.player = {
     x: Math.max(b.minX, Math.min(p.player.x, b.maxX)),
     z: Math.max(b.minZ, Math.min(p.player.z, b.maxZ)),
-    health: Math.min(p.player.health, computeStats(progress).maxHealth),
+    // A save can't legitimately hold a dead player (death resolves in the same tick), but never load one.
+    health: p.player.health > 0 ? Math.min(p.player.health, computeStats(progress).maxHealth) : computeStats(progress).maxHealth,
   };
+
+  if (typeof p.firstDeathForgiven !== "boolean") return null;
+  progress.firstDeathForgiven = p.firstDeathForgiven;
 
   if (!isObj(p.quests)) return null;
   const quests: Record<string, QuestState> = {};
