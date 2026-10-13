@@ -1,0 +1,227 @@
+:root {
+  --bg: #07060c;
+  --panel: rgba(16, 13, 26, 0.94);
+  --line: rgba(160, 130, 255, 0.25);
+  --text: #ece8ff;
+  --muted: #a49cc4;
+  --accent: #46f0c0;
+  --violet: #9b6bff;
+  --warn: #ffb347;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app { position: fixed; inset: 0; }
+
+#scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  outline: none;
+}
+
+/* Joystick appears wherever the thumb lands in the lower part of the screen. */
+#joystick-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 62%;
+  touch-action: none;
+}
+
+.joy-base {
+  position: absolute;
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
+  border-radius: 50%;
+  border: 2px solid rgba(200, 180, 255, 0.35);
+  background: rgba(30, 20, 60, 0.25);
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+.joy-base.active { opacity: 1; }
+.joy-knob {
+  position: absolute;
+  left: 32px;
+  top: 32px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(190, 160, 255, 0.55);
+  box-shadow: 0 0 16px rgba(155, 107, 255, 0.6);
+}
+
+#ui { position: absolute; inset: 0; pointer-events: none; }
+#ui > * { pointer-events: auto; }
+
+.hud-top {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: stretch;
+  pointer-events: none !important;
+}
+
+.chip, .cargo {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  min-height: 36px;
+}
+.chip-label { color: var(--muted); font-size: 12px; }
+.chip-value { font-weight: 700; font-variant-numeric: tabular-nums; }
+.chip-icon.biomass { color: var(--accent); }
+
+.cargo { flex: 1 1 140px; flex-direction: column; align-items: stretch; gap: 4px; }
+.cargo-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.cargo-value { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.cargo-bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.cargo-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--violet), var(--accent)); transition: width 0.15s; }
+.cargo.full { border-color: var(--warn); }
+.cargo.full .cargo-fill { background: repeating-linear-gradient(45deg, var(--warn) 0 6px, #c77d1d 6px 12px); }
+.cargo.full .cargo-label::after { content: " FULL"; color: var(--warn); font-weight: 700; }
+
+.hint {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 64px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  white-space: nowrap;
+  pointer-events: none !important;
+}
+.hint.warn { border-color: var(--warn); color: var(--warn); font-weight: 700; }
+
+.btn {
+  font: inherit;
+  color: var(--text);
+  background: #241b40;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btn-upgrade {
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 14px);
+  bottom: calc(env(safe-area-inset-bottom) + 18px);
+  z-index: 2;
+  min-height: 52px;
+  font-size: 16px;
+}
+.btn-upgrade.left { right: auto; left: calc(env(safe-area-inset-left) + 14px); }
+.btn-upgrade.ready { background: #2d6b5c; border-color: var(--accent); }
+
+.panel {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(4, 3, 10, 0.55);
+  padding: 12px;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
+}
+.panel-card {
+  width: min(460px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+}
+.panel-head { display: flex; justify-content: space-between; align-items: center; }
+.panel-head h2 { margin: 0; font-size: 20px; }
+.panel-note { color: var(--muted); font-size: 13px; margin: 6px 0 12px; }
+.up-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.up-name { font-weight: 700; }
+.up-level { color: var(--muted); font-weight: 400; font-size: 13px; }
+.up-value { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.btn-buy { flex: 0 0 auto; background: #2d6b5c; border-color: var(--accent); }
+.btn-buy:disabled { background: #241b40; border-color: var(--line); }
+.btn-secondary { background: transparent; }
+.panel-settings { padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+
+.toast {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom) + 86px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 14px;
+  z-index: 6;
+  pointer-events: none !important;
+  white-space: nowrap;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(4, 3, 10, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+
+.hidden { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cargo-fill, .joy-base { transition: none; }
+}
