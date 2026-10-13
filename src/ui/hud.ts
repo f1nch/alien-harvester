@@ -1,6 +1,11 @@
+import type { DoorDef } from "../content/map";
+import { goalTarget } from "../content/quests";
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
+import { doorRequirements } from "../domain/doors";
 import { maxLevel, nextCost } from "../domain/economy";
+import { levelProgress } from "../domain/levels";
 import { cargoWeight } from "../domain/progress";
+import { activeQuests, questCount } from "../domain/quests";
 import type { World } from "../game/world";
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
@@ -12,38 +17,72 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return e;
 }
 
+function chip(icon: string, iconCls: string, label: string): { root: HTMLElement; value: HTMLElement } {
+  const root = el("div", "chip");
+  root.setAttribute("aria-label", label);
+  root.title = label;
+  const value = el("span", "chip-value", "0");
+  root.append(el("span", `chip-icon ${iconCls}`, icon), el("span", "chip-label", label), value);
+  return { root, value };
+}
+
 export interface HudCallbacks {
   onOpenUpgrades(): void;
   onCloseUpgrades(): void;
   onBuy(id: UpgradeId): void;
   onToggleHand(): void;
+  onUnlockDoor(door: DoorDef): void;
+}
+
+export interface HudState {
+  inBase: boolean;
+  /** Locked door the player is standing next to. */
+  door: DoorDef | null;
 }
 
 export class Hud {
   private biomass: HTMLElement;
-  private xp: HTMLElement;
+  private genetic: HTMLElement;
+  private geneticChip: HTMLElement;
+  private level: HTMLElement;
+  private levelFill: HTMLElement;
+  private levelText: HTMLElement;
   private cargoText: HTMLElement;
   private cargoFill: HTMLElement;
   private cargoBox: HTMLElement;
   private hint: HTMLElement;
+  private quests: HTMLElement;
+  private doorCard: HTMLElement;
+  private doorTitle: HTMLElement;
+  private doorList: HTMLElement;
+  private doorBtn: HTMLButtonElement;
+  private currentDoor: DoorDef | null = null;
   private upgradeBtn: HTMLButtonElement;
   private panel: HTMLElement;
   private rows = new Map<UpgradeId, { level: HTMLElement; value: HTMLElement; buy: HTMLButtonElement }>();
   private toastEl: HTMLElement;
-  private toastTimer = 0;
+  private toastQueue: string[] = [];
+  private toastBusy = false;
   private overlay: HTMLElement;
   private last = "";
 
   constructor(root: HTMLElement, cb: HudCallbacks) {
     const top = el("div", "hud-top");
-    const res = el("div", "chip");
-    res.append(el("span", "chip-icon biomass", "◆"), el("span", "chip-label", "Biomass"));
-    this.biomass = el("span", "chip-value", "0");
-    res.append(this.biomass);
-    const xp = el("div", "chip");
-    xp.append(el("span", "chip-label", "XP"));
-    this.xp = el("span", "chip-value", "0");
-    xp.append(this.xp);
+    const bio = chip("◆", "biomass", "Biomass");
+    this.biomass = bio.value;
+    const gen = chip("✦", "genetic", "Genetic");
+    this.genetic = gen.value;
+    this.geneticChip = gen.root;
+
+    const lvl = el("div", "chip level-chip");
+    this.level = el("span", "chip-value", "Lv 1");
+    const lvlBar = el("div", "level-bar");
+    this.levelFill = el("div", "level-fill");
+    lvlBar.append(this.levelFill);
+    this.levelText = el("span", "level-text");
+    const lvlCol = el("div", "level-col");
+    lvlCol.append(lvlBar, this.levelText);
+    lvl.append(this.level, lvlCol);
 
     this.cargoBox = el("div", "cargo");
     const cargoLabel = el("div", "cargo-label");
@@ -54,9 +93,25 @@ export class Hud {
     this.cargoFill = el("div", "cargo-fill");
     bar.append(this.cargoFill);
     this.cargoBox.append(cargoLabel, bar);
-    top.append(res, xp, this.cargoBox);
+    top.append(bio.root, gen.root, lvl, this.cargoBox);
 
+    // Objectives and hints flow under the HUD so they never overlap it as it wraps.
+    const sub = el("div", "hud-sub");
+    this.quests = el("div", "quests");
+    this.quests.setAttribute("aria-live", "polite");
     this.hint = el("div", "hint");
+    sub.append(this.quests, this.hint);
+    top.append(sub);
+
+    this.doorCard = el("div", "door-card hidden");
+    this.doorCard.setAttribute("role", "region");
+    this.doorTitle = el("h3");
+    this.doorList = el("ul", "door-reqs");
+    this.doorBtn = el("button", "btn btn-buy", "Unlock");
+    this.doorBtn.addEventListener("click", () => {
+      if (this.currentDoor) cb.onUnlockDoor(this.currentDoor);
+    });
+    this.doorCard.append(this.doorTitle, this.doorList, this.doorBtn);
 
     this.upgradeBtn = el("button", "btn btn-upgrade", "Upgrades");
     this.upgradeBtn.addEventListener("click", () => cb.onOpenUpgrades());
@@ -94,9 +149,10 @@ export class Hud {
     this.panel.append(card);
 
     this.toastEl = el("div", "toast hidden");
+    this.toastEl.setAttribute("role", "status");
     this.overlay = el("div", "overlay hidden");
 
-    root.append(top, this.hint, this.upgradeBtn, this.panel, this.toastEl, this.overlay);
+    root.append(top, this.doorCard, this.upgradeBtn, this.panel, this.toastEl, this.overlay);
   }
 
   setLeftHanded(left: boolean): void {
@@ -112,11 +168,23 @@ export class Hud {
     this.last = "";
   }
 
+  /** Messages queue so simultaneous events (quest + level-up) are all readable. */
   toast(msg: string, seconds = 2.5): void {
+    this.toastQueue.push(msg);
+    if (!this.toastBusy) this.nextToast(seconds);
+  }
+
+  private nextToast(seconds: number): void {
+    const msg = this.toastQueue.shift();
+    if (msg === undefined) {
+      this.toastBusy = false;
+      this.toastEl.classList.add("hidden");
+      return;
+    }
+    this.toastBusy = true;
     this.toastEl.textContent = msg;
     this.toastEl.classList.remove("hidden");
-    window.clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => this.toastEl.classList.add("hidden"), seconds * 1000);
+    window.setTimeout(() => this.nextToast(seconds), seconds * 1000);
   }
 
   /** Full-screen blocking message (e.g. game open in another tab). */
@@ -125,27 +193,41 @@ export class Hud {
     this.overlay.classList.remove("hidden");
   }
 
-  update(w: World, inBaseNow: boolean): void {
+  update(w: World, s: HudState): void {
     const p = w.progress;
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
-    const key = `${p.banked.biomass}|${p.xp}|${cargo}|${cap}|${w.cargoFull}|${inBaseNow}|${this.upgradesOpen}`;
+    const key = [
+      p.banked.biomass, p.banked.genetic, p.xp, cargo, cap, w.cargoFull, s.inBase, s.door?.id,
+      this.upgradesOpen, JSON.stringify(p.quests), p.unlockedDoors.length,
+    ].join("|");
     if (key === this.last) return;
     this.last = key;
 
-    this.biomass.textContent = fmt(p.banked.biomass);
-    this.xp.textContent = fmt(p.xp);
+    this.biomass.textContent = fmt(Math.floor(p.banked.biomass));
+    this.genetic.textContent = fmt(Math.floor(p.banked.genetic));
+    // Genetic material appears once it matters, to keep the first minutes uncluttered.
+    this.geneticChip.classList.toggle("hidden", p.banked.genetic === 0 && p.unlockedDoors.length === 0);
+
+    const lp = levelProgress(p.xp);
+    this.level.textContent = `Lv ${lp.level}`;
+    this.levelFill.style.width = lp.span === null ? "100%" : `${(lp.into / lp.span) * 100}%`;
+    this.levelText.textContent = lp.span === null ? "Max level" : `${fmt(lp.into)} / ${lp.span} XP`;
+
     this.cargoText.textContent = `${fmt(cargo)} / ${fmt(cap)}`;
     this.cargoFill.style.width = `${Math.min(100, (cargo / cap) * 100)}%`;
     this.cargoBox.classList.toggle("full", w.cargoFull);
 
+    this.renderQuests(w);
+    this.renderDoor(w, s.door);
+
     let hint = "";
-    if (w.cargoFull && !inBaseNow) hint = "Cargo full — return to base ▼";
-    else if (inBaseNow && cargo > 0) hint = "Depositing…";
+    if (w.cargoFull && !s.inBase) hint = "Cargo full — return to base ▼";
+    else if (s.inBase && cargo > 0) hint = "Depositing…";
     else if (p.xp === 0) hint = "Move near workers to capture them";
     this.hint.textContent = hint;
     this.hint.classList.toggle("hidden", hint === "");
-    this.hint.classList.toggle("warn", w.cargoFull && !inBaseNow);
+    this.hint.classList.toggle("warn", w.cargoFull && !s.inBase);
 
     let affordable = false;
     for (const id of UPGRADE_IDS) {
@@ -171,5 +253,40 @@ export class Hud {
     }
     this.upgradeBtn.classList.toggle("ready", affordable);
     this.upgradeBtn.textContent = affordable ? "Upgrades ●" : "Upgrades";
+  }
+
+  private renderQuests(w: World): void {
+    const active = activeQuests(w.progress).slice(0, 3);
+    this.quests.classList.toggle("hidden", active.length === 0);
+    this.quests.replaceChildren(
+      el("div", "quests-title", "Objectives"),
+      ...active.map((q) => {
+        const row = el("div", "quest");
+        const target = goalTarget(q.goal);
+        row.append(el("span", "quest-name", q.title));
+        if (target > 1) row.append(el("span", "quest-count", `${fmt(Math.floor(questCount(w.progress, q.id)))} / ${target}`));
+        return row;
+      }),
+    );
+  }
+
+  private renderDoor(w: World, door: DoorDef | null): void {
+    this.currentDoor = door;
+    this.doorCard.classList.toggle("hidden", door === null);
+    if (!door) return;
+    const reqs = doorRequirements(w.progress, door);
+    this.doorTitle.textContent = `${door.name} — locked`;
+    this.doorCard.setAttribute("aria-label", `${door.name} requirements`);
+    this.doorList.replaceChildren(
+      ...reqs.map((r) => {
+        const li = el("li", r.met ? "met" : "unmet");
+        // Marks are text (✓ / ✗), not colour alone.
+        li.append(el("span", "req-mark", r.met ? "✓" : "✗"), el("span", "req-label", r.label), el("span", "req-progress", r.progress));
+        return li;
+      }),
+    );
+    const ready = reqs.every((r) => r.met);
+    this.doorBtn.disabled = !ready;
+    this.doorBtn.textContent = ready ? "Unlock" : "Requirements not met";
   }
 }

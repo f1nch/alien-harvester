@@ -1,9 +1,12 @@
 import Dexie, { type Table } from "dexie";
-import type { RoomDef } from "../content/rooms";
+import type { MapDef } from "../content/map";
 import { parseSave, SCHEMA_VERSION, type SaveFile } from "./schema";
 
 interface Slot {
-  /** "current", "previous", or "quarantine:<n>" for unreadable snapshots kept for recovery. */
+  /**
+   * "current", "previous", "quarantine:<n>" for unreadable snapshots, or
+   * "premigration:v<n>" for the raw save as it was before a schema upgrade.
+   */
   key: string;
   data: unknown;
 }
@@ -31,7 +34,7 @@ export class SaveStore {
   private db = new SaveDB();
   private writing: Promise<void> = Promise.resolve();
 
-  constructor(private readonly room: RoomDef) {}
+  constructor(private readonly room: MapDef) {}
 
   async load(): Promise<LoadResult> {
     const [current, previous] = await Promise.all([
@@ -41,6 +44,17 @@ export class SaveStore {
     for (const slot of [current, previous]) {
       const v = slot ? schemaVersionOf(slot.data) : null;
       if (v !== null && v > SCHEMA_VERSION) return { status: "newer" };
+    }
+
+    // Before an older save is migrated and rotated away, keep its raw form permanently.
+    const oldVersion = current ? schemaVersionOf(current.data) : null;
+    if (current && oldVersion !== null && oldVersion < SCHEMA_VERSION) {
+      const key = `premigration:v${oldVersion}`;
+      try {
+        if (!(await this.db.slots.get(key))) await this.db.slots.put({ key, data: current.data });
+      } catch (err) {
+        console.warn("Could not keep pre-migration snapshot", err);
+      }
     }
 
     const cur = current ? parseSave(current.data, this.room) : null;

@@ -1,11 +1,12 @@
 import { CURRENCIES, emptyWallet } from "../content/currencies";
-import type { RoomDef } from "../content/rooms";
+import { reachableZones, zoneAtOrDoorway, type MapDef } from "../content/map";
+import { goalTarget, QUEST_BY_ID } from "../content/quests";
 import { isTargetType, TARGETS } from "../content/targets";
 import { UPGRADE_IDS, UPGRADES } from "../content/upgrades";
 import { computeStats } from "../domain/economy";
-import { newProgress, type CargoDrop, type ProgressState } from "../domain/progress";
+import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const CONTENT_VERSION = 1;
 
 export interface Settings {
@@ -41,11 +42,18 @@ const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isNonNeg = (v: unknown): v is number => isNum(v) && v >= 0;
 
-/** Upgrade older schemas in place. Returns null for unknown/newer versions. */
+/**
+ * Bring older schemas up to date, one version at a time, without mutating the
+ * input. Returns null for unknown or newer versions.
+ */
 function migrate(raw: Obj): Obj | null {
-  const v = raw.schemaVersion;
-  if (v === SCHEMA_VERSION) return raw;
-  return null;
+  let m = raw;
+  if (m.schemaVersion === 1) {
+    // v2 adds quests and doors. Old saves start the quest chain from the beginning.
+    const progress = isObj(m.progress) ? { ...m.progress, quests: {}, unlockedDoors: [] } : m.progress;
+    m = { ...m, schemaVersion: 2, progress };
+  }
+  return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
 
@@ -53,7 +61,7 @@ function migrate(raw: Obj): Obj | null {
  * Validate an untrusted save (from storage or an import). Returns null if it
  * can't be trusted, so the caller can fall back without overwriting anything.
  */
-export function parseSave(raw: unknown, room: RoomDef): SaveFile | null {
+export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   if (!isObj(raw)) return null;
   const m = migrate(raw);
   if (!m) return null;
@@ -102,6 +110,30 @@ export function parseSave(raw: unknown, room: RoomDef): SaveFile | null {
     z: Math.max(b.minZ, Math.min(p.player.z, b.maxZ)),
     health: Math.min(p.player.health, computeStats(progress).maxHealth),
   };
+
+  if (!isObj(p.quests)) return null;
+  const quests: Record<string, QuestState> = {};
+  for (const [id, q] of Object.entries(p.quests)) {
+    const def = QUEST_BY_ID.get(id);
+    if (!def) continue; // quest removed from content: drop it
+    if (!isObj(q) || !isNonNeg(q.count) || typeof q.done !== "boolean") return null;
+    quests[id] = { count: Math.min(q.count, goalTarget(def.goal)), done: q.done };
+  }
+  progress.quests = quests;
+
+  if (!Array.isArray(p.unlockedDoors)) return null;
+  const doorIds = new Set(room.doors.map((d) => d.id));
+  for (const id of p.unlockedDoors) {
+    if (typeof id !== "string") return null;
+    if (doorIds.has(id) && !progress.unlockedDoors.includes(id)) progress.unlockedDoors.push(id);
+  }
+
+  // A position the player couldn't have walked to (or outside every zone) returns to spawn.
+  const zone = zoneAtOrDoorway(room, progress.player.x, progress.player.z, progress.unlockedDoors);
+  if (!zone || !reachableZones(room, progress.unlockedDoors).has(zone.id)) {
+    progress.player.x = room.playerSpawn.x;
+    progress.player.z = room.playerSpawn.z;
+  }
 
   if (!isObj(p.spawnCooldowns)) return null;
   // Keep cooldowns only for spawn points that still exist; new ones start alive.

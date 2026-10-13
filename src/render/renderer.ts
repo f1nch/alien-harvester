@@ -2,12 +2,12 @@ import {
   Camera, Color3, Color4, DirectionalLight, Engine, FreeCamera, GlowLayer, HemisphericLight, Mesh, MeshBuilder,
   Scene, ShadowGenerator, StandardMaterial, Vector3,
 } from "@babylonjs/core";
-import type { RoomDef } from "../content/rooms";
+import { zoneAt, type MapDef, type Rect } from "../content/map";
 import { inBase } from "../game/systems/deposit";
 import type { GameEvent, World } from "../game/world";
 import { CreatureView } from "./creature";
 import { CrowdView } from "./crowd";
-import { buildEnvironment, type Environment } from "./environment";
+import { buildEnvironment, updateDoors, type Environment } from "./environment";
 
 const CAMERA_OFFSET = new Vector3(0, 16, -11.5);
 const CAMERA_FOV = 0.62;
@@ -26,6 +26,7 @@ export class GameRenderer {
   readonly scene: Scene;
   private camera: FreeCamera;
   private look = new Vector3();
+  private cameraZone: Rect;
   private creature: CreatureView;
   private crowd: CrowdView;
   private env: Environment;
@@ -39,7 +40,7 @@ export class GameRenderer {
   private time = 0;
   private depositPulse = 0;
 
-  constructor(canvas: HTMLCanvasElement, private room: RoomDef, opts: RenderOptions) {
+  constructor(canvas: HTMLCanvasElement, private map: MapDef, opts: RenderOptions) {
     this.engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false, powerPreference: "high-performance" }, false);
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 2));
     const scene = (this.scene = new Scene(this.engine));
@@ -73,7 +74,7 @@ export class GameRenderer {
       this.glow.intensity = 0.55;
     }
 
-    this.env = buildEnvironment(scene, room, shadows);
+    this.env = buildEnvironment(scene, map, shadows);
     this.glow?.addExcludedMesh(this.env.basePad);
     this.creature = new CreatureView(scene, shadows);
     this.crowd = new CrowdView(scene, shadows);
@@ -120,6 +121,7 @@ export class GameRenderer {
       this.goalStore.push(new Vector3());
     }
 
+    this.cameraZone = map.zones[0]?.rect ?? map.bounds;
     this.resize();
   }
 
@@ -178,8 +180,8 @@ export class GameRenderer {
     const showArrow = w.cargoFull && !inBase(w);
     this.arrow.setEnabled(showArrow);
     if (showArrow) {
-      const dx = this.room.base.x - x;
-      const dz = this.room.base.z - z;
+      const dx = this.map.base.x - x;
+      const dz = this.map.base.z - z;
       const len = Math.hypot(dx, dz) || 1;
       const off = 1.5 + Math.sin(this.time * 6) * 0.12;
       this.arrow.position.set(x + (dx / len) * off, 0.08, z + (dz / len) * off);
@@ -191,35 +193,41 @@ export class GameRenderer {
     const s = 1 + this.depositPulse * 0.08 + Math.sin(this.time * 2) * 0.015;
     this.env.baseRing.scaling.set(s, 1, s);
 
+    updateDoors(this.env, w.progress.unlockedDoors, dt);
+
     this.updateCamera(x, z, dt);
     this.scene.render();
   }
 
-  /** Snap the camera to the player (used after loading). */
+  /** Snap the camera and doors to the current state (used after loading). */
   snapCamera(w: World): void {
-    this.look.set(w.player.x, 0, w.player.z);
+    updateDoors(this.env, w.progress.unlockedDoors, 0, true);
+    this.cameraZone = zoneAt(this.map, w.player.x, w.player.z)?.rect ?? this.map.bounds;
     this.updateCamera(w.player.x, w.player.z, 0);
   }
 
   private updateCamera(x: number, z: number, dt: number): void {
-    const k = dt === 0 ? 1 : 1 - Math.exp(-dt * 6);
-    this.look.x += (x - this.look.x) * k;
-    this.look.z += (z - this.look.z) * k;
-
-    // Clamp so the view doesn't drift far past the room edges.
-    const b = this.room.bounds;
+    // Horizontal framing follows the zone the player is in (kept while crossing a doorway).
+    this.cameraZone = zoneAt(this.map, x, z)?.rect ?? this.cameraZone;
+    const zr = this.cameraZone;
     const dist = CAMERA_OFFSET.length();
     const aspect = this.engine.getAspectRatio(this.camera);
     const halfW = this.camera.fovMode === Camera.FOVMODE_HORIZONTAL_FIXED
       ? dist * Math.tan(CAMERA_FOV / 2)
       : dist * Math.tan(CAMERA_FOV / 2) * aspect;
-    const roomHalfW = (b.maxX - b.minX) / 2;
-    const cx = (b.minX + b.maxX) / 2;
-    const marginX = Math.max(0, roomHalfW - halfW + 1);
-    const lx = Math.max(cx - marginX, Math.min(this.look.x, cx + marginX));
-    const lz = Math.max(b.minZ + 8, Math.min(this.look.z, b.maxZ - 9));
+    const cx = (zr.minX + zr.maxX) / 2;
+    const marginX = Math.max(0, (zr.maxX - zr.minX) / 2 - halfW + 1);
+    // Depth is only clamped at the facility ends, so the next zone stays visible through doors.
+    const b = this.map.bounds;
+    const tx = Math.max(cx - marginX, Math.min(x, cx + marginX));
+    const tz = Math.max(b.minZ + 8, Math.min(z, b.maxZ - 9));
 
-    this.camera.position.set(lx + CAMERA_OFFSET.x, CAMERA_OFFSET.y, lz + CAMERA_OFFSET.z);
-    this.camera.setTarget(new Vector3(lx, 0, lz + 0.5));
+    // Smooth toward the clamped target so zone changes never jump.
+    const k = dt === 0 ? 1 : 1 - Math.exp(-dt * 6);
+    this.look.x += (tx - this.look.x) * k;
+    this.look.z += (tz - this.look.z) * k;
+
+    this.camera.position.set(this.look.x + CAMERA_OFFSET.x, CAMERA_OFFSET.y, this.look.z + CAMERA_OFFSET.z);
+    this.camera.setTarget(new Vector3(this.look.x, 0, this.look.z + 0.5));
   }
 }

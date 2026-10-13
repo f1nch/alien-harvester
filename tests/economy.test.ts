@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONTAINMENT } from "../src/content/rooms";
+import { FACILITY } from "../src/content/map";
 import { UPGRADE_IDS, UPGRADES } from "../src/content/upgrades";
 import { computeStats, purchaseUpgrade } from "../src/domain/economy";
 import { newProgress } from "../src/domain/progress";
@@ -12,8 +12,8 @@ describe("deposit", () => {
   it("banks exactly the cargo's rewards and empties the hold", () => {
     const w = testWorld([]);
     for (let i = 0; i < 7; i++) w.progress.cargo.push({ type: "worker", weight: 2, reward: { biomass: 3 } });
-    w.player.x = w.room.base.x;
-    w.player.z = w.room.base.z;
+    w.player.x = w.map.base.x;
+    w.player.z = w.map.base.z;
     for (let i = 0; i < 30; i++) updateDeposit(w, SIM_DT);
     expect(w.progress.cargo).toHaveLength(0);
     expect(w.progress.banked.biomass).toBe(21);
@@ -31,7 +31,7 @@ describe("deposit", () => {
 
 describe("upgrades", () => {
   it("deducts and levels atomically, refusing when unaffordable", () => {
-    const p = newProgress(CONTAINMENT);
+    const p = newProgress(FACILITY);
     p.banked.biomass = 14;
     expect(purchaseUpgrade(p, "capturePower")).toEqual({ ok: false, reason: "unaffordable" });
     expect(p.banked.biomass).toBe(14);
@@ -44,7 +44,7 @@ describe("upgrades", () => {
   });
 
   it("stops at the level cap", () => {
-    const p = newProgress(CONTAINMENT);
+    const p = newProgress(FACILITY);
     p.banked.biomass = 1e9;
     const id = "moveSpeed";
     for (let i = 0; i < 20; i++) purchaseUpgrade(p, id);
@@ -63,7 +63,7 @@ describe("upgrades", () => {
 describe("pacing smoke test", () => {
   it("a greedy bot captures within 20s and affords an upgrade within 2 minutes", () => {
     // Crude bot: walk toward the nearest worker; go home when full.
-    const room = CONTAINMENT;
+    const room = FACILITY;
     const w = createWorld(room, newProgress(room));
 
     let firstCapture = -1;

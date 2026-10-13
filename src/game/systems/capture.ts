@@ -1,6 +1,6 @@
 import { cargoWeight } from "../../domain/progress";
 import { dist2, hasLineOfSight } from "../geometry";
-import type { TargetEntity, World } from "../world";
+import { gainXp, questEvent, type TargetEntity, type World } from "../world";
 
 /** Seconds a target may be out of reach before its progress starts to decay. */
 export const GRACE_SECONDS = 0.3;
@@ -17,7 +17,7 @@ export function committedCargo(w: World): number {
 function inReach(w: World, t: TargetEntity): boolean {
   const p = w.player;
   const r = w.stats.captureRadius;
-  return dist2(p.x, p.z, t.x, t.z) <= r * r && hasLineOfSight(p.x, p.z, t.x, t.z, w.room.obstacles);
+  return dist2(p.x, p.z, t.x, t.z) <= r * r && hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles);
 }
 
 function release(w: World, slot: number): void {
@@ -84,7 +84,7 @@ function assignTentacles(w: World): void {
   for (const t of w.targets) w.hash.insert(t);
   const candidates = w.hash
     .query(p.x, p.z, stats.captureRadius)
-    .filter((t) => !w.tentacles.includes(t) && hasLineOfSight(p.x, p.z, t.x, t.z, w.room.obstacles))
+    .filter((t) => !w.tentacles.includes(t) && hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles))
     .sort((a, b) => dist2(p.x, p.z, a.x, a.z) - dist2(p.x, p.z, b.x, b.z));
 
   // Reserve cargo on assignment so simultaneous completions can never overflow.
@@ -105,7 +105,8 @@ function complete(w: World, slot: number, t: TargetEntity): void {
   w.tentacles[slot] = null;
   w.targets.splice(w.targets.indexOf(t), 1);
   w.progress.cargo.push({ type: t.def.id, weight: t.def.weight, reward: { ...t.def.reward } });
-  w.progress.xp += t.def.xp;
   w.progress.spawnCooldowns[t.spawnId] = t.def.respawnSeconds;
   w.events.push({ type: "captured", target: t, slot });
+  gainXp(w, t.def.xp);
+  questEvent(w, { kind: "capture", target: t.def.id });
 }

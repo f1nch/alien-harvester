@@ -1,11 +1,11 @@
 import {
   Color3, DynamicTexture, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, Texture,
 } from "@babylonjs/core";
-import type { Rect, RoomDef } from "../content/rooms";
+import type { MapDef, Rect } from "../content/map";
 
-function floorTexture(scene: Scene): DynamicTexture {
+function floorTexture(scene: Scene, name: string): DynamicTexture {
   const size = 256;
-  const tex = new DynamicTexture("floorTex", { width: size, height: size }, scene, true);
+  const tex = new DynamicTexture(name, { width: size, height: size }, scene, true);
   const ctx = tex.getContext() as CanvasRenderingContext2D;
   ctx.fillStyle = "#1b1d26";
   ctx.fillRect(0, 0, size, size);
@@ -35,79 +35,147 @@ function floorTexture(scene: Scene): DynamicTexture {
 }
 
 function block(
-  scene: Scene, name: string, r: Rect, height: number, mat: StandardMaterial, trim: StandardMaterial,
+  scene: Scene, name: string, r: Rect, height: number, mat: StandardMaterial, trim: StandardMaterial | null,
 ): Mesh {
   const w = r.maxX - r.minX;
   const d = r.maxZ - r.minZ;
   const m = MeshBuilder.CreateBox(name, { width: w, depth: d, height }, scene);
   m.position.set((r.minX + r.maxX) / 2, height / 2, (r.minZ + r.maxZ) / 2);
   m.material = mat;
-  const strip = MeshBuilder.CreateBox(`${name}-trim`, { width: w + 0.02, depth: d + 0.02, height: 0.06 }, scene);
-  strip.position.set(m.position.x, height - 0.18, m.position.z);
-  strip.material = trim;
   m.freezeWorldMatrix();
-  strip.freezeWorldMatrix();
+  if (trim) {
+    const strip = MeshBuilder.CreateBox(`${name}-trim`, { width: w + 0.02, depth: d + 0.02, height: 0.06 }, scene);
+    strip.position.set(m.position.x, height - 0.18, m.position.z);
+    strip.material = trim;
+    strip.freezeWorldMatrix();
+  }
   return m;
+}
+
+function emissive(scene: Scene, name: string, color: Color3): StandardMaterial {
+  const m = new StandardMaterial(name, scene);
+  m.diffuseColor = Color3.Black();
+  m.emissiveColor = color;
+  m.disableLighting = true;
+  return m;
+}
+
+export interface DoorView {
+  id: string;
+  /** Sliding panel; sinks into the floor when the door opens. */
+  panel: Mesh;
+  open: number;
 }
 
 export interface Environment {
   baseRing: Mesh;
   basePad: Mesh;
+  doors: DoorView[];
 }
 
-export function buildEnvironment(scene: Scene, room: RoomDef, shadows: ShadowGenerator | null): Environment {
-  const b = room.bounds;
-  const width = b.maxX - b.minX;
-  const depth = b.maxZ - b.minZ;
+const WALL_HEIGHT = 1.8;
+const DOOR_HEIGHT = 2;
 
-  const floorMat = new StandardMaterial("floorMat", scene);
-  const tex = floorTexture(scene);
-  tex.uScale = width / 2;
-  tex.vScale = depth / 2;
-  floorMat.diffuseTexture = tex;
-  floorMat.specularColor = new Color3(0.15, 0.15, 0.2);
-  floorMat.specularPower = 32;
-  const floor = MeshBuilder.CreateGround("floor", { width, height: depth }, scene);
-  floor.position.set((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2);
-  floor.material = floorMat;
-  floor.receiveShadows = true;
-  floor.freezeWorldMatrix();
+export function buildEnvironment(scene: Scene, map: MapDef, shadows: ShadowGenerator | null): Environment {
+  const b = map.bounds;
 
-  // Dark service floor outside the room so the camera never shows a void.
+  // Dark service floor outside the facility so the camera never shows a void.
   const outerMat = new StandardMaterial("outerMat", scene);
   outerMat.diffuseColor = new Color3(0.05, 0.05, 0.08);
   outerMat.specularColor = Color3.Black();
-  const outer = MeshBuilder.CreateGround("outerFloor", { width: width + 40, height: depth + 40 }, scene);
-  outer.position.set(floor.position.x, -0.02, floor.position.z);
+  const outer = MeshBuilder.CreateGround("outerFloor", { width: b.maxX - b.minX + 40, height: b.maxZ - b.minZ + 40 }, scene);
+  outer.position.set((b.minX + b.maxX) / 2, -0.02, (b.minZ + b.maxZ) / 2);
   outer.material = outerMat;
   outer.freezeWorldMatrix();
+
+  // One tinted floor per zone so each reads as its own place.
+  for (const zone of map.zones) {
+    const r = zone.rect;
+    const width = r.maxX - r.minX;
+    const depth = r.maxZ - r.minZ;
+    const mat = new StandardMaterial(`floor-${zone.id}`, scene);
+    const tex = floorTexture(scene, `floorTex-${zone.id}`);
+    tex.uScale = width / 2;
+    tex.vScale = depth / 2;
+    mat.diffuseTexture = tex;
+    mat.diffuseColor = new Color3(...zone.tint);
+    mat.specularColor = new Color3(0.15, 0.15, 0.2);
+    mat.specularPower = 32;
+    const floor = MeshBuilder.CreateGround(`floor-${zone.id}`, { width, height: depth }, scene);
+    floor.position.set((r.minX + r.maxX) / 2, 0, (r.minZ + r.maxZ) / 2);
+    floor.material = mat;
+    floor.receiveShadows = true;
+    floor.freezeWorldMatrix();
+  }
+  // Floor under door gaps so open doorways aren't holes.
+  const thresholdMat = new StandardMaterial("thresholdMat", scene);
+  thresholdMat.diffuseColor = new Color3(0.16, 0.16, 0.2);
+  for (const d of map.doors) {
+    const r = d.rect;
+    const g = MeshBuilder.CreateGround(`threshold-${d.id}`, { width: r.maxX - r.minX, height: r.maxZ - r.minZ }, scene);
+    g.position.set((r.minX + r.maxX) / 2, 0.001, (r.minZ + r.maxZ) / 2);
+    g.material = thresholdMat;
+    g.freezeWorldMatrix();
+  }
 
   const wallMat = new StandardMaterial("wallMat", scene);
   wallMat.diffuseColor = new Color3(0.13, 0.14, 0.19);
   wallMat.specularColor = new Color3(0.1, 0.1, 0.12);
-  const trimMat = new StandardMaterial("trimMat", scene);
-  trimMat.diffuseColor = Color3.Black();
-  trimMat.emissiveColor = new Color3(0.35, 0.2, 0.9);
-  trimMat.disableLighting = true;
+  const trimMat = emissive(scene, "trimMat", new Color3(0.35, 0.2, 0.9));
 
+  // Perimeter; the south edge is low so it never hides the creature from the angled camera.
   const t = 0.6;
-  // The near wall is low so it never hides the creature from the angled camera.
-  block(scene, "wallN", { minX: b.minX - t, maxX: b.maxX + t, minZ: b.maxZ, maxZ: b.maxZ + t }, 2.4, wallMat, trimMat);
-  block(scene, "wallS", { minX: b.minX - t, maxX: b.maxX + t, minZ: b.minZ - t, maxZ: b.minZ }, 0.5, wallMat, trimMat);
-  block(scene, "wallW", { minX: b.minX - t, maxX: b.minX, minZ: b.minZ, maxZ: b.maxZ }, 1.6, wallMat, trimMat);
-  block(scene, "wallE", { minX: b.maxX, maxX: b.maxX + t, minZ: b.minZ, maxZ: b.maxZ }, 1.6, wallMat, trimMat);
+  block(scene, "perimN", { minX: b.minX - t, maxX: b.maxX + t, minZ: b.maxZ, maxZ: b.maxZ + t }, 2.4, wallMat, trimMat);
+  block(scene, "perimS", { minX: b.minX - t, maxX: b.maxX + t, minZ: b.minZ - t, maxZ: b.minZ }, 0.5, wallMat, trimMat);
+  block(scene, "perimW", { minX: b.minX - t, maxX: b.minX, minZ: b.minZ, maxZ: b.maxZ }, WALL_HEIGHT, wallMat, trimMat);
+  block(scene, "perimE", { minX: b.maxX, maxX: b.maxX + t, minZ: b.minZ, maxZ: b.maxZ }, WALL_HEIGHT, wallMat, trimMat);
+  map.walls.forEach((r, i) => block(scene, `wall${i}`, r, WALL_HEIGHT, wallMat, trimMat));
 
   const podMat = new StandardMaterial("podMat", scene);
   podMat.diffuseColor = new Color3(0.2, 0.22, 0.28);
   podMat.specularColor = new Color3(0.35, 0.35, 0.4);
   podMat.specularPower = 48;
-  const podTrim = new StandardMaterial("podTrim", scene);
-  podTrim.diffuseColor = Color3.Black();
-  podTrim.emissiveColor = new Color3(0.1, 0.75, 0.65);
-  podTrim.disableLighting = true;
-  room.obstacles.forEach((r, i) => {
-    const m = block(scene, `obstacle${i}`, r, 1.3, podMat, podTrim);
+  const podTrim = emissive(scene, "podTrim", new Color3(0.1, 0.75, 0.65));
+  map.props.forEach((r, i) => {
+    const m = block(scene, `prop${i}`, r, 1.3, podMat, podTrim);
     shadows?.addShadowCaster(m);
+  });
+
+  // Doors: hazard-striped panels between glowing posts.
+  const doorTex = new DynamicTexture("doorTex", { width: 128, height: 64 }, scene, true);
+  const ctx = doorTex.getContext() as CanvasRenderingContext2D;
+  ctx.fillStyle = "#2a1414";
+  ctx.fillRect(0, 0, 128, 64);
+  ctx.fillStyle = "#c8401e";
+  for (let x = -64; x < 128; x += 24) {
+    ctx.beginPath();
+    ctx.moveTo(x, 64);
+    ctx.lineTo(x + 12, 64);
+    ctx.lineTo(x + 44, 0);
+    ctx.lineTo(x + 32, 0);
+    ctx.fill();
+  }
+  doorTex.update();
+  const doorMat = new StandardMaterial("doorMat", scene);
+  doorMat.diffuseTexture = doorTex;
+  doorMat.emissiveColor = new Color3(0.25, 0.08, 0.05);
+  doorMat.specularColor = new Color3(0.2, 0.2, 0.2);
+  const postMat = emissive(scene, "doorPost", new Color3(1, 0.45, 0.15));
+
+  const doors: DoorView[] = map.doors.map((d) => {
+    const r = d.rect;
+    const cx = (r.minX + r.maxX) / 2;
+    const cz = (r.minZ + r.maxZ) / 2;
+    const panel = MeshBuilder.CreateBox(`door-${d.id}`, { width: r.maxX - r.minX, depth: (r.maxZ - r.minZ) * 0.5, height: DOOR_HEIGHT }, scene);
+    panel.position.set(cx, DOOR_HEIGHT / 2, cz);
+    panel.material = doorMat;
+    for (const side of [r.minX, r.maxX]) {
+      const post = MeshBuilder.CreateBox(`doorPost-${d.id}`, { width: 0.16, depth: r.maxZ - r.minZ + 0.1, height: DOOR_HEIGHT + 0.2 }, scene);
+      post.position.set(side, (DOOR_HEIGHT + 0.2) / 2, cz);
+      post.material = postMat;
+      post.freezeWorldMatrix();
+    }
+    return { id: d.id, panel, open: 0 };
   });
 
   // Base: glowing pad with a slowly turning ring.
@@ -115,27 +183,34 @@ export function buildEnvironment(scene: Scene, room: RoomDef, shadows: ShadowGen
   baseMat.diffuseColor = new Color3(0.02, 0.1, 0.1);
   baseMat.emissiveColor = new Color3(0.02, 0.17, 0.16);
   baseMat.alpha = 0.7;
-  const basePad = MeshBuilder.CreateCylinder("basePad", { diameter: room.base.radius * 2, height: 0.04, tessellation: 48 }, scene);
-  basePad.position.set(room.base.x, 0.02, room.base.z);
+  const basePad = MeshBuilder.CreateCylinder("basePad", { diameter: map.base.radius * 2, height: 0.04, tessellation: 48 }, scene);
+  basePad.position.set(map.base.x, 0.02, map.base.z);
   basePad.material = baseMat;
 
-  const ringMat = new StandardMaterial("ringMat", scene);
-  ringMat.diffuseColor = Color3.Black();
-  ringMat.emissiveColor = new Color3(0.2, 1, 0.85);
-  ringMat.disableLighting = true;
-  const baseRing = MeshBuilder.CreateTorus("baseRing", { diameter: room.base.radius * 2, thickness: 0.08, tessellation: 64 }, scene);
-  baseRing.position.set(room.base.x, 0.06, room.base.z);
+  const ringMat = emissive(scene, "ringMat", new Color3(0.2, 1, 0.85));
+  const baseRing = MeshBuilder.CreateTorus("baseRing", { diameter: map.base.radius * 2, thickness: 0.08, tessellation: 64 }, scene);
+  baseRing.position.set(map.base.x, 0.06, map.base.z);
   baseRing.material = ringMat;
 
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
     const pylon = MeshBuilder.CreateCylinder(`pylon${i}`, { diameterTop: 0.12, diameterBottom: 0.3, height: 1.2, tessellation: 8 }, scene);
-    pylon.position.set(room.base.x + Math.cos(a) * (room.base.radius + 0.3), 0.6, room.base.z + Math.sin(a) * (room.base.radius + 0.3));
+    pylon.position.set(map.base.x + Math.cos(a) * (map.base.radius + 0.3), 0.6, map.base.z + Math.sin(a) * (map.base.radius + 0.3));
     pylon.material = wallMat;
     const cap = MeshBuilder.CreateSphere(`pylonCap${i}`, { diameter: 0.22, segments: 8 }, scene);
     cap.position.set(pylon.position.x, 1.25, pylon.position.z);
     cap.material = ringMat;
   }
 
-  return { baseRing, basePad };
+  return { baseRing, basePad, doors };
+}
+
+/** Animate door panels toward their open/closed state. */
+export function updateDoors(env: Environment, unlocked: readonly string[], dt: number, snap = false): void {
+  for (const d of env.doors) {
+    const target = unlocked.includes(d.id) ? 1 : 0;
+    d.open = snap ? target : d.open + (target - d.open) * Math.min(1, dt * 3);
+    d.panel.position.y = DOOR_HEIGHT / 2 - d.open * (DOOR_HEIGHT + 0.05);
+    d.panel.setEnabled(d.open < 0.999);
+  }
 }

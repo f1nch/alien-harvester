@@ -1,12 +1,12 @@
 import { CURRENCIES } from "../../content/currencies";
 import { dist2 } from "../geometry";
-import type { World } from "../world";
+import { questEvent, type World } from "../world";
 
 /** Cargo units banked per second while standing in the base zone. */
 export const DEPOSIT_RATE = 40;
 
 export function inBase(w: World): boolean {
-  const b = w.room.base;
+  const b = w.map.base;
   return dist2(w.player.x, w.player.z, b.x, b.z) <= b.radius * b.radius;
 }
 
@@ -23,7 +23,10 @@ export function updateDeposit(w: World, dt: number): void {
     w.depositBudget -= drop.weight;
     for (const c of CURRENCIES) {
       const amount = drop.reward[c];
-      if (amount) w.progress.banked[c] += amount * w.stats.yieldMultiplier;
+      if (!amount) continue;
+      const banked = amount * w.stats.yieldMultiplier;
+      w.progress.banked[c] += banked;
+      questEvent(w, { kind: "bank", currency: c, amount: banked });
     }
     w.events.push({ type: "deposited", drop });
   }

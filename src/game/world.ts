@@ -1,7 +1,10 @@
-import type { RoomDef } from "../content/rooms";
+import { zoneAt, type MapDef, type Rect } from "../content/map";
+import type { QuestDef } from "../content/quests";
 import { TARGETS, type TargetDef } from "../content/targets";
 import { computeStats, type PlayerStats } from "../domain/economy";
+import { addXp } from "../domain/levels";
 import type { CargoDrop, ProgressState } from "../domain/progress";
+import { applyQuestEvent, settleQuests, type QuestEvent, type QuestOutcome } from "../domain/quests";
 import { SpatialHash } from "./spatialHash";
 
 export const SIM_HZ = 30;
@@ -30,18 +33,27 @@ export interface TargetEntity {
   outOfReach: number;
   /** True while a tentacle is holding it within reach. */
   held: boolean;
+  /** True while running from the player. */
+  fleeing: boolean;
+  /** Targets never leave the zone they spawned in. */
+  zoneRect: Rect;
 }
 
 export type GameEvent =
   | { type: "captured"; target: TargetEntity; slot: number }
   | { type: "deposited"; drop: CargoDrop }
   | { type: "depositComplete" }
-  | { type: "purchased" };
+  | { type: "purchased" }
+  | { type: "questComplete"; quest: QuestDef }
+  | { type: "levelUp"; level: number }
+  | { type: "doorUnlocked"; door: string };
 
 export interface World {
-  room: RoomDef;
+  map: MapDef;
   progress: ProgressState;
   stats: PlayerStats;
+  /** Walls, props, and locked doors. Rebuilt when a door opens. */
+  obstacles: Rect[];
   player: { x: number; z: number; prevX: number; prevZ: number; vx: number; vz: number };
   /** Desired movement, already normalised to length <= 1. */
   input: { x: number; z: number };
@@ -68,11 +80,12 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-export function createWorld(room: RoomDef, progress: ProgressState, seed = 1): World {
+export function createWorld(map: MapDef, progress: ProgressState, seed = 1): World {
   const w: World = {
-    room,
+    map,
     progress,
     stats: computeStats(progress),
+    obstacles: [],
     player: {
       x: progress.player.x, z: progress.player.z,
       prevX: progress.player.x, prevZ: progress.player.z, vx: 0, vz: 0,
@@ -88,14 +101,26 @@ export function createWorld(room: RoomDef, progress: ProgressState, seed = 1): W
     tick: 0,
     nextId: 1,
   };
-  for (const s of room.spawns) {
+  refreshObstacles(w);
+  for (const s of map.spawns) {
     if ((progress.spawnCooldowns[s.id] ?? 0) <= 0) spawnTarget(w, s.id);
   }
+  // Quests whose state goal already holds (e.g. migrated saves) complete now.
+  pushQuestOutcome(w, settleQuests(progress));
   return w;
 }
 
+export function refreshObstacles(w: World): void {
+  const open = new Set(w.progress.unlockedDoors);
+  w.obstacles = [
+    ...w.map.walls,
+    ...w.map.props,
+    ...w.map.doors.filter((d) => !open.has(d.id)).map((d) => d.rect),
+  ];
+}
+
 export function spawnTarget(w: World, spawnId: string): TargetEntity | null {
-  const s = w.room.spawns.find((sp) => sp.id === spawnId);
+  const s = w.map.spawns.find((sp) => sp.id === spawnId);
   if (!s) return null;
   const t: TargetEntity = {
     id: w.nextId++,
@@ -110,6 +135,8 @@ export function spawnTarget(w: World, spawnId: string): TargetEntity | null {
     progress: 0,
     outOfReach: 0,
     held: false,
+    fleeing: false,
+    zoneRect: zoneAt(w.map, s.x, s.z)?.rect ?? w.map.bounds,
   };
   w.targets.push(t);
   w.progress.spawnCooldowns[spawnId] = 0;
@@ -119,4 +146,17 @@ export function spawnTarget(w: World, spawnId: string): TargetEntity | null {
 /** Call after anything that changes upgrades. */
 export function refreshStats(w: World): void {
   w.stats = computeStats(w.progress);
+}
+
+export function pushQuestOutcome(w: World, out: QuestOutcome): void {
+  for (const quest of out.completed) w.events.push({ type: "questComplete", quest });
+  for (const level of out.levelsGained) w.events.push({ type: "levelUp", level });
+}
+
+export function questEvent(w: World, e: QuestEvent): void {
+  pushQuestOutcome(w, applyQuestEvent(w.progress, e));
+}
+
+export function gainXp(w: World, amount: number): void {
+  for (const level of addXp(w.progress, amount)) w.events.push({ type: "levelUp", level });
 }

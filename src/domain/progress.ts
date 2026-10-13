@@ -1,5 +1,5 @@
 import { emptyWallet, type Reward, type Wallet } from "../content/currencies";
-import type { RoomDef } from "../content/rooms";
+import type { MapDef } from "../content/map";
 import type { TargetTypeId } from "../content/targets";
 import { UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 
@@ -8,6 +8,13 @@ export interface CargoDrop {
   type: TargetTypeId;
   weight: number;
   reward: Reward;
+}
+
+export interface QuestState {
+  /** Progress toward the goal, counted only while the quest is active. */
+  count: number;
+  /** Completed and reward granted. Rewards are granted exactly once. */
+  done: boolean;
 }
 
 /**
@@ -22,20 +29,24 @@ export interface ProgressState {
   player: { x: number; z: number; health: number };
   /** Remaining respawn seconds per spawn point; 0 means its target is alive. */
   spawnCooldowns: Record<string, number>;
+  quests: Record<string, QuestState>;
+  unlockedDoors: string[];
 }
 
-export function newProgress(room: RoomDef): ProgressState {
+export function newProgress(map: MapDef): ProgressState {
   const upgrades = {} as Record<UpgradeId, number>;
   for (const id of UPGRADE_IDS) upgrades[id] = 0;
   const spawnCooldowns: Record<string, number> = {};
-  for (const s of room.spawns) spawnCooldowns[s.id] = 0;
+  for (const s of map.spawns) spawnCooldowns[s.id] = 0;
   return {
     banked: emptyWallet(),
     cargo: [],
     xp: 0,
     upgrades,
-    player: { x: room.playerSpawn.x, z: room.playerSpawn.z, health: 100 },
+    player: { x: map.playerSpawn.x, z: map.playerSpawn.z, health: 100 },
     spawnCooldowns,
+    quests: {},
+    unlockedDoors: [],
   };
 }
 

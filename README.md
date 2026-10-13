@@ -2,7 +2,7 @@
 
 Portrait-first 3D browser game (Babylon.js + TypeScript). Design: [Alien-Harvester-Web-Game-Spec.md](Alien-Harvester-Web-Game-Spec.md).
 
-**Current status: Stage A (prove the loop).** One room, one base, one passive target type (worker), joystick/WASD movement, automatic tentacle capture with cargo reservation, deposit, four upgrades, respawns, IndexedDB saves, foreground-only simulation. Visuals are procedural placeholder meshes pending the Blender pipeline.
+**Current status: Stage B in progress.** Done: Stage A loop; four-zone facility with doors (requirements shown, atomic unlock); ten XP levels; quest chain (11 of 12; guard quest arrives with guards); runners (flee) and technicians (genetic material); save schema v2 with v1 migration. Next: guards and combat, remaining upgrade tracks, perks, farm, helper, evolution, boss, export/import. Visuals are procedural placeholders pending the Blender pipeline.
 
 ## Commands
 
@@ -17,8 +17,8 @@ npm run build      # typecheck + production bundle
 
 | Path | Role |
 | --- | --- |
-| `src/content/` | Typed data: targets, upgrades, rooms, currencies |
-| `src/domain/` | Persistent progress state and the upgrade economy (renderer-free) |
+| `src/content/` | Typed data: map (zones, doors, spawns), targets, upgrades, quests, levels, currencies |
+| `src/domain/` | Persistent progress, economy, levels, quests, doors (renderer-free) |
 | `src/game/` | World, fixed 30 Hz loop, systems (movement, targets, capture, deposit), geometry, spatial hash |
 | `src/persistence/` | Save schema/validation and the Dexie store (current + previous + quarantine snapshots, single-tab lock) |
 | `src/render/` | Babylon scene: environment, creature + tentacles, crowd pooling, camera |
@@ -29,4 +29,5 @@ npm run build      # typecheck + production bundle
 
 - Simulation only advances inside `FixedLoop.frame` while no pause reason is active. Hidden pages and open menus pause it; resuming resets the clock so missed time is discarded.
 - Saves hold remaining cooldown seconds, never wall-clock timestamps.
-- In dev builds, `window.__game.step(n, ix, iz)` advances the sim deterministically for automated checks.
+- In dev builds, `window.__game.step(n, ix, iz)` advances the sim deterministically for automated checks, and a **Dev** button grants currencies for testing. Neither ships in production builds.
+- Older saves are migrated on load; the raw pre-migration save is kept in IndexedDB under `premigration:v<n>`.

@@ -16,7 +16,7 @@ export function updatePlayer(w: World, dt: number): void {
   p.vz = iz * w.stats.moveSpeed;
   p.x += p.vx * dt;
   p.z += p.vz * dt;
-  resolveCircle(p, PLAYER_RADIUS, w.room.bounds, w.room.obstacles);
+  resolveCircle(p, PLAYER_RADIUS, w.map.bounds, w.obstacles);
   w.progress.player.x = p.x;
   w.progress.player.z = p.z;
 }

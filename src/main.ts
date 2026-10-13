@@ -1,12 +1,12 @@
 import "./ui/styles.css";
-import { CONTAINMENT } from "./content/rooms";
+import { FACILITY } from "./content/map";
 import type { UpgradeId } from "./content/upgrades";
-import { purchaseUpgrade } from "./domain/economy";
 import { newProgress } from "./domain/progress";
+import { buyUpgrade, nearbyLockedDoor, openDoor } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
 import { inBase } from "./game/systems/deposit";
-import { createWorld, refreshStats, SIM_HZ, type World } from "./game/world";
+import { createWorld, SIM_HZ, type World } from "./game/world";
 import { defaultSettings, toSaveFile, type Settings } from "./persistence/schema";
 import { acquireActiveTabLock, SaveStore } from "./persistence/store";
 import { GameRenderer } from "./render/renderer";
@@ -19,7 +19,7 @@ async function boot(): Promise<void> {
   const canvas = document.getElementById("scene") as HTMLCanvasElement;
   const uiRoot = document.getElementById("ui")!;
   const zone = document.getElementById("joystick-zone")!;
-  const room = CONTAINMENT;
+  const room = FACILITY;
 
   let world: World;
   let settings: Settings = defaultSettings();
@@ -35,11 +35,16 @@ async function boot(): Promise<void> {
     onCloseUpgrades: () => ready && setUpgradesOpen(false),
     onBuy: (id: UpgradeId) => {
       if (!ready) return;
-      const r = purchaseUpgrade(world.progress, id);
-      if (r.ok) {
-        refreshStats(world);
-        world.events.push({ type: "purchased" });
-        hud.update(world, inBase(world));
+      if (buyUpgrade(world, id).ok) {
+        refreshHud();
+        void save();
+      }
+    },
+    onUnlockDoor: (door) => {
+      if (!ready) return;
+      if (openDoor(world, door).ok) {
+        hud.toast(`${door.name} opened`);
+        refreshHud();
         void save();
       }
     },
@@ -83,7 +88,7 @@ async function boot(): Promise<void> {
     void import("./ui/devTools").then(({ mountDevTools }) =>
       mountDevTools(uiRoot, (currency, amount) => {
         world.progress.banked[currency] += amount;
-        hud.update(world, inBase(world));
+        refreshHud();
         void save();
       }),
     );
@@ -101,6 +106,10 @@ async function boot(): Promise<void> {
         },
       },
     });
+  }
+
+  function refreshHud(): void {
+    hud.update(world, { inBase: inBase(world), door: nearbyLockedDoor(world) });
   }
 
   function applySettings(): void {
@@ -177,7 +186,14 @@ async function boot(): Promise<void> {
       let saveNow = false;
       for (const e of events) {
         if (e.type === "deposited") depositUnsaved = true;
-        if (e.type === "depositComplete") saveNow = true;
+        else if (e.type === "depositComplete") saveNow = true;
+        else if (e.type === "questComplete") {
+          hud.toast(`Objective complete: ${e.quest.title}`);
+          saveNow = true;
+        } else if (e.type === "levelUp") {
+          hud.toast(`Level ${e.level} reached`);
+          saveNow = true;
+        } else if (e.type === "doorUnlocked" || e.type === "purchased") saveNow = true;
       }
       world.events = [];
       if (saveNow) depositUnsaved = false;
@@ -198,7 +214,7 @@ async function boot(): Promise<void> {
     }
 
     renderer.render(world, loop.paused ? 1 : alpha);
-    hud.update(world, inBase(world));
+    refreshHud();
   });
 }
 

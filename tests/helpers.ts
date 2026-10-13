@@ -1,23 +1,38 @@
-import type { RoomDef } from "../src/content/rooms";
+import type { MapDef } from "../src/content/map";
+import type { TargetTypeId } from "../src/content/targets";
 import { newProgress } from "../src/domain/progress";
 import { createWorld, type World } from "../src/game/world";
 
-/** Open room with no obstacles; spawns are supplied per test. */
-export function testRoom(spawns: Array<[number, number]>, obstacles: RoomDef["obstacles"] = []): RoomDef {
+const BOUNDS = { minX: -20, maxX: 20, minZ: -20, maxZ: 20 };
+
+/** Open single-zone map with no walls; spawns and props are supplied per test. */
+export function testMap(
+  spawns: Array<[number, number]>,
+  props: MapDef["props"] = [],
+  type: TargetTypeId = "worker",
+  extra: Partial<MapDef> = {},
+): MapDef {
   return {
-    id: "test",
-    name: "Test",
-    bounds: { minX: -20, maxX: 20, minZ: -20, maxZ: 20 },
+    bounds: BOUNDS,
+    zones: [{ id: "containment", name: "Test", rect: BOUNDS, tint: [1, 1, 1] }],
     base: { x: 0, z: -15, radius: 2 },
     playerSpawn: { x: 0, z: 0 },
-    obstacles,
-    spawns: spawns.map(([x, z], i) => ({ id: `s${i}`, type: "worker", x, z, wanderRadius: 0 })),
+    walls: [],
+    props,
+    doors: [],
+    spawns: spawns.map(([x, z], i) => ({ id: `s${i}`, type, x, z, wanderRadius: 0 })),
+    ...extra,
   };
 }
 
-export function testWorld(spawns: Array<[number, number]>, obstacles: RoomDef["obstacles"] = []): World {
-  const room = testRoom(spawns, obstacles);
-  const w = createWorld(room, newProgress(room));
+export function testWorld(
+  spawns: Array<[number, number]>,
+  props: MapDef["props"] = [],
+  type: TargetTypeId = "worker",
+  extra: Partial<MapDef> = {},
+): World {
+  const map = testMap(spawns, props, type, extra);
+  const w = createWorld(map, newProgress(map));
   // Keep targets stationary for deterministic capture tests.
   for (const t of w.targets) t.idle = 1e9;
   return w;

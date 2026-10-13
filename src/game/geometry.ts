@@ -1,4 +1,4 @@
-import type { Rect } from "../content/rooms";
+import type { Rect } from "../content/map";
 
 export function dist2(ax: number, az: number, bx: number, bz: number): number {
   const dx = ax - bx;
