@@ -2,7 +2,7 @@
 
 Portrait-first 3D browser game (Babylon.js + TypeScript). Design: [Alien-Harvester-Web-Game-Spec.md](Alien-Harvester-Web-Game-Spec.md).
 
-**Current status: Stage B in progress.** Done: Stage A loop; four-zone facility with doors (requirements shown, atomic unlock); ten XP levels; quest chain (11 of 12; guard quest arrives with guards); runners (flee) and technicians (genetic material); save schema v2 with v1 migration. Next: guards and combat, remaining upgrade tracks, perks, farm, helper, evolution, boss, export/import. Visuals are procedural placeholders pending the Blender pipeline.
+**Current status: Stage B in progress.** Done: Stage A loop; four-zone facility with doors (requirements shown, atomic unlock); ten XP levels; quest chain (11 of 12; guard quest arrives with guards); runners (flee) and technicians (genetic material); evolution to a second form (third tentacle, raised mutation caps, new silhouette); save schema v3 with migrations from v1/v2. Next: guards and combat, remaining upgrade tracks, perks, farm, helper, boss, export/import. Visuals are procedural placeholders pending the Blender pipeline.
 
 ## Commands
 
@@ -29,5 +29,5 @@ npm run build      # typecheck + production bundle
 
 - Simulation only advances inside `FixedLoop.frame` while no pause reason is active. Hidden pages and open menus pause it; resuming resets the clock so missed time is discarded.
 - Saves hold remaining cooldown seconds, never wall-clock timestamps.
-- In dev builds, `window.__game.step(n, ix, iz)` advances the sim deterministically for automated checks, and a **Dev** button grants currencies for testing. Neither ships in production builds.
+- In dev builds, `window.__game.step(n, ix, iz)` advances the sim deterministically for automated checks, and a **Dev** button grants currencies and XP, completes current objectives, and can devolve for repeat testing. Neither ships in production builds.
 - Older saves are migrated on load; the raw pre-migration save is kept in IndexedDB under `premigration:v<n>`.

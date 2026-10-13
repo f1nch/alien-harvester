@@ -2,11 +2,12 @@ import { CURRENCIES, emptyWallet } from "../content/currencies";
 import { reachableZones, zoneAtOrDoorway, type MapDef } from "../content/map";
 import { goalTarget, QUEST_BY_ID } from "../content/quests";
 import { isTargetType, TARGETS } from "../content/targets";
-import { UPGRADE_IDS, UPGRADES } from "../content/upgrades";
-import { computeStats } from "../domain/economy";
+import { UPGRADE_IDS } from "../content/upgrades";
+import { MAX_TIER } from "../content/evolution";
+import { capAtTier, computeStats } from "../domain/economy";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const CONTENT_VERSION = 1;
 
 export interface Settings {
@@ -53,6 +54,11 @@ function migrate(raw: Obj): Obj | null {
     const progress = isObj(m.progress) ? { ...m.progress, quests: {}, unlockedDoors: [] } : m.progress;
     m = { ...m, schemaVersion: 2, progress };
   }
+  if (m.schemaVersion === 2) {
+    // v3 adds the evolution tier; everyone starts in the base form.
+    const progress = isObj(m.progress) ? { ...m.progress, evolution: 0 } : m.progress;
+    m = { ...m, schemaVersion: 3, progress };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
@@ -81,11 +87,15 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   if (!isNonNeg(p.xp)) return null;
   progress.xp = p.xp;
 
+  // Parsed before upgrades: the tier decides each track's level cap.
+  if (!Number.isInteger(p.evolution) || (p.evolution as number) < 0) return null;
+  progress.evolution = Math.min(p.evolution as number, MAX_TIER);
+
   if (!isObj(p.upgrades)) return null;
   for (const id of UPGRADE_IDS) {
     const lvl = p.upgrades[id] ?? 0;
     if (!Number.isInteger(lvl) || (lvl as number) < 0) return null;
-    progress.upgrades[id] = Math.min(lvl as number, UPGRADES[id].costs.length);
+    progress.upgrades[id] = Math.min(lvl as number, capAtTier(id, progress.evolution));
   }
 
   // Rebuild drops from content definitions rather than trusting stored numbers,

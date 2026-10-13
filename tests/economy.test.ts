@@ -48,7 +48,7 @@ describe("upgrades", () => {
     p.banked.biomass = 1e9;
     const id = "moveSpeed";
     for (let i = 0; i < 20; i++) purchaseUpgrade(p, id);
-    expect(p.upgrades[id]).toBe(UPGRADES[id].costs.length);
+    expect(p.upgrades[id]).toBe(UPGRADES[id].capByTier[0]);
     expect(purchaseUpgrade(p, id)).toEqual({ ok: false, reason: "maxed" });
   });
 

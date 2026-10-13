@@ -315,3 +315,15 @@ html, body {
 @media (max-width: 420px) {
   .chip .chip-label { display: none; }
 }
+
+/* Evolution section */
+.evo { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.evo-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.evo-head h3 { margin: 0; font-size: 17px; }
+.evo-form { color: var(--muted); font-size: 12px; }
+.evo-next { font-weight: 700; margin-top: 6px; color: var(--violet); }
+.evo-desc { color: var(--muted); font-size: 13px; margin: 4px 0 8px; }
+.btn-evolve { width: 100%; background: #4a2a8a; border-color: var(--violet); }
+.btn-evolve:disabled { background: #241b40; border-color: var(--line); }
+/* Dev panel opens upward from its toggle so it never covers the Upgrades button. */
+.dev-panel { top: auto; bottom: calc(45% + 6px); max-height: 50%; overflow-y: auto; }

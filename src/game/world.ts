@@ -46,7 +46,8 @@ export type GameEvent =
   | { type: "purchased" }
   | { type: "questComplete"; quest: QuestDef }
   | { type: "levelUp"; level: number }
-  | { type: "doorUnlocked"; door: string };
+  | { type: "doorUnlocked"; door: string }
+  | { type: "evolved"; tier: number };
 
 export interface World {
   map: MapDef;

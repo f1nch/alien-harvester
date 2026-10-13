@@ -1,0 +1,75 @@
+import { CURRENCIES, CURRENCY_LABEL, type Reward } from "../content/currencies";
+import { QUEST_BY_ID } from "../content/quests";
+import { UPGRADE_IDS } from "../content/upgrades";
+import { levelForXp } from "./levels";
+import type { ProgressState } from "./progress";
+import { isDone } from "./quests";
+
+/** Shared gate used by doors and evolution. */
+export interface Requirements {
+  level?: number;
+  /** Quest IDs that must be complete. */
+  quests?: string[];
+  /** Total purchased mutation (upgrade) levels across all tracks. */
+  mutationLevels?: number;
+  /** Deducted only when everything is met, in the same transaction. */
+  cost?: Reward;
+}
+
+export interface Requirement {
+  label: string;
+  met: boolean;
+  /** e.g. "3 / 5" or "120 / 250". */
+  progress: string;
+}
+
+export function totalMutationLevels(p: ProgressState): number {
+  let n = 0;
+  for (const id of UPGRADE_IDS) n += p.upgrades[id];
+  return n;
+}
+
+/** Every requirement with its current progress, for UI cards. */
+export function evaluate(p: ProgressState, r: Requirements): Requirement[] {
+  const out: Requirement[] = [];
+  if (r.level !== undefined) {
+    const level = levelForXp(p.xp);
+    out.push({ label: `Reach level ${r.level}`, met: level >= r.level, progress: `Lv ${level} / ${r.level}` });
+  }
+  for (const id of r.quests ?? []) {
+    const q = QUEST_BY_ID.get(id);
+    const met = isDone(p, id);
+    out.push({ label: q ? `Quest: ${q.title}` : id, met, progress: met ? "Done" : "Not done" });
+  }
+  if (r.mutationLevels !== undefined) {
+    const n = totalMutationLevels(p);
+    out.push({
+      label: `Buy ${r.mutationLevels} mutation levels`,
+      met: n >= r.mutationLevels,
+      progress: `${Math.min(n, r.mutationLevels)} / ${r.mutationLevels}`,
+    });
+  }
+  for (const c of CURRENCIES) {
+    const cost = r.cost?.[c];
+    if (!cost) continue;
+    const have = p.banked[c];
+    out.push({
+      label: `Pay ${cost} ${CURRENCY_LABEL[c].toLowerCase()}`,
+      met: have >= cost,
+      progress: `${Math.floor(Math.min(have, cost))} / ${cost}`,
+    });
+  }
+  return out;
+}
+
+export function allMet(p: ProgressState, r: Requirements): boolean {
+  return evaluate(p, r).every((req) => req.met);
+}
+
+/** Deduct the cost. Callers must check allMet first, in the same synchronous step. */
+export function payCost(p: ProgressState, r: Requirements): void {
+  for (const c of CURRENCIES) {
+    const cost = r.cost?.[c];
+    if (cost) p.banked[c] -= cost;
+  }
+}

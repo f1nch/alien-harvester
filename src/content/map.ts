@@ -1,4 +1,4 @@
-import type { Reward } from "./currencies";
+import type { Requirements } from "../domain/requirements";
 import type { TargetTypeId } from "./targets";
 
 export interface Rect {
@@ -18,13 +18,7 @@ export interface ZoneDef {
   tint: [number, number, number];
 }
 
-export interface DoorRequirements {
-  level?: number;
-  /** Quest IDs that must be complete. */
-  quests?: string[];
-  /** Deducted on unlock, atomically with opening the door. */
-  cost?: Reward;
-}
+export type DoorRequirements = Requirements;
 
 export interface DoorDef {
   id: string;

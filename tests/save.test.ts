@@ -83,13 +83,14 @@ describe("save hardening", () => {
     expect(parseSave(s, FACILITY)!.progress.player.z).toBe(30);
   });
 
-  it("migrates a v1 save to v2 without losing progress", () => {
+  it("migrates a v1 save to the current schema without losing progress", () => {
     const v1 = JSON.parse(JSON.stringify(valid()));
     v1.schemaVersion = 1;
     delete v1.progress.quests;
     delete v1.progress.unlockedDoors;
     const parsed = parseSave(v1, FACILITY)!;
-    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.schemaVersion).toBe(3);
+    expect(parsed.progress.evolution).toBe(0);
     expect(parsed.progress.banked.biomass).toBe(42);
     expect(parsed.progress.upgrades.cargoCapacity).toBe(2);
     expect(parsed.progress.quests).toEqual({});

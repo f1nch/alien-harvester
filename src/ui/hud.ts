@@ -2,7 +2,10 @@ import type { DoorDef } from "../content/map";
 import { goalTarget } from "../content/quests";
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 import { doorRequirements } from "../domain/doors";
-import { maxLevel, nextCost } from "../domain/economy";
+import { FORM_NAMES } from "../content/evolution";
+import { cappedByEvolution, maxLevel, nextCost } from "../domain/economy";
+import { evolutionRequirements, nextEvolution } from "../domain/evolution";
+import type { Requirement } from "../domain/requirements";
 import { levelProgress } from "../domain/levels";
 import { cargoWeight } from "../domain/progress";
 import { activeQuests, questCount } from "../domain/quests";
@@ -32,6 +35,18 @@ export interface HudCallbacks {
   onBuy(id: UpgradeId): void;
   onToggleHand(): void;
   onUnlockDoor(door: DoorDef): void;
+  onEvolve(): void;
+}
+
+function requirementList(list: HTMLElement, reqs: Requirement[]): void {
+  list.replaceChildren(
+    ...reqs.map((r) => {
+      const li = el("li", r.met ? "met" : "unmet");
+      // Marks are text (✓ / ✗), not colour alone.
+      li.append(el("span", "req-mark", r.met ? "✓" : "✗"), el("span", "req-label", r.label), el("span", "req-progress", r.progress));
+      return li;
+    }),
+  );
 }
 
 export interface HudState {
@@ -60,6 +75,11 @@ export class Hud {
   private upgradeBtn: HTMLButtonElement;
   private panel: HTMLElement;
   private rows = new Map<UpgradeId, { level: HTMLElement; value: HTMLElement; buy: HTMLButtonElement }>();
+  private evoForm: HTMLElement;
+  private evoNext: HTMLElement;
+  private evoDesc: HTMLElement;
+  private evoList: HTMLElement;
+  private evoBtn: HTMLButtonElement;
   private toastEl: HTMLElement;
   private toastQueue: string[] = [];
   private toastBusy = false;
@@ -141,6 +161,20 @@ export class Hud {
       card.append(row);
       this.rows.set(id, { level, value, buy });
     }
+    const evo = el("section", "evo");
+    evo.setAttribute("aria-label", "Evolution");
+    const evoHead = el("div", "evo-head");
+    evoHead.append(el("h3", undefined, "Evolution"));
+    this.evoForm = el("span", "evo-form");
+    evoHead.append(this.evoForm);
+    this.evoNext = el("div", "evo-next");
+    this.evoDesc = el("p", "evo-desc");
+    this.evoList = el("ul", "door-reqs");
+    this.evoBtn = el("button", "btn btn-evolve", "Evolve");
+    this.evoBtn.addEventListener("click", () => cb.onEvolve());
+    evo.append(evoHead, this.evoNext, this.evoDesc, this.evoList, this.evoBtn);
+    card.append(evo);
+
     const settings = el("div", "panel-settings");
     const hand = el("button", "btn btn-secondary", "Swap button side");
     hand.addEventListener("click", () => cb.onToggleHand());
@@ -199,7 +233,7 @@ export class Hud {
     const cap = w.stats.cargoCapacity;
     const key = [
       p.banked.biomass, p.banked.genetic, p.xp, cargo, cap, w.cargoFull, s.inBase, s.door?.id,
-      this.upgradesOpen, JSON.stringify(p.quests), p.unlockedDoors.length,
+      this.upgradesOpen, JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
     if (key === this.last) return;
     this.last = key;
@@ -236,12 +270,12 @@ export class Hud {
       const lvl = p.upgrades[id];
       const cost = nextCost(p, id);
       const cur = def.base + def.perLevel * lvl;
-      row.level.textContent = ` Lv ${lvl}/${maxLevel(id)}`;
+      row.level.textContent = ` Lv ${lvl}/${maxLevel(p, id)}`;
       row.value.textContent = cost === null
         ? `${fmt(cur)}${def.unit} (max)`
         : `${fmt(cur)}${def.unit} → ${fmt(cur + def.perLevel)}${def.unit}`;
       if (cost === null) {
-        row.buy.textContent = "Maxed";
+        row.buy.textContent = cappedByEvolution(p, id) ? "Evolve to raise cap" : "Maxed";
         row.buy.disabled = true;
       } else {
         const can = p.banked[def.currency] >= cost;
@@ -251,6 +285,8 @@ export class Hud {
         row.buy.setAttribute("aria-label", `Buy ${def.name} for ${cost} biomass`);
       }
     }
+    const evoReady = this.renderEvolution(w);
+    affordable ||= evoReady;
     this.upgradeBtn.classList.toggle("ready", affordable);
     this.upgradeBtn.textContent = affordable ? "Upgrades ●" : "Upgrades";
   }
@@ -270,6 +306,29 @@ export class Hud {
     );
   }
 
+  /** Returns true when the player can evolve right now. */
+  private renderEvolution(w: World): boolean {
+    const p = w.progress;
+    this.evoForm.textContent = `Current: ${FORM_NAMES[p.evolution] ?? "Unknown"}`;
+    const next = nextEvolution(p);
+    if (!next) {
+      this.evoNext.textContent = "Final form reached";
+      this.evoDesc.textContent = "";
+      this.evoList.replaceChildren();
+      this.evoBtn.classList.add("hidden");
+      return false;
+    }
+    this.evoBtn.classList.remove("hidden");
+    this.evoNext.textContent = `Next: ${next.name}`;
+    this.evoDesc.textContent = next.description;
+    const reqs = evolutionRequirements(p);
+    requirementList(this.evoList, reqs);
+    const ready = reqs.every((r) => r.met);
+    this.evoBtn.disabled = !ready;
+    this.evoBtn.textContent = ready ? `Evolve into ${next.name}` : "Requirements not met";
+    return ready;
+  }
+
   private renderDoor(w: World, door: DoorDef | null): void {
     this.currentDoor = door;
     this.doorCard.classList.toggle("hidden", door === null);
@@ -277,14 +336,7 @@ export class Hud {
     const reqs = doorRequirements(w.progress, door);
     this.doorTitle.textContent = `${door.name} — locked`;
     this.doorCard.setAttribute("aria-label", `${door.name} requirements`);
-    this.doorList.replaceChildren(
-      ...reqs.map((r) => {
-        const li = el("li", r.met ? "met" : "unmet");
-        // Marks are text (✓ / ✗), not colour alone.
-        li.append(el("span", "req-mark", r.met ? "✓" : "✗"), el("span", "req-label", r.label), el("span", "req-progress", r.progress));
-        return li;
-      }),
-    );
+    requirementList(this.doorList, reqs);
     const ready = reqs.every((r) => r.met);
     this.doorBtn.disabled = !ready;
     this.doorBtn.textContent = ready ? "Unlock" : "Requirements not met";

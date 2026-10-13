@@ -2,6 +2,7 @@ import type { DoorDef } from "../content/map";
 import type { UpgradeId } from "../content/upgrades";
 import { unlockDoor, type UnlockResult } from "../domain/doors";
 import { purchaseUpgrade, type PurchaseResult } from "../domain/economy";
+import { evolve, type EvolveResult } from "../domain/evolution";
 import { dist2 } from "./geometry";
 import { questEvent, refreshObstacles, refreshStats, type World } from "./world";
 
@@ -22,6 +23,16 @@ export function openDoor(w: World, door: DoorDef): UnlockResult {
   refreshObstacles(w);
   w.events.push({ type: "doorUnlocked", door: door.id });
   questEvent(w, { kind: "unlockDoor", door: door.id });
+  return r;
+}
+
+export function evolveCreature(w: World): EvolveResult {
+  const r = evolve(w.progress);
+  if (!r.ok) return r;
+  // New tentacle count and raised caps take effect immediately.
+  refreshStats(w);
+  w.events.push({ type: "evolved", tier: r.tier });
+  questEvent(w, { kind: "evolve" });
   return r;
 }
 

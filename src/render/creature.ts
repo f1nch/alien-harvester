@@ -4,6 +4,25 @@ import {
 
 const SEGMENTS = 14;
 const BODY_Y = 0.85;
+const MAX_LEGS = 8;
+
+/** Per-form look. Each evolution changes the silhouette, not just colour. */
+interface FormStyle {
+  size: number;
+  legs: number;
+  body: Color3;
+  rim: Color3;
+  tip: Color3;
+  spines: boolean;
+  extraEyes: boolean;
+}
+
+const FORMS: FormStyle[] = [
+  { size: 1, legs: 6, body: new Color3(0.07, 0.04, 0.1), rim: new Color3(0.45, 0.15, 0.75), tip: new Color3(0.2, 1, 0.75), spines: false, extraEyes: false },
+  { size: 1.28, legs: 8, body: new Color3(0.03, 0.07, 0.1), rim: new Color3(0.2, 0.75, 0.95), tip: new Color3(1, 0.35, 0.85), spines: true, extraEyes: true },
+];
+
+const MORPH_SECONDS = 1.1;
 
 function glossyMaterial(scene: Scene, name: string): StandardMaterial {
   const m = new StandardMaterial(name, scene);
@@ -69,11 +88,20 @@ export class CreatureView {
   private heading = 0;
   private time = 0;
   private pulse = 0;
+  private skin: StandardMaterial;
+  private tipMat: StandardMaterial;
+  private spines: Mesh[] = [];
+  private extraEyes: Mesh[] = [];
+  private form = 0;
+  private size = 1;
+  private fromSize = 1;
+  /** 0..1 progress of the evolution morph; 1 when idle. */
+  private morph = 1;
   private tmp = { a: new Vector3(), b: new Vector3(), c: new Vector3(), d: new Vector3(), w: new Vector3() };
 
   constructor(scene: Scene, shadows: ShadowGenerator | null) {
     this.root = new TransformNode("creature", scene);
-    const skin = glossyMaterial(scene, "creatureSkin");
+    const skin = (this.skin = glossyMaterial(scene, "creatureSkin"));
 
     this.body = MeshBuilder.CreateSphere("body", { diameter: 1.4, segments: 24 }, scene);
     this.body.scaling.set(1, 0.82, 1.05);
@@ -95,25 +123,52 @@ export class CreatureView {
     const pupilMat = new StandardMaterial("pupilMat", scene);
     pupilMat.diffuseColor = Color3.Black();
     pupilMat.specularColor = new Color3(1, 1, 1);
-    for (const side of [-1, 1]) {
-      const eye = MeshBuilder.CreateSphere("eye", { diameter: 0.3, segments: 12 }, scene);
-      eye.position.set(side * 0.24, 0.12, 0.55);
+    const makeEye = (x: number, y: number, z: number, size: number): Mesh => {
+      const eye = MeshBuilder.CreateSphere("eye", { diameter: 0.3 * size, segments: 12 }, scene);
+      eye.position.set(x, y, z);
       eye.scaling.set(1, 0.75, 0.6);
       eye.material = eyeMat;
       eye.parent = this.body;
-      const pupil = MeshBuilder.CreateSphere("pupil", { diameter: 0.14, segments: 8 }, scene);
-      pupil.position.set(0, 0, 0.11);
+      const pupil = MeshBuilder.CreateSphere("pupil", { diameter: 0.14 * size, segments: 8 }, scene);
+      pupil.position.set(0, 0, 0.11 * size);
       pupil.scaling.set(0.5, 1.2, 0.5);
       pupil.material = pupilMat;
       pupil.parent = eye;
+      return eye;
+    };
+    for (const side of [-1, 1]) makeEye(side * 0.24, 0.12, 0.55, 1);
+    // Evolved forms gain a second, smaller pair of eyes above the first.
+    for (const side of [-1, 1]) this.extraEyes.push(makeEye(side * 0.17, 0.33, 0.47, 0.6));
+
+    // Dorsal spines along the mantle for evolved forms.
+    const spineMat = glossyMaterial(scene, "spineMat");
+    spineMat.diffuseColor = new Color3(0.2, 0.32, 0.38);
+    spineMat.emissiveColor = new Color3(0.04, 0.16, 0.2);
+    // A crest of spines rising clear of the mantle, so the silhouette changes from above.
+    for (let i = 0; i < 5; i++) {
+      const spine = MeshBuilder.CreateCylinder(`spine${i}`, { diameterTop: 0, diameterBottom: 0.2, height: 0.75 - i * 0.07, tessellation: 8 }, scene);
+      spine.position.set(0, 0.78 - i * 0.04, 0.12 - i * 0.24);
+      spine.rotation.x = -0.45 - i * 0.12;
+      spine.material = spineMat;
+      spine.parent = this.body;
+      this.spines.push(spine);
+    }
+    for (const side of [-1, 1]) {
+      const spine = MeshBuilder.CreateCylinder("spineSide", { diameterTop: 0, diameterBottom: 0.16, height: 0.55, tessellation: 8 }, scene);
+      spine.position.set(side * 0.62, 0.3, -0.15);
+      spine.rotation.z = -side * 1.0;
+      spine.rotation.x = -0.4;
+      spine.material = spineMat;
+      spine.parent = this.body;
+      this.spines.push(spine);
     }
 
-    const tipMat = new StandardMaterial("tipMat", scene);
+    const tipMat = (this.tipMat = new StandardMaterial("tipMat", scene));
     tipMat.diffuseColor = Color3.Black();
     tipMat.emissiveColor = new Color3(0.2, 1, 0.75);
     tipMat.disableLighting = true;
 
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < MAX_LEGS; i++) {
       const leg = new Tube(scene, `leg${i}`, 0.17, 0.04, skin);
       this.legs.push(leg);
       shadows?.addShadowCaster(leg.mesh);
@@ -132,6 +187,26 @@ export class CreatureView {
       this.arms.push({ tube, tip, ext: 0, goal: new Vector3(), attached: false });
     }
     shadows?.addShadowCaster(this.body, true);
+    this.setForm(0, false);
+  }
+
+  /** Switch evolution form. With animate, the body swells through a morph. */
+  setForm(tier: number, animate: boolean): void {
+    const style = FORMS[Math.min(tier, FORMS.length - 1)]!;
+    this.form = tier;
+    this.fromSize = animate ? this.size : style.size;
+    this.morph = animate ? 0 : 1;
+    if (!animate) this.size = style.size;
+    this.skin.diffuseColor = style.body.clone();
+    // Replace (not mutate) the Fresnel parameters so the material is marked dirty.
+    const f = this.skin.emissiveFresnelParameters!;
+    this.skin.emissiveFresnelParameters = new FresnelParameters({
+      leftColor: style.rim.clone(), rightColor: f.rightColor.clone(), power: f.power, bias: f.bias,
+    });
+    this.tipMat.emissiveColor = style.tip.clone();
+    for (const m of this.spines) m.setEnabled(style.spines);
+    for (const m of this.extraEyes) m.setEnabled(style.extraEyes);
+    this.legs.forEach((leg, i) => leg.mesh.setEnabled(i < style.legs));
   }
 
   /** Called when a capture completes so the body visibly gulps. */
@@ -153,12 +228,26 @@ export class CreatureView {
       this.heading += diff * Math.min(1, dt * 10);
     }
     this.pulse = Math.max(0, this.pulse - dt * 4);
+    const style = FORMS[Math.min(this.form, FORMS.length - 1)]!;
+    if (this.morph < 1) {
+      this.morph = Math.min(1, this.morph + dt / MORPH_SECONDS);
+      // Overshoot then settle, so the evolution reads as a growth spurt.
+      const k = this.morph;
+      const swell = Math.sin(k * Math.PI) * 0.35;
+      this.size = this.fromSize + (style.size - this.fromSize) * k + swell;
+      for (const m of this.spines) if (style.spines) m.scaling.setAll(Math.min(1, k * 1.4));
+    } else {
+      this.size = style.size;
+    }
+    const s = this.size;
+    this.root.scaling.setAll(s);
+    const bodyY = BODY_Y * s;
     const bob = Math.sin(this.time * 3.2) * 0.05;
     const lean = Math.min(speed / 4, 1) * 0.18;
 
     this.root.position.set(x, 0, z);
     this.root.rotation.y = this.heading;
-    this.body.position.y = BODY_Y + bob;
+    this.body.position.y = BODY_Y + bob / s;
     this.body.rotation.x = lean;
     const squash = 1 + this.pulse * 0.12;
     this.body.scaling.set(squash, 0.82 / squash, 1.05 * squash);
@@ -168,16 +257,19 @@ export class CreatureView {
     const cosH = Math.cos(this.heading);
 
     // Walking legs: splay around the body and trail opposite to motion.
+    const legCount = style.legs;
     this.legs.forEach((leg, i) => {
-      const ang = (i / this.legs.length) * Math.PI * 2 + 0.3;
+      if (i >= legCount) return;
+      const ang = (i / legCount) * Math.PI * 2 + 0.3;
       const lx = Math.sin(ang), lz = Math.cos(ang);
       const wx = lx * cosH + lz * sinH;
       const wz = -lx * sinH + lz * cosH;
       const gait = Math.sin(this.time * (4 + speed * 2.5) + i * 1.7);
-      a.set(x + wx * 0.35, BODY_Y + bob - 0.2, z + wz * 0.35);
-      b.set(x + wx * 0.8, 0.55, z + wz * 0.8);
-      d.set(x + wx * (1.15 + gait * 0.08) - vx * 0.08, 0.04, z + wz * (1.15 + gait * 0.08) - vz * 0.08);
-      c.set((b.x + d.x) / 2, 0.35 + Math.max(0, gait) * 0.15, (b.z + d.z) / 2);
+      a.set(x + wx * 0.35 * s, bodyY + bob - 0.2 * s, z + wz * 0.35 * s);
+      b.set(x + wx * 0.8 * s, 0.55 * s, z + wz * 0.8 * s);
+      const reach = (1.15 + gait * 0.08) * s;
+      d.set(x + wx * reach - vx * 0.08, 0.04, z + wz * reach - vz * 0.08);
+      c.set((b.x + d.x) / 2, (0.35 + Math.max(0, gait) * 0.15) * s, (b.z + d.z) / 2);
       w.set(-wz * 0.06, 0.04, wx * 0.06);
       leg.set(a, b, c, d, w, this.time * 2 + i);
     });
@@ -203,7 +295,7 @@ export class CreatureView {
       const dx = arm.goal.x - x, dz = arm.goal.z - z;
       const len = Math.hypot(dx, dz) || 1;
       const nx = dx / len, nz = dz / len;
-      a.set(x + nx * 0.45, BODY_Y + bob - 0.05, z + nz * 0.45);
+      a.set(x + nx * 0.45 * s, bodyY + bob - 0.05 * s, z + nz * 0.45 * s);
       d.set(a.x + (arm.goal.x - a.x) * arm.ext, a.y + (arm.goal.y - a.y) * arm.ext, a.z + (arm.goal.z - a.z) * arm.ext);
       const reach = Math.hypot(d.x - a.x, d.z - a.z);
       b.set(a.x + nx * reach * 0.3, a.y + 0.5 * arm.ext, a.z + nz * reach * 0.3);

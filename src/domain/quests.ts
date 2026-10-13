@@ -95,6 +95,9 @@ function stateGoalHolds(p: ProgressState, q: QuestDef): boolean {
   switch (q.goal.kind) {
     case "unlockDoor":
       return p.unlockedDoors.includes(q.goal.door);
+    case "evolve":
+      // Repairs saves that evolved without the quest being active (e.g. after content changes).
+      return p.evolution >= q.goal.count;
     case "buyUpgrade":
       // Already owning a mutation counts, so buying early (or a maxed migrated save) is never a dead end.
       return Object.values(p.upgrades).some((lvl) => lvl > 0);
@@ -119,5 +122,15 @@ export function settleQuests(p: ProgressState): QuestOutcome {
       }
     }
   }
+  return out;
+}
+
+/** Dev tools only: complete every currently active quest, granting rewards as normal. */
+export function devCompleteActive(p: ProgressState): QuestOutcome {
+  const out: QuestOutcome = { completed: [], levelsGained: [] };
+  for (const q of activeQuests(p)) complete(p, q, out);
+  const settled = settleQuests(p);
+  out.completed.push(...settled.completed);
+  out.levelsGained.push(...settled.levelsGained);
   return out;
 }

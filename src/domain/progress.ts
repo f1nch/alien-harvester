@@ -31,6 +31,8 @@ export interface ProgressState {
   spawnCooldowns: Record<string, number>;
   quests: Record<string, QuestState>;
   unlockedDoors: string[];
+  /** Evolution tier; 0 is the starting form. */
+  evolution: number;
 }
 
 export function newProgress(map: MapDef): ProgressState {
@@ -47,6 +49,7 @@ export function newProgress(map: MapDef): ProgressState {
     spawnCooldowns,
     quests: {},
     unlockedDoors: [],
+    evolution: 0,
   };
 }
 

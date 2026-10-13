@@ -2,11 +2,15 @@ import "./ui/styles.css";
 import { FACILITY } from "./content/map";
 import type { UpgradeId } from "./content/upgrades";
 import { newProgress } from "./domain/progress";
-import { buyUpgrade, nearbyLockedDoor, openDoor } from "./game/actions";
+import { FORM_NAMES } from "./content/evolution";
+import { UPGRADE_IDS } from "./content/upgrades";
+import { capAtTier } from "./domain/economy";
+import { devCompleteActive } from "./domain/quests";
+import { buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
 import { inBase } from "./game/systems/deposit";
-import { createWorld, SIM_HZ, type World } from "./game/world";
+import { createWorld, gainXp, pushQuestOutcome, refreshStats, SIM_HZ, type World } from "./game/world";
 import { defaultSettings, toSaveFile, type Settings } from "./persistence/schema";
 import { acquireActiveTabLock, SaveStore } from "./persistence/store";
 import { GameRenderer } from "./render/renderer";
@@ -48,6 +52,13 @@ async function boot(): Promise<void> {
         void save();
       }
     },
+    onEvolve: () => {
+      if (!ready) return;
+      if (evolveCreature(world).ok) {
+        refreshHud();
+        void save();
+      }
+    },
     onToggleHand: () => {
       if (!ready) return;
       settings.leftHanded = !settings.leftHanded;
@@ -85,13 +96,36 @@ async function boot(): Promise<void> {
   renderer.snapCamera(world);
   if (import.meta.env.DEV) {
     // Dynamic import keeps the testing panel out of production bundles entirely.
-    void import("./ui/devTools").then(({ mountDevTools }) =>
-      mountDevTools(uiRoot, (currency, amount) => {
-        world.progress.banked[currency] += amount;
+    void import("./ui/devTools").then(({ mountDevTools }) => {
+      const after = () => {
         refreshHud();
         void save();
-      }),
-    );
+      };
+      mountDevTools(uiRoot, {
+        grant: (currency, amount) => {
+          world.progress.banked[currency] += amount;
+          after();
+        },
+        addXp: (amount) => {
+          gainXp(world, amount);
+          after();
+        },
+        completeObjectives: () => {
+          pushQuestOutcome(world, devCompleteActive(world.progress));
+          after();
+        },
+        devolve: () => {
+          const p = world.progress;
+          p.evolution = Math.max(0, p.evolution - 1);
+          for (const id of UPGRADE_IDS) p.upgrades[id] = Math.min(p.upgrades[id], capAtTier(id, p.evolution));
+          refreshStats(world);
+          // Keep the hold within the reduced capacity, matching what a reload would do.
+          let held = 0;
+          p.cargo = p.cargo.filter((d) => (held += d.weight) <= world.stats.cargoCapacity);
+          after();
+        },
+      });
+    });
     // Debug hook for automated checks: advance the simulation deterministically.
     Object.assign(window, {
       __game: {
@@ -192,6 +226,9 @@ async function boot(): Promise<void> {
           saveNow = true;
         } else if (e.type === "levelUp") {
           hud.toast(`Level ${e.level} reached`);
+          saveNow = true;
+        } else if (e.type === "evolved") {
+          hud.toast(`Evolved into ${FORM_NAMES[e.tier] ?? "a new form"}!`, 3.5);
           saveNow = true;
         } else if (e.type === "doorUnlocked" || e.type === "purchased") saveNow = true;
       }

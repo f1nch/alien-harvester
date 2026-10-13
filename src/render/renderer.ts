@@ -39,6 +39,8 @@ export class GameRenderer {
   private creaturePos = new Vector3();
   private time = 0;
   private depositPulse = 0;
+  /** Evolution tier currently shown by the creature model. */
+  private shownForm = 0;
 
   constructor(canvas: HTMLCanvasElement, private map: MapDef, opts: RenderOptions) {
     this.engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false, powerPreference: "high-performance" }, false);
@@ -139,6 +141,9 @@ export class GameRenderer {
         this.creature.gulp();
       } else if (e.type === "deposited") {
         this.depositPulse = 1;
+      } else if (e.type === "evolved") {
+        this.creature.setForm(e.tier, true);
+        this.shownForm = e.tier;
       }
     }
   }
@@ -171,6 +176,11 @@ export class GameRenderer {
     });
     for (let i = w.tentacles.length; i < this.bars.length; i++) this.bars[i]!.bg.setEnabled(false);
 
+    // Loads and dev devolves change the tier without an event: switch instantly.
+    if (w.progress.evolution !== this.shownForm) {
+      this.shownForm = w.progress.evolution;
+      this.creature.setForm(this.shownForm, false);
+    }
     this.creature.update(dt, x, z, p.vx, p.vz, this.goals);
 
     const r = w.stats.captureRadius;
