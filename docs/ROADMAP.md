@@ -44,7 +44,7 @@ Each item respects "reduced effects" and keeps the 30 FPS floor on the stress ca
 Goal: the spec's visual bar (section 10): original rigged 3D assets that meet or beat the reference at a stable mobile frame rate.
 
 - Blender pipeline: GLB export, shared materials, compressed textures (KTX2), validated room manifests (spawn, door, collision markers)
-- Rigged creature with idle, move and capture animations, and distinct evolution silhouettes; tentacles that extend, attach, bend and retract
+- Rigged creature with idle, move and capture animations, and distinct evolution silhouettes; tentacles that extend, attach, bend and retract. Brief, GLB contract and loading plan: [CREATURE_ASSET_BRIEF.md](CREATURE_ASSET_BRIEF.md)
 - Skinned crowd characters (profiled separately; instancing doesn't cover independently animated characters)
 - Modular floor, wall and door kit; baked ambient shading; limited dynamic shadows
 - Camera projection decided by side-by-side review; recorded reference comparison

@@ -33,4 +33,4 @@ Design source of truth: [Alien-Harvester-Web-Game-Spec.md](Alien-Harvester-Web-G
 
 ## Next up (see roadmap)
 
-Milestone 1 remainder: settings menu (sound, reduced effects, quality), audio, offline PWA, pacing simulations, real-device validation. Milestone 2: the user wants to **build the creature in Blender** (GLB export into `assets/`, loaded in place of the procedural `render/creature.ts`).
+Milestone 1 remainder: settings menu (sound, reduced effects, quality), audio, offline PWA, pacing simulations, real-device validation. Milestone 2: the user wants to **build the creature in Blender** (`.blend` source in `assets/creature/`, GLB exports in `public/models/`, loaded in place of the procedural `render/creature.ts` with per-form fallback). The asset contract and the loading plan are in [docs/CREATURE_ASSET_BRIEF.md](docs/CREATURE_ASSET_BRIEF.md).
