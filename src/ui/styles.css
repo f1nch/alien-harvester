@@ -438,3 +438,28 @@ html, body {
 .completion-stats dt { color: var(--muted); }
 .completion-stats dd { margin: 0; font-weight: 700; text-align: right; }
 .completion .btn { width: 100%; }
+
+/* Save data */
+.save-data { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.save-data h3 { margin: 0; font-size: 17px; }
+.save-data .panel-note { margin: 0; }
+.save-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.save-row .btn { padding: 0 8px; }
+.import-text {
+  width: 100%;
+  min-height: 90px;
+  font: 12px/1.4 ui-monospace, monospace;
+  color: var(--text);
+  background: #120e1f;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.import-preview { background: #120e1f; border: 1px solid var(--accent); border-radius: 10px; padding: 10px; font-size: 13px; }
+.import-preview p { margin: 0 0 8px; }
+.import-preview .completion-stats { margin: 0; }
+.import-preview.error { border-color: var(--warn); color: var(--warn); }
+.btn-danger { background: #6b2a2a; border-color: #ff7a6a; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

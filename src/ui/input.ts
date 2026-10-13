@@ -106,7 +106,7 @@ export class InputController {
   private onKey = (e: KeyboardEvent) => {
     const k = e.key.toLowerCase();
     if (!["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) return;
-    if (e.target instanceof HTMLInputElement) return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     e.preventDefault();
     if (e.type === "keydown") this.keys.add(k);
     else this.keys.delete(k);

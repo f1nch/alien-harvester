@@ -66,13 +66,46 @@ export class SaveStore {
     const bad = [current && !cur ? current : null, previous && !prev ? previous : null].filter(Boolean) as Slot[];
     for (const slot of bad) {
       try {
-        const n = await this.db.slots.where("key").startsWith("quarantine:").count();
-        await this.db.slots.put({ key: `quarantine:${n}`, data: slot.data });
+        await this.db.slots.add({ key: await this.nextKey("quarantine:"), data: slot.data });
       } catch (err) {
         console.warn("Could not quarantine unreadable save", err);
       }
     }
     return { status: "ok", save: prev, recovered: prev !== null && current !== undefined };
+  }
+
+  /** One past the highest existing "<prefix><n>" index, so gaps never cause reuse. */
+  private async nextKey(prefix: string): Promise<string> {
+    const keys = (await this.db.slots.where("key").startsWith(prefix).primaryKeys()) as string[];
+    let max = -1;
+    for (const k of keys) {
+      const n = Number(k.slice(prefix.length));
+      if (Number.isInteger(n)) max = Math.max(max, n);
+    }
+    return `${prefix}${max + 1}`;
+  }
+
+  /**
+   * Replace progress with an imported save. The current save is first copied to
+   * a "preimport:<n>" slot that nothing ever overwrites, so an import can always
+   * be undone by hand. Queued behind any pending write.
+   */
+  importSave(save: SaveFile): Promise<void> {
+    const run = async () => {
+      if (!parseSave(save, this.room)) throw new Error("Refusing to import an invalid save");
+      await this.db.transaction("rw", this.db.slots, async () => {
+        const old = await this.db.slots.get("current");
+        if (old) {
+          // add(), not put(): a key clash aborts the whole import instead of overwriting a backup.
+          await this.db.slots.add({ key: await this.nextKey("preimport:"), data: old.data });
+          if (parseSave(old.data, this.room)) await this.db.slots.put({ key: "previous", data: old.data });
+        }
+        await this.db.slots.put({ key: "current", data: save });
+      });
+    };
+    const p = this.writing.then(run, run);
+    this.writing = p.catch(() => undefined);
+    return p;
   }
 
   /**
@@ -101,7 +134,17 @@ export class SaveStore {
  * Resolves false if another tab already holds it.
  * Without Web Locks support every tab proceeds (known gap; see README).
  */
-export function acquireActiveTabLock(): Promise<boolean> {
+export async function acquireActiveTabLock(): Promise<boolean> {
+  // A reload (e.g. right after an import) can briefly overlap the old page still holding
+  // the lock, so retry a few times before declaring another tab active.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (await tryLock()) return true;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return false;
+}
+
+function tryLock(): Promise<boolean> {
   if (!("locks" in navigator)) return Promise.resolve(true);
   return new Promise((resolve) => {
     navigator.locks

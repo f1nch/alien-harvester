@@ -89,3 +89,50 @@ describe("pre-migration snapshot", () => {
     expect(await rawKeys()).toContain("premigration:v1");
   });
 });
+
+describe("import", () => {
+  it("backs up the current save permanently, then replaces it", async () => {
+    const store = new SaveStore(FACILITY);
+    await store.write(snapshot(1));
+    await store.write(snapshot(2));
+    await store.importSave(snapshot(99));
+    const r = await store.load();
+    expect(r.status === "ok" && r.save?.progress.banked.biomass).toBe(99);
+    expect(await rawKeys()).toContain("preimport:0");
+    // Later writes never touch the backup.
+    await store.write(snapshot(100));
+    await store.write(snapshot(101));
+    await store.importSave(snapshot(5));
+    expect(await rawKeys()).toEqual(expect.arrayContaining(["preimport:0", "preimport:1"]));
+  });
+
+  it("refuses an invalid import and leaves the current save alone", async () => {
+    const store = new SaveStore(FACILITY);
+    await store.write(snapshot(7));
+    const bad = snapshot(0);
+    bad.progress.banked.biomass = Number.NaN;
+    await expect(store.importSave(bad)).rejects.toThrow();
+    const r = await store.load();
+    expect(r.status === "ok" && r.save?.progress.banked.biomass).toBe(7);
+  });
+});
+
+describe("import review regressions", () => {
+  it("never reuses a backup number after a gap", async () => {
+    const store = new SaveStore(FACILITY);
+    await store.write(snapshot(1));
+    await rawPut("preimport:3", { marker: "keep me" });
+    await store.importSave(snapshot(2));
+    const keys = await rawKeys();
+    expect(keys).toContain("preimport:4");
+    expect(keys).toContain("preimport:3");
+  });
+
+  it("importing with no current save backs nothing up and still works", async () => {
+    const store = new SaveStore(FACILITY);
+    await store.importSave(snapshot(42));
+    const r = await store.load();
+    expect(r.status === "ok" && r.save?.progress.banked.biomass).toBe(42);
+    expect((await rawKeys()).filter((k) => k.startsWith("preimport:"))).toEqual([]);
+  });
+});

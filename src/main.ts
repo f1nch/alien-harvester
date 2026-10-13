@@ -16,7 +16,8 @@ import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
 import { inBase } from "./game/systems/deposit";
 import { createWorld, gainXp, pushQuestOutcome, refreshStats, SIM_HZ, type TargetEntity, type World } from "./game/world";
-import { defaultSettings, toSaveFile, type Settings } from "./persistence/schema";
+import { defaultSettings, toSaveFile, type SaveFile, type Settings } from "./persistence/schema";
+import { exportFileName, exportText, IMPORT_ERRORS, parseImport } from "./persistence/transfer";
 import { acquireActiveTabLock, SaveStore } from "./persistence/store";
 import { GameRenderer } from "./render/renderer";
 import { Hud } from "./ui/hud";
@@ -53,8 +54,12 @@ async function boot(): Promise<void> {
   let saveFailedShown = false;
   /** UI callbacks are ignored until boot has finished creating the world and loop. */
   let ready = false;
-  /** Set when loading failed: never write, so a fresh game can't overwrite real progress. */
+  /** Set when loading failed, or while an import reloads: never write over real progress. */
   let readOnly = false;
+  /** Loading failed this session: saving stays off for good, and export would only copy an empty game. */
+  let loadFailed = false;
+  /** A validated import waiting for the player's confirmation. */
+  let pendingImport: SaveFile | null = null;
   const store = new SaveStore(room);
 
   const hud = new Hud(uiRoot, {
@@ -124,6 +129,65 @@ async function boot(): Promise<void> {
       hud.showCompletion(null);
       loop.resume("completion");
     },
+    onExportDownload: () => {
+      if (!ready) return;
+      if (loadFailed) {
+        hud.toast("Your saved progress couldn't be read this session, so there's nothing to export. Reload to try again.", 6);
+        return;
+      }
+      const text = exportText(toSaveFile(world.progress, settings));
+      const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = exportFileName();
+      document.body.append(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      hud.toast("Save file downloaded.");
+    },
+    onExportCopy: () => {
+      if (!ready) return;
+      if (loadFailed) {
+        hud.toast("Your saved progress couldn't be read this session, so there's nothing to export. Reload to try again.", 6);
+        return;
+      }
+      const text = exportText(toSaveFile(world.progress, settings));
+      navigator.clipboard?.writeText(text).then(
+        () => hud.toast("Save text copied. Paste it somewhere safe."),
+        () => hud.toast("Couldn't copy automatically. Use Download save file instead.", 4),
+      ) ?? hud.toast("Copying isn't available here. Use Download save file instead.", 4);
+    },
+    onImportRejected: (reason) => {
+      if (!ready || !hud.upgradesOpen) return;
+      pendingImport = null;
+      hud.showImportPreview({ error: reason === "tooLarge" ? IMPORT_ERRORS.tooLarge : "That file couldn't be read." });
+    },
+    onImportText: (text) => {
+      // Ignore a file read that finishes after the panel was closed.
+      if (!ready || !hud.upgradesOpen) return;
+      const r = parseImport(text, room);
+      pendingImport = r.ok ? r.save : null;
+      hud.showImportPreview(r.ok ? { summary: r.summary } : { error: IMPORT_ERRORS[r.reason] });
+    },
+    onImportConfirm: () => {
+      if (!ready || !pendingImport) return;
+      const incoming = pendingImport;
+      pendingImport = null;
+      // Freeze saving first: the reload's save-on-hide must not write the old game over the import.
+      readOnly = true;
+      loop.pause("import");
+      store.importSave(incoming).then(
+        () => location.reload(),
+        (err) => {
+          console.error("Import failed", err);
+          // Back to how it was: a session whose load failed must stay read-only.
+          readOnly = loadFailed;
+          loop.resume("import");
+          hud.showImportPreview({ error: "The import couldn't be saved. Your current progress is unchanged." });
+        },
+      );
+    },
     onToggleHand: () => {
       if (!ready) return;
       settings.leftHanded = !settings.leftHanded;
@@ -151,6 +215,7 @@ async function boot(): Promise<void> {
   } catch (err) {
     console.error("Load failed", err);
     readOnly = true;
+    loadFailed = true;
     hud.toast("Couldn't read saved progress. Saving is off this session — reload to try again.", 8);
     world = createWorld(room, newProgress(room), seed);
   }
@@ -263,6 +328,8 @@ async function boot(): Promise<void> {
   function setUpgradesOpen(open: boolean): void {
     if (open) loop.pause("menu");
     input.reset();
+    // A half-finished import never survives closing the panel.
+    if (!open) pendingImport = null;
     hud.showUpgrades(open);
     if (open) void save();
     else loop.resume("menu");

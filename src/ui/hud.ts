@@ -16,6 +16,7 @@ import { cargoWeight } from "../domain/progress";
 import { activeQuests, questCount } from "../domain/quests";
 import type { TargetEntity, World } from "../game/world";
 import { reactorRequirements } from "../domain/reactor";
+import { MAX_IMPORT_BYTES, type SaveSummary } from "../persistence/transfer";
 
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
 export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢" };
@@ -54,6 +55,13 @@ export interface HudCallbacks {
   onRespec(): void;
   onBuildStructure(kind: StructureKind): void;
   onRepair(): void;
+  onExportDownload(): void;
+  onExportCopy(): void;
+  /** Validate text (from a file or paste); the HUD then shows a preview or an error. */
+  onImportText(text: string): void;
+  /** A file couldn't be used before reading its text (too big, or unreadable). */
+  onImportRejected(reason: "tooLarge" | "unreadable"): void;
+  onImportConfirm(): void;
   onCloseCompletion(): void;
   onOpenPerks(): void;
   onClosePerks(): void;
@@ -141,6 +149,10 @@ export class Hud {
   private reactorBtn: HTMLButtonElement;
   private reactorTitle: HTMLElement;
   private completion: HTMLElement;
+  private importPreview: HTMLElement;
+  private importText: HTMLTextAreaElement;
+  private importConfirm: HTMLButtonElement;
+  private importArmedAt = 0;
   private completionStats: HTMLElement;
   private respecBtn: HTMLButtonElement;
   private respecArmedAt = 0;
@@ -347,6 +359,64 @@ export class Hud {
     respec.append(this.respecBtn, this.respecNote);
     card.append(respec);
 
+    // Save data: export (download or copy) and import (file or paste), with a preview before replacing.
+    const data = el("section", "save-data");
+    data.setAttribute("aria-label", "Save data");
+    data.append(el("h3", undefined, "Save data"), el("p", "panel-note", "Keep a copy of your progress, or move it to another device."));
+    const exportRow = el("div", "save-row");
+    const download = el("button", "btn btn-secondary", "Download save file");
+    download.addEventListener("click", () => cb.onExportDownload());
+    const copy = el("button", "btn btn-secondary", "Copy save text");
+    copy.addEventListener("click", () => cb.onExportCopy());
+    exportRow.append(download, copy);
+    const importRow = el("div", "save-row");
+    const fileInput = el("input");
+    fileInput.type = "file";
+    fileInput.accept = ".json,application/json,text/plain";
+    fileInput.className = "visually-hidden";
+    fileInput.setAttribute("aria-label", "Choose a save file");
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files?.[0];
+      fileInput.value = "";
+      if (!file) return;
+      // Reject huge files before reading them into memory.
+      if (file.size > MAX_IMPORT_BYTES) {
+        cb.onImportRejected("tooLarge");
+        return;
+      }
+      file.text().then((t) => cb.onImportText(t), () => cb.onImportRejected("unreadable"));
+    });
+    const chooseFile = el("button", "btn btn-secondary", "Import from file");
+    chooseFile.addEventListener("click", () => fileInput.click());
+    const pasteToggle = el("button", "btn btn-secondary", "Paste save text");
+    this.importText = el("textarea", "import-text hidden");
+    this.importText.setAttribute("aria-label", "Paste save text");
+    this.importText.placeholder = "Paste exported save text here";
+    const checkPaste = el("button", "btn btn-secondary hidden", "Check pasted save");
+    pasteToggle.addEventListener("click", () => {
+      const show = this.importText.classList.toggle("hidden") === false;
+      checkPaste.classList.toggle("hidden", !show);
+      if (show) this.importText.focus();
+    });
+    checkPaste.addEventListener("click", () => cb.onImportText(this.importText.value));
+    importRow.append(chooseFile, pasteToggle);
+    this.importPreview = el("div", "import-preview hidden");
+    this.importPreview.setAttribute("role", "status");
+    this.importConfirm = el("button", "btn btn-danger hidden", "Replace current progress");
+    this.importConfirm.addEventListener("click", () => {
+      // Two deliberate taps, and never a double-tap: replacing progress is serious.
+      const now = performance.now();
+      if (this.importArmedAt && now - this.importArmedAt >= 400 && now - this.importArmedAt < 4000) {
+        this.importArmedAt = 0;
+        cb.onImportConfirm();
+      } else {
+        this.importArmedAt = now;
+        this.importConfirm.textContent = "Tap again to replace your progress";
+      }
+    });
+    data.append(exportRow, importRow, fileInput, this.importText, checkPaste, this.importPreview, this.importConfirm);
+    card.append(data);
+
     const settings = el("div", "panel-settings");
     const hand = el("button", "btn btn-secondary", "Swap button side");
     hand.addEventListener("click", () => cb.onToggleHand());
@@ -383,6 +453,8 @@ export class Hud {
 
   showUpgrades(open: boolean): void {
     this.panel.classList.toggle("hidden", !open);
+    // A half-finished import never survives closing the panel.
+    if (!open) this.showImportPreview(null);
     // Closing (or reopening) the panel always disarms a pending reset.
     this.respecArmedUntil = 0;
     this.last = "";
@@ -554,6 +626,37 @@ export class Hud {
     this.reactorBtn.classList.remove("hidden");
     this.reactorBtn.disabled = !ok;
     this.reactorBtn.textContent = ok ? "Repair the reactor" : "Requirements not met";
+  }
+
+  /** Show the result of checking an import: a summary to confirm, or why it was rejected. */
+  showImportPreview(result: { summary: SaveSummary } | { error: string } | null): void {
+    this.importArmedAt = 0;
+    this.importConfirm.textContent = "Replace current progress";
+    this.importPreview.classList.toggle("hidden", result === null);
+    this.importConfirm.classList.toggle("hidden", !(result && "summary" in result));
+    this.importPreview.classList.toggle("error", !!result && "error" in result);
+    if (!result) return;
+    if ("error" in result) {
+      this.importPreview.replaceChildren(el("p", undefined, result.error));
+      return;
+    }
+    const s = result.summary;
+    const rows: Array<[string, string]> = [
+      ["Level", String(s.level)],
+      ["Form", s.form],
+      ["Biomass", String(s.biomass)],
+      ["Genetic material", String(s.genetic)],
+      ["Reactor parts", String(s.parts)],
+      ["Doors open", String(s.doorsOpen)],
+      ["Objectives done", String(s.questsDone)],
+      ["Reactor repaired", s.reactorRepaired ? "Yes" : "No"],
+    ];
+    const dl = el("dl", "completion-stats");
+    dl.append(...rows.flatMap(([k, v]) => [el("dt", undefined, k), el("dd", undefined, v)]));
+    this.importPreview.replaceChildren(
+      el("p", undefined, "This save is valid. Importing replaces your current progress; a backup of it is kept on this device."),
+      dl,
+    );
   }
 
   get completionOpen(): boolean {

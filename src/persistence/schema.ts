@@ -48,7 +48,9 @@ export function toSaveFile(progress: ProgressState, settings: Settings): SaveFil
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const isNonNeg = (v: unknown): v is number => isNum(v) && v >= 0;
+/** Far beyond anything reachable in play, but small enough that sums can never overflow to Infinity. */
+const MAX_AMOUNT = 1e12;
+const isNonNeg = (v: unknown): v is number => isNum(v) && v >= 0 && v <= MAX_AMOUNT;
 
 /**
  * Bring older schemas up to date, one version at a time, without mutating the
