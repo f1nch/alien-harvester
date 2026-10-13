@@ -79,6 +79,14 @@ async function boot(): Promise<void> {
   const loop = new FixedLoop((dt) => stepWorld(world, dt), { hz: SIM_HZ, maxStepsPerFrame: 5 });
   renderer.snapCamera(world);
   if (import.meta.env.DEV) {
+    // Dynamic import keeps the testing panel out of production bundles entirely.
+    void import("./ui/devTools").then(({ mountDevTools }) =>
+      mountDevTools(uiRoot, (currency, amount) => {
+        world.progress.banked[currency] += amount;
+        hud.update(world, inBase(world));
+        void save();
+      }),
+    );
     // Debug hook for automated checks: advance the simulation deterministically.
     Object.assign(window, {
       __game: {

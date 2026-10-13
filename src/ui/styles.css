@@ -225,3 +225,30 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   .cargo-fill, .joy-base { transition: none; }
 }
+
+/* Dev-only testing tools */
+.dev-toggle {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 110px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  z-index: 4;
+  border-style: dashed;
+  color: var(--warn);
+}
+.dev-panel {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 160px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  z-index: 4;
+  background: var(--panel);
+  border: 1px dashed var(--warn);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dev-title { color: var(--warn); font-size: 12px; font-weight: 700; }
+.dev-row { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.dev-row span { flex: 1; min-width: 110px; }
+.dev-add { padding: 0 10px; }
