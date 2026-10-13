@@ -1,10 +1,13 @@
 import { zoneAt, type MapDef, type Rect } from "../content/map";
+import type { PerkId } from "../content/perks";
 import type { QuestDef } from "../content/quests";
 import { TARGETS, type TargetDef } from "../content/targets";
 import { computeStats, type PlayerStats } from "../domain/economy";
 import { addXp } from "../domain/levels";
+import { queuePerkChoices } from "../domain/perks";
 import type { CargoDrop, ProgressState } from "../domain/progress";
 import { applyQuestEvent, settleQuests, type QuestEvent, type QuestOutcome } from "../domain/quests";
+import { mulberry32 } from "../domain/rng";
 import { SpatialHash } from "./spatialHash";
 
 export const SIM_HZ = 30;
@@ -54,6 +57,7 @@ export type GameEvent =
   | { type: "levelUp"; level: number }
   | { type: "doorUnlocked"; door: string }
   | { type: "evolved"; tier: number }
+  | { type: "perkChosen"; perk: PerkId }
   | { type: "playerHit"; damage: number; by: TargetEntity }
   | { type: "strike"; by: TargetEntity; hit: boolean }
   | { type: "died"; lost: CargoDrop[]; forgiven: boolean };
@@ -85,16 +89,7 @@ export interface World {
   nextId: number;
 }
 
-export function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export { mulberry32 } from "../domain/rng";
 
 export function createWorld(map: MapDef, progress: ProgressState, seed = 1): World {
   const w: World = {
@@ -122,8 +117,12 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
   for (const s of map.spawns) {
     if ((progress.spawnCooldowns[s.id] ?? 0) <= 0) spawnTarget(w, s.id);
   }
-  // Quests whose state goal already holds (e.g. migrated saves) complete now.
+  // Quests whose state goal already holds (e.g. migrated saves) complete now. Any perk
+  // choices this earns are rolled from the save itself, so reloading can't reroll them.
+  const sessionRng = w.rng;
+  w.rng = mulberry32(0x51ed27 ^ Math.floor(progress.xp) ^ (Object.keys(progress.quests).length << 16));
   pushQuestOutcome(w, settleQuests(progress));
+  w.rng = sessionRng;
   return w;
 }
 
@@ -169,7 +168,14 @@ export function refreshStats(w: World): void {
 
 export function pushQuestOutcome(w: World, out: QuestOutcome): void {
   for (const quest of out.completed) w.events.push({ type: "questComplete", quest });
-  for (const level of out.levelsGained) w.events.push({ type: "levelUp", level });
+  levelsGained(w, out.levelsGained);
+}
+
+/** Every level gained (from captures, quests, or dev tools) earns a perk choice, rolled now. */
+function levelsGained(w: World, levels: readonly number[]): void {
+  if (levels.length === 0) return;
+  queuePerkChoices(w.progress, levels, w.rng);
+  for (const level of levels) w.events.push({ type: "levelUp", level });
 }
 
 export function questEvent(w: World, e: QuestEvent): void {
@@ -177,5 +183,5 @@ export function questEvent(w: World, e: QuestEvent): void {
 }
 
 export function gainXp(w: World, amount: number): void {
-  for (const level of addXp(w.progress, amount)) w.events.push({ type: "levelUp", level });
+  levelsGained(w, addXp(w.progress, amount));
 }

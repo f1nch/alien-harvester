@@ -8,7 +8,7 @@ import type { CargoDrop } from "./domain/progress";
 import { UPGRADE_IDS } from "./content/upgrades";
 import { capAtTier, tableCostForLevels } from "./domain/economy";
 import { devCompleteActive } from "./domain/quests";
-import { buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, respec, respecBlocker } from "./game/actions";
+import { buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
 import { inBase } from "./game/systems/deposit";
@@ -79,6 +79,19 @@ async function boot(): Promise<void> {
         hud.toast(`Mutations reset. Refunded ${parts.join(", ") || "nothing"}.`, 4);
         refreshHud();
         void save();
+      }
+    },
+    onOpenPerks: () => ready && setPerksOpen(true),
+    onClosePerks: () => ready && setPerksOpen(false),
+    onPickPerk: (level, option) => {
+      if (!ready) return;
+      // Only act on the choice the player was actually looking at.
+      if (world.progress.pendingPerks[0]?.level !== level) return;
+      if (pickPerk(world, option).ok) {
+        refreshHud();
+        void save();
+        // Stay open while more choices are queued.
+        if (world.progress.pendingPerks.length === 0) setPerksOpen(false);
       }
     },
     onToggleHand: () => {
@@ -190,6 +203,13 @@ async function boot(): Promise<void> {
     }
   }
 
+  function setPerksOpen(open: boolean): void {
+    if (open) loop.pause("perks");
+    input.reset();
+    hud.showPerks(open);
+    if (!open) loop.resume("perks");
+  }
+
   function setUpgradesOpen(open: boolean): void {
     if (open) loop.pause("menu");
     input.reset();
@@ -251,7 +271,7 @@ async function boot(): Promise<void> {
           hud.toast(`Objective complete: ${e.quest.title}`);
           saveNow = true;
         } else if (e.type === "levelUp") {
-          hud.toast(`Level ${e.level} reached`);
+          hud.toast(`Level ${e.level} reached — perk ready`);
           saveNow = true;
         } else if (e.type === "playerHit") {
           hud.flashDamage();

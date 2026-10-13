@@ -4,10 +4,15 @@ import { goalTarget, QUEST_BY_ID } from "../content/quests";
 import { isTargetType, TARGETS } from "../content/targets";
 import { UPGRADE_IDS } from "../content/upgrades";
 import { MAX_TIER } from "../content/evolution";
+import { MAX_LEVEL } from "../content/levels";
+import { CHOICES_PER_LEVEL, isPerkId, PERKS } from "../content/perks";
 import { capAtTier, computeStats, tableCostForLevels } from "../domain/economy";
+import { levelForXp } from "../domain/levels";
+import { queuePerkChoices } from "../domain/perks";
+import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 export const CONTENT_VERSION = 1;
 
 export interface Settings {
@@ -80,6 +85,12 @@ function migrate(raw: Obj): Obj | null {
     }
     m = { ...m, schemaVersion: 5 };
   }
+  if (m.schemaVersion === 5) {
+    // v6 adds perks. Existing players get the choices for levels they already reached,
+    // rolled once after parsing (deterministically from the save) and then saved.
+    const progress = isObj(m.progress) ? { ...m.progress, perks: {}, pendingPerks: [] } : m.progress;
+    m = { ...m, schemaVersion: 6, progress };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
@@ -117,6 +128,15 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
     const lvl = p.upgrades[id] ?? 0;
     if (!Number.isInteger(lvl) || (lvl as number) < 0) return null;
     progress.upgrades[id] = Math.min(lvl as number, capAtTier(id, progress.evolution));
+  }
+
+  // Perks before cargo and health: they change capacity and maximum health.
+  if (!isObj(p.perks)) return null;
+  for (const [id, n] of Object.entries(p.perks)) {
+    if (!isPerkId(id)) continue; // perk removed from content
+    if (!Number.isInteger(n) || (n as number) < 0) return null;
+    const max = PERKS[id].maxStacks;
+    progress.perks[id] = max === null ? (n as number) : Math.min(n as number, max);
   }
 
   if (!isObj(p.upgradeSpent)) return null;
@@ -188,6 +208,23 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
     const cd = p.spawnCooldowns[s.id];
     if (cd !== undefined && !isNonNeg(cd)) return null;
     progress.spawnCooldowns[s.id] = Math.min((cd as number | undefined) ?? 0, 600);
+  }
+
+  if (!Array.isArray(p.pendingPerks)) return null;
+  for (const c of p.pendingPerks) {
+    if (!isObj(c) || !Number.isInteger(c.level) || !Array.isArray(c.options)) return null;
+    // Grants scale with the level, so it must be a real one.
+    if ((c.level as number) < 2 || (c.level as number) > MAX_LEVEL) return null;
+    // Drop removed perks and duplicates; a choice left empty becomes a biomass cache.
+    const options = [...new Set(c.options.filter(isPerkId))].slice(0, CHOICES_PER_LEVEL);
+    progress.pendingPerks.push({ level: c.level as number, options: options.length ? options : ["biomassCache"] });
+  }
+  progress.pendingPerks = progress.pendingPerks.slice(0, MAX_LEVEL);
+  // Saves from before perks existed get the choices for levels they already reached.
+  if (typeof raw.schemaVersion === "number" && raw.schemaVersion < 6) {
+    const levels: number[] = [];
+    for (let l = 2; l <= levelForXp(progress.xp); l++) levels.push(l);
+    queuePerkChoices(progress, levels, mulberry32(0x9e3779b9 ^ Math.floor(progress.xp)));
   }
 
   const settings = defaultSettings();

@@ -3,6 +3,7 @@ import type { UpgradeId } from "../content/upgrades";
 import { unlockDoor, type UnlockResult } from "../domain/doors";
 import { purchaseUpgrade, respecUpgrades, type PurchaseResult, type RespecResult } from "../domain/economy";
 import { evolve, type EvolveResult } from "../domain/evolution";
+import { choosePerk, claimFallback, type ChooseResult } from "../domain/perks";
 import { dist2 } from "./geometry";
 import { inBase } from "./systems/deposit";
 import { questEvent, refreshObstacles, refreshStats, type World } from "./world";
@@ -28,6 +29,18 @@ export function openDoor(w: World, door: DoorDef): UnlockResult {
   refreshObstacles(w);
   w.events.push({ type: "doorUnlocked", door: door.id });
   questEvent(w, { kind: "unlockDoor", door: door.id });
+  return r;
+}
+
+/** Take an option from the oldest pending perk choice (or the fallback if none are legal). */
+export function pickPerk(w: World, optionIndex: number | "fallback"): ChooseResult {
+  const maxBefore = w.stats.maxHealth;
+  const r = optionIndex === "fallback" ? claimFallback(w.progress) : choosePerk(w.progress, optionIndex);
+  if (!r.ok) return r;
+  refreshStats(w);
+  // Perks are free and can't be refunded, so a bigger health pool simply comes filled in.
+  w.progress.player.health += Math.max(0, w.stats.maxHealth - maxBefore);
+  w.events.push({ type: "perkChosen", perk: r.perk });
   return r;
 }
 

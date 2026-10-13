@@ -1,6 +1,8 @@
 import { emptyWallet, type Reward, type Wallet } from "../content/currencies";
 import type { MapDef } from "../content/map";
+import type { PerkId } from "../content/perks";
 import type { TargetTypeId } from "../content/targets";
+import type { PerkChoice } from "./perks";
 import { UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 
 /** A captured, not-yet-banked drop. Cargo is not a spendable wallet. */
@@ -39,6 +41,10 @@ export interface ProgressState {
   evolution: number;
   /** The first death keeps cargo (tutorial exemption); set once it has been used. */
   firstDeathForgiven: boolean;
+  /** Times each perk has been taken. */
+  perks: Partial<Record<PerkId, number>>;
+  /** Level-up choices not yet made, oldest first. Options are fixed when rolled. */
+  pendingPerks: PerkChoice[];
 }
 
 export function newProgress(map: MapDef): ProgressState {
@@ -63,6 +69,8 @@ export function newProgress(map: MapDef): ProgressState {
     unlockedDoors: [],
     evolution: 0,
     firstDeathForgiven: false,
+    perks: {},
+    pendingPerks: [],
   };
 }
 

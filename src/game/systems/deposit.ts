@@ -1,4 +1,5 @@
 import { CURRENCIES, roundCents } from "../../content/currencies";
+import type { CargoDrop } from "../../domain/progress";
 import { dist2 } from "../geometry";
 import { questEvent, type World } from "../world";
 
@@ -8,6 +9,20 @@ export const DEPOSIT_RATE = 40;
 export function inBase(w: World): boolean {
   const b = w.map.base;
   return dist2(w.player.x, w.player.z, b.x, b.z) <= b.radius * b.radius;
+}
+
+/**
+ * Bank one drop's rewards (times yield) and advance bank quests. The only
+ * place cargo turns into currency, for both the player and the drone.
+ */
+export function bankDrop(w: World, drop: CargoDrop): void {
+  for (const c of CURRENCIES) {
+    const amount = drop.reward[c];
+    if (!amount) continue;
+    const banked = roundCents((amount * w.stats.yieldPercent) / 100);
+    w.progress.banked[c] = roundCents(w.progress.banked[c] + banked);
+    questEvent(w, { kind: "bank", currency: c, amount: banked });
+  }
 }
 
 /** Moves whole drops from cargo to the bank. Conserves rewards (times yield). */
@@ -21,13 +36,7 @@ export function updateDeposit(w: World, dt: number): void {
   while (cargo.length > 0 && w.depositBudget >= cargo[0]!.weight) {
     const drop = cargo.shift()!;
     w.depositBudget -= drop.weight;
-    for (const c of CURRENCIES) {
-      const amount = drop.reward[c];
-      if (!amount) continue;
-      const banked = roundCents((amount * w.stats.yieldPercent) / 100);
-      w.progress.banked[c] = roundCents(w.progress.banked[c] + banked);
-      questEvent(w, { kind: "bank", currency: c, amount: banked });
-    }
+    bankDrop(w, drop);
     w.events.push({ type: "deposited", drop });
   }
   if (cargo.length === 0) {

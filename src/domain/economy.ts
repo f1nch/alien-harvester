@@ -1,4 +1,5 @@
 import { EVOLUTIONS } from "../content/evolution";
+import { perkBonuses } from "./perks";
 import { CURRENCIES, emptyWallet, roundCents, type Wallet } from "../content/currencies";
 import { UPGRADE_IDS, UPGRADES, type UpgradeId } from "../content/upgrades";
 import type { ProgressState } from "./progress";
@@ -27,21 +28,28 @@ export function upgradeValue(p: ProgressState, id: UpgradeId, level = p.upgrades
 }
 
 /**
- * Single place where upgrade levels become stats. Each stat comes from one
- * track and is applied in exactly one system, so multipliers can't compound.
+ * Single place where progression becomes stats. Order is fixed:
+ *   1. upgrade track value (base + levels, plus evolution bonuses),
+ *   2. perk percentages for that stat, summed then applied once,
+ *   3. flat perk bonuses.
+ * Each stat is then applied in exactly one system, so nothing compounds by accident.
  */
 export function computeStats(p: ProgressState): PlayerStats {
   const v = (id: UpgradeId) => upgradeValue(p, id);
+  const perk = perkBonuses(p);
+  // Multiply before dividing so e.g. 20 * 107 / 100 can't become 21.3999… and floor wrong.
+  const pct = (value: number, percent: number) => (value * (100 + percent)) / 100;
   return {
-    moveSpeed: v("moveSpeed"),
-    captureRadius: v("captureRadius"),
-    capturePower: v("capturePower"),
+    moveSpeed: pct(v("moveSpeed"), perk.percent.moveSpeed),
+    captureRadius: pct(v("captureRadius"), perk.percent.captureRadius),
+    capturePower: pct(v("capturePower"), perk.percent.capturePower),
     tentacles: v("tentacles"),
-    cargoCapacity: v("cargoCapacity"),
-    maxHealth: v("maxHealth"),
-    regeneration: v("regeneration"),
+    // Whole units: cargo weights are integers.
+    cargoCapacity: Math.floor(pct(v("cargoCapacity"), perk.percent.cargoCapacity)),
+    maxHealth: Math.round(pct(v("maxHealth"), perk.percent.maxHealth)),
+    regeneration: v("regeneration") + perk.regeneration,
     // Applied only in the deposit system.
-    yieldPercent: v("resourceYield"),
+    yieldPercent: v("resourceYield") + perk.yieldPercent,
   };
 }
 

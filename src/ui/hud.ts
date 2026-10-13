@@ -3,6 +3,8 @@ import { goalTarget } from "../content/quests";
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 import { doorRequirements } from "../domain/doors";
 import { FORM_NAMES } from "../content/evolution";
+import { CHOICES_PER_LEVEL, PERKS } from "../content/perks";
+import { describePerk, isLegal, perkStacks } from "../domain/perks";
 import { CURRENCY_LABEL, type Currency } from "../content/currencies";
 import { cappedByEvolution, maxLevel, nextCost, upgradeValue } from "../domain/economy";
 import { evolutionRequirements, nextEvolution } from "../domain/evolution";
@@ -41,6 +43,10 @@ export interface HudCallbacks {
   onUnlockDoor(door: DoorDef): void;
   onEvolve(): void;
   onRespec(): void;
+  onOpenPerks(): void;
+  onClosePerks(): void;
+  /** Pick an option of the pending choice for `level`, or the fallback. */
+  onPickPerk(level: number, option: number | "fallback"): void;
 }
 
 function requirementList(list: HTMLElement, reqs: Requirement[]): void {
@@ -84,6 +90,15 @@ export class Hud {
   private doorBtn: HTMLButtonElement;
   private currentDoor: DoorDef | null = null;
   private upgradeBtn: HTMLButtonElement;
+  private perkBtn: HTMLButtonElement;
+  private perkPanel: HTMLElement;
+  private perkTitle: HTMLElement;
+  private perkCards: HTMLElement;
+  private perkFallback: HTMLButtonElement;
+  private perkCb: Pick<HudCallbacks, "onPickPerk">;
+  /** Choice the cards currently show, and when they appeared (guards against double-taps). */
+  private perkShownLevel = 0;
+  private perkShownAt = 0;
   private panel: HTMLElement;
   private rows = new Map<UpgradeId, { level: HTMLElement; value: HTMLElement; buy: HTMLButtonElement }>();
   private evoForm: HTMLElement;
@@ -165,6 +180,25 @@ export class Hud {
     this.upgradeBtn = el("button", "btn btn-upgrade", "Upgrades");
     this.upgradeBtn.addEventListener("click", () => cb.onOpenUpgrades());
 
+    // Level-up perks: opened deliberately (never auto-popped mid-fight), and pausing while open.
+    this.perkCb = cb;
+    this.perkBtn = el("button", "btn btn-perk hidden", "Perk ready");
+    this.perkBtn.addEventListener("click", () => cb.onOpenPerks());
+    this.perkPanel = el("div", "panel perk-panel hidden");
+    this.perkPanel.setAttribute("role", "dialog");
+    this.perkPanel.setAttribute("aria-label", "Choose a perk");
+    const perkCard = el("div", "panel-card");
+    const perkHead = el("div", "panel-head");
+    this.perkTitle = el("h2", undefined, "Choose a perk");
+    const perkClose = el("button", "btn btn-close", "Later");
+    perkClose.addEventListener("click", () => cb.onClosePerks());
+    perkHead.append(this.perkTitle, perkClose);
+    this.perkCards = el("div", "perk-cards");
+    this.perkFallback = el("button", "btn btn-buy hidden", "Take a biomass cache instead");
+    this.perkFallback.addEventListener("click", () => this.pick("fallback"));
+    perkCard.append(perkHead, el("p", "panel-note", "Game paused. Choices are fixed when you level up."), this.perkCards, this.perkFallback);
+    this.perkPanel.append(perkCard);
+
     this.panel = el("div", "panel hidden");
     this.panel.setAttribute("role", "dialog");
     this.panel.setAttribute("aria-label", "Upgrades");
@@ -240,11 +274,21 @@ export class Hud {
     this.vignette = el("div", "vignette");
     this.vignette.setAttribute("aria-hidden", "true");
 
-    root.append(this.vignette, top, this.doorCard, this.upgradeBtn, this.panel, this.toastEl, this.overlay);
+    root.append(this.vignette, top, this.doorCard, this.upgradeBtn, this.perkBtn, this.perkPanel, this.panel, this.toastEl, this.overlay);
   }
 
   setLeftHanded(left: boolean): void {
     this.upgradeBtn.classList.toggle("left", left);
+    this.perkBtn.classList.toggle("left", left);
+  }
+
+  get perksOpen(): boolean {
+    return !this.perkPanel.classList.contains("hidden");
+  }
+
+  showPerks(open: boolean): void {
+    this.perkPanel.classList.toggle("hidden", !open);
+    this.last = "";
   }
 
   get upgradesOpen(): boolean {
@@ -297,7 +341,7 @@ export class Hud {
     const cap = w.stats.cargoCapacity;
     const key = [
       p.banked.biomass, p.banked.genetic, p.xp, cargo, cap, s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
-      this.upgradesOpen, JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
+      this.upgradesOpen, this.perksOpen, JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
     if (key === this.last) return;
     this.last = key;
@@ -325,6 +369,7 @@ export class Hud {
     this.cargoBox.classList.toggle("full", w.cargoFull);
 
     this.renderQuests(w);
+    this.renderPerks(w);
     this.renderDoor(w, s.door);
 
     let hint = "";
@@ -379,6 +424,51 @@ export class Hud {
         return row;
       }),
     );
+  }
+
+  private pick(option: number | "fallback"): void {
+    // A double-tap must not land on the next queued choice's freshly rendered cards.
+    if (performance.now() - this.perkShownAt < 350) return;
+    this.perkCb.onPickPerk(this.perkShownLevel, option);
+  }
+
+  private renderPerks(w: World): void {
+    const p = w.progress;
+    const pending = p.pendingPerks.length;
+    this.perkBtn.classList.toggle("hidden", pending === 0);
+    this.perkBtn.textContent = pending > 1 ? `Perks ready (${pending})` : "Perk ready";
+    const choice = p.pendingPerks[0];
+    if (!choice) {
+      this.perkCards.replaceChildren();
+      return;
+    }
+    if (choice.level !== this.perkShownLevel) {
+      this.perkShownLevel = choice.level;
+      this.perkShownAt = performance.now();
+    }
+    this.perkTitle.textContent = pending > 1 ? `Level ${choice.level} perk (${pending} to choose)` : `Level ${choice.level} perk`;
+    let legalCount = 0;
+    this.perkCards.replaceChildren(
+      ...choice.options.map((id, i) => {
+        const def = PERKS[id];
+        const legal = isLegal(p, id);
+        if (legal) legalCount++;
+        const card = el("button", "perk-card");
+        card.disabled = !legal;
+        const stacks = def.maxStacks === null ? "" : `${perkStacks(p, id)} / ${def.maxStacks}`;
+        card.append(
+          el("span", "perk-icon", def.icon),
+          el("span", "perk-name", def.name),
+          el("span", "perk-desc", legal ? describePerk(def, choice.level) : "Already at maximum"),
+          el("span", "perk-stacks", stacks),
+        );
+        card.setAttribute("aria-label", `${def.name}: ${describePerk(def, choice.level)}${stacks ? `, taken ${stacks}` : ""}`);
+        card.addEventListener("click", () => this.pick(i));
+        return card;
+      }),
+    );
+    // Always three real options: top up with a biomass cache when earlier picks maxed some.
+    this.perkFallback.classList.toggle("hidden", legalCount >= CHOICES_PER_LEVEL);
   }
 
   private renderRespec(): void {
