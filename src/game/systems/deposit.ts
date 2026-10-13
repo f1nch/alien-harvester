@@ -1,4 +1,4 @@
-import { CURRENCIES } from "../../content/currencies";
+import { CURRENCIES, roundCents } from "../../content/currencies";
 import { dist2 } from "../geometry";
 import { questEvent, type World } from "../world";
 
@@ -24,8 +24,8 @@ export function updateDeposit(w: World, dt: number): void {
     for (const c of CURRENCIES) {
       const amount = drop.reward[c];
       if (!amount) continue;
-      const banked = amount * w.stats.yieldMultiplier;
-      w.progress.banked[c] += banked;
+      const banked = roundCents((amount * w.stats.yieldPercent) / 100);
+      w.progress.banked[c] = roundCents(w.progress.banked[c] + banked);
       questEvent(w, { kind: "bank", currency: c, amount: banked });
     }
     w.events.push({ type: "deposited", drop });

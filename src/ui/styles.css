@@ -347,3 +347,8 @@ html, body {
 @media (prefers-reduced-motion: reduce) { .vignette.hit { animation-duration: 0.01s; } }
 /* Toasts sit above the creature (screen centre) rather than on top of it. */
 .toast { top: 28%; }
+
+/* Respec */
+.respec { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.respec .btn { width: 100%; }
+.respec .btn.armed { border-color: var(--warn); color: var(--warn); }

@@ -3,13 +3,17 @@ import { goalTarget } from "../content/quests";
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 import { doorRequirements } from "../domain/doors";
 import { FORM_NAMES } from "../content/evolution";
-import { cappedByEvolution, maxLevel, nextCost } from "../domain/economy";
+import { CURRENCY_LABEL, type Currency } from "../content/currencies";
+import { cappedByEvolution, maxLevel, nextCost, upgradeValue } from "../domain/economy";
 import { evolutionRequirements, nextEvolution } from "../domain/evolution";
 import type { Requirement } from "../domain/requirements";
 import { levelProgress } from "../domain/levels";
 import { cargoWeight } from "../domain/progress";
 import { activeQuests, questCount } from "../domain/quests";
 import type { World } from "../game/world";
+
+/** Distinct shapes per currency, so cost labels don't rely on colour. */
+export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢" };
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
@@ -36,6 +40,7 @@ export interface HudCallbacks {
   onToggleHand(): void;
   onUnlockDoor(door: DoorDef): void;
   onEvolve(): void;
+  onRespec(): void;
 }
 
 function requirementList(list: HTMLElement, reqs: Requirement[]): void {
@@ -53,6 +58,8 @@ export interface HudState {
   inBase: boolean;
   /** Locked door the player is standing next to. */
   door: DoorDef | null;
+  /** Why a respec isn't allowed right now, or null if it is. */
+  respecBlocker: "notAtBase" | "cargoAboard" | null;
 }
 
 export class Hud {
@@ -84,6 +91,11 @@ export class Hud {
   private evoDesc: HTMLElement;
   private evoList: HTMLElement;
   private evoBtn: HTMLButtonElement;
+  private respecBtn: HTMLButtonElement;
+  private respecArmedAt = 0;
+  private respecArmedUntil = 0;
+  private respecNote: HTMLElement;
+  private respecBlocker: HudState["respecBlocker"] = "notAtBase";
   private toastEl: HTMLElement;
   private toastQueue: string[] = [];
   private toastBusy = false;
@@ -162,7 +174,7 @@ export class Hud {
     const close = el("button", "btn btn-close", "Close");
     close.addEventListener("click", () => cb.onCloseUpgrades());
     head.append(close);
-    card.append(head, el("p", "panel-note", "Game paused. Spend banked biomass; cargo must be deposited at base first."));
+    card.append(head, el("p", "panel-note", "Game paused. Spend banked resources; cargo must be deposited at base first."));
     for (const id of UPGRADE_IDS) {
       const def = UPGRADES[id];
       const row = el("div", "up-row");
@@ -192,6 +204,29 @@ export class Hud {
     evo.append(evoHead, this.evoNext, this.evoDesc, this.evoList, this.evoBtn);
     card.append(evo);
 
+    // Free respec, two-tap confirm, only at base.
+    const respec = el("section", "respec");
+    this.respecBtn = el("button", "btn btn-secondary", "Reset mutations");
+    this.respecNote = el("p", "panel-note");
+    this.respecBtn.addEventListener("click", () => {
+      const now = performance.now();
+      // The confirming tap must be deliberate: not part of a double-tap on the first.
+      if (now < this.respecArmedUntil && now - this.respecArmedAt >= 400) {
+        this.respecArmedUntil = 0;
+        cb.onRespec();
+      } else if (now >= this.respecArmedUntil) {
+        this.respecArmedAt = now;
+        this.respecArmedUntil = now + 3000;
+        this.last = "";
+        window.setTimeout(() => {
+          this.last = "";
+        }, 3100);
+      }
+      this.renderRespec();
+    });
+    respec.append(this.respecBtn, this.respecNote);
+    card.append(respec);
+
     const settings = el("div", "panel-settings");
     const hand = el("button", "btn btn-secondary", "Swap button side");
     hand.addEventListener("click", () => cb.onToggleHand());
@@ -218,6 +253,8 @@ export class Hud {
 
   showUpgrades(open: boolean): void {
     this.panel.classList.toggle("hidden", !open);
+    // Closing (or reopening) the panel always disarms a pending reset.
+    this.respecArmedUntil = 0;
     this.last = "";
   }
 
@@ -259,7 +296,7 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.xp, cargo, cap, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
+      p.banked.biomass, p.banked.genetic, p.xp, cargo, cap, s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
     if (key === this.last) return;
@@ -304,22 +341,25 @@ export class Hud {
       const row = this.rows.get(id)!;
       const lvl = p.upgrades[id];
       const cost = nextCost(p, id);
-      const cur = def.base + def.perLevel * lvl;
+      const cur = upgradeValue(p, id);
+      const next = upgradeValue(p, id, lvl + 1);
       row.level.textContent = ` Lv ${lvl}/${maxLevel(p, id)}`;
       row.value.textContent = cost === null
         ? `${fmt(cur)}${def.unit} (max)`
-        : `${fmt(cur)}${def.unit} → ${fmt(cur + def.perLevel)}${def.unit}`;
+        : `${fmt(cur)}${def.unit} → ${fmt(next)}${def.unit}`;
       if (cost === null) {
         row.buy.textContent = cappedByEvolution(p, id) ? "Evolve to raise cap" : "Maxed";
         row.buy.disabled = true;
       } else {
         const can = p.banked[def.currency] >= cost;
         affordable ||= can;
-        row.buy.textContent = `Buy · ${cost} ◆`;
+        row.buy.textContent = `Buy · ${cost} ${CURRENCY_ICON[def.currency]}`;
         row.buy.disabled = !can;
-        row.buy.setAttribute("aria-label", `Buy ${def.name} for ${cost} biomass`);
+        row.buy.setAttribute("aria-label", `Buy ${def.name} for ${cost} ${CURRENCY_LABEL[def.currency].toLowerCase()}`);
       }
     }
+    this.respecBlocker = s.respecBlocker;
+    this.renderRespec();
     const evoReady = this.renderEvolution(w);
     affordable ||= evoReady;
     this.upgradeBtn.classList.toggle("ready", affordable);
@@ -339,6 +379,19 @@ export class Hud {
         return row;
       }),
     );
+  }
+
+  private renderRespec(): void {
+    const blocked = this.respecBlocker;
+    if (blocked) this.respecArmedUntil = 0;
+    const armed = performance.now() < this.respecArmedUntil;
+    this.respecBtn.disabled = blocked !== null;
+    this.respecBtn.textContent = armed ? "Tap again to reset all mutations" : "Reset mutations (free, full refund)";
+    this.respecBtn.classList.toggle("armed", armed);
+    this.respecNote.textContent =
+      blocked === "notAtBase" ? "Available while standing at the base."
+      : blocked === "cargoAboard" ? "Deposit your cargo first."
+      : "Refunds everything paid for current mutations. Evolution is kept.";
   }
 
   /** Returns true when the player can evolve right now. */

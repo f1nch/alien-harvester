@@ -6,9 +6,9 @@ import { CURRENCIES, CURRENCY_LABEL, emptyWallet } from "./content/currencies";
 import { FORM_NAMES } from "./content/evolution";
 import type { CargoDrop } from "./domain/progress";
 import { UPGRADE_IDS } from "./content/upgrades";
-import { capAtTier } from "./domain/economy";
+import { capAtTier, tableCostForLevels } from "./domain/economy";
 import { devCompleteActive } from "./domain/quests";
-import { buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor } from "./game/actions";
+import { buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, respec, respecBlocker } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
 import { inBase } from "./game/systems/deposit";
@@ -71,6 +71,16 @@ async function boot(): Promise<void> {
         void save();
       }
     },
+    onRespec: () => {
+      if (!ready) return;
+      const r = respec(world);
+      if (r.ok) {
+        const parts = CURRENCIES.filter((c) => r.refund[c] > 0).map((c) => `${r.refund[c]} ${CURRENCY_LABEL[c].toLowerCase()}`);
+        hud.toast(`Mutations reset. Refunded ${parts.join(", ") || "nothing"}.`, 4);
+        refreshHud();
+        void save();
+      }
+    },
     onToggleHand: () => {
       if (!ready) return;
       settings.leftHanded = !settings.leftHanded;
@@ -129,7 +139,11 @@ async function boot(): Promise<void> {
         devolve: () => {
           const p = world.progress;
           p.evolution = Math.max(0, p.evolution - 1);
-          for (const id of UPGRADE_IDS) p.upgrades[id] = Math.min(p.upgrades[id], capAtTier(id, p.evolution));
+          for (const id of UPGRADE_IDS) {
+            const capped = Math.min(p.upgrades[id], capAtTier(id, p.evolution));
+            if (capped < p.upgrades[id]) p.upgradeSpent[id] = tableCostForLevels(id, capped);
+            p.upgrades[id] = capped;
+          }
           refreshStats(world);
           // Keep the hold within the reduced capacity, matching what a reload would do.
           let held = 0;
@@ -155,7 +169,7 @@ async function boot(): Promise<void> {
   }
 
   function refreshHud(): void {
-    hud.update(world, { inBase: inBase(world), door: nearbyLockedDoor(world) });
+    hud.update(world, { inBase: inBase(world), door: nearbyLockedDoor(world), respecBlocker: respecBlocker(world) });
   }
 
   function applySettings(): void {

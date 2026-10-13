@@ -21,6 +21,7 @@ function ready() {
   p.upgrades.capturePower = 4;
   p.upgrades.cargoCapacity = 4;
   p.upgrades.moveSpeed = 2;
+  p.mutationsBought = 10;
   p.banked.genetic = 30;
   p.banked.biomass = 150;
   return p;
@@ -41,7 +42,7 @@ describe("evolution", () => {
 
   it("never deducts anything unless every requirement is met", () => {
     const p = ready();
-    p.upgrades.moveSpeed = 1; // 9 mutation levels: one short
+    p.mutationsBought = 9; // one short
     expect(evolve(p)).toEqual({ ok: false, reason: "requirements" });
     expect(p.banked).toMatchObject({ genetic: 30, biomass: 150 });
     expect(p.evolution).toBe(0);
@@ -134,7 +135,13 @@ describe("evolution saves", () => {
 describe("evolution review regressions", () => {
   it("tier-0 caps match the pre-evolution saves, so migrated levels are never cut", () => {
     // Schema v2 capped levels at the cost-table lengths: 8, 8, 5, 5.
-    expect(UPGRADE_IDS.map((id) => UPGRADES[id].capByTier[0])).toEqual([8, 8, 5, 5]);
+    const original = ["capturePower", "cargoCapacity", "captureRadius", "moveSpeed"] as const;
+    expect(original.map((id) => UPGRADES[id].capByTier[0])).toEqual([8, 8, 5, 5]);
+    // Pin every track: lowering a cap would silently remove purchased levels from saves.
+    expect(Object.fromEntries(UPGRADE_IDS.map((id) => [id, UPGRADES[id].capByTier]))).toEqual({
+      capturePower: [8, 12], cargoCapacity: [8, 12], captureRadius: [5, 7], moveSpeed: [5, 7],
+      tentacles: [1, 3], maxHealth: [5, 8], regeneration: [4, 6], resourceYield: [3, 5],
+    });
   });
 
   it("an evolved save whose evolve quest was never completed is repaired on load", () => {

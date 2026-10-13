@@ -1,6 +1,5 @@
-import { CURRENCIES, CURRENCY_LABEL, type Reward } from "../content/currencies";
+import { CURRENCIES, CURRENCY_LABEL, roundCents, type Reward } from "../content/currencies";
 import { QUEST_BY_ID } from "../content/quests";
-import { UPGRADE_IDS } from "../content/upgrades";
 import { levelForXp } from "./levels";
 import type { ProgressState } from "./progress";
 import { isDone } from "./quests";
@@ -10,7 +9,7 @@ export interface Requirements {
   level?: number;
   /** Quest IDs that must be complete. */
   quests?: string[];
-  /** Total purchased mutation (upgrade) levels across all tracks. */
+  /** Lifetime mutation (upgrade) levels bought; a respec does not reduce it. */
   mutationLevels?: number;
   /** Deducted only when everything is met, in the same transaction. */
   cost?: Reward;
@@ -24,9 +23,7 @@ export interface Requirement {
 }
 
 export function totalMutationLevels(p: ProgressState): number {
-  let n = 0;
-  for (const id of UPGRADE_IDS) n += p.upgrades[id];
-  return n;
+  return p.mutationsBought;
 }
 
 /** Every requirement with its current progress, for UI cards. */
@@ -70,6 +67,6 @@ export function allMet(p: ProgressState, r: Requirements): boolean {
 export function payCost(p: ProgressState, r: Requirements): void {
   for (const c of CURRENCIES) {
     const cost = r.cost?.[c];
-    if (cost) p.banked[c] -= cost;
+    if (cost) p.banked[c] = roundCents(p.banked[c] - cost);
   }
 }

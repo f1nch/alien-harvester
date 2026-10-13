@@ -9,6 +9,14 @@ export const CURRENCY_LABEL: Record<Currency, string> = {
   parts: "Reactor parts",
 };
 
+/**
+ * Wallet amounts are kept to whole cents. Yield bonuses produce fractions, and
+ * unrounded float sums (10.999…) would make exact-cost purchases unaffordable.
+ */
+export function roundCents(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export function emptyWallet(): Wallet {
   return { biomass: 0, genetic: 0, parts: 0 };
 }

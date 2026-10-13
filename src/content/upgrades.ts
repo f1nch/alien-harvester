@@ -1,6 +1,14 @@
 import type { Currency } from "./currencies";
 
-export type UpgradeId = "capturePower" | "cargoCapacity" | "captureRadius" | "moveSpeed";
+export type UpgradeId =
+  | "capturePower"
+  | "cargoCapacity"
+  | "captureRadius"
+  | "moveSpeed"
+  | "tentacles"
+  | "maxHealth"
+  | "regeneration"
+  | "resourceYield";
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -58,6 +66,48 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "biomass",
     costs: [25, 60, 120, 210, 330, 500, 700],
     capByTier: [5, 7],
+  },
+  // Milestone-style: few, expensive levels. Displayed value includes evolution bonuses.
+  tentacles: {
+    id: "tentacles",
+    name: "Tentacles",
+    unit: "",
+    base: 2,
+    perLevel: 1,
+    currency: "genetic",
+    costs: [25, 70, 140],
+    capByTier: [1, 3],
+  },
+  maxHealth: {
+    id: "maxHealth",
+    name: "Maximum health",
+    unit: "",
+    base: 100,
+    perLevel: 20,
+    currency: "biomass",
+    costs: [40, 90, 160, 250, 360, 500, 680, 900],
+    capByTier: [5, 8],
+  },
+  regeneration: {
+    id: "regeneration",
+    name: "Regeneration",
+    unit: "/s",
+    base: 2,
+    perLevel: 1,
+    currency: "biomass",
+    costs: [50, 110, 190, 290, 420, 600],
+    capByTier: [4, 6],
+  },
+  // Percent of each drop's reward that is banked. Applied once, at deposit.
+  resourceYield: {
+    id: "resourceYield",
+    name: "Resource yield",
+    unit: "%",
+    base: 100,
+    perLevel: 10,
+    currency: "genetic",
+    costs: [20, 45, 80, 130, 200],
+    capByTier: [3, 5],
   },
 };
 

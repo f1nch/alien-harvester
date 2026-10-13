@@ -1,17 +1,22 @@
 import type { DoorDef } from "../content/map";
 import type { UpgradeId } from "../content/upgrades";
 import { unlockDoor, type UnlockResult } from "../domain/doors";
-import { purchaseUpgrade, type PurchaseResult } from "../domain/economy";
+import { purchaseUpgrade, respecUpgrades, type PurchaseResult, type RespecResult } from "../domain/economy";
 import { evolve, type EvolveResult } from "../domain/evolution";
 import { dist2 } from "./geometry";
+import { inBase } from "./systems/deposit";
 import { questEvent, refreshObstacles, refreshStats, type World } from "./world";
 
 /** Player-initiated actions. Each applies its domain transaction, then quest and event bookkeeping. */
 
 export function buyUpgrade(w: World, id: UpgradeId): PurchaseResult {
+  const maxBefore = w.stats.maxHealth;
   const r = purchaseUpgrade(w.progress, id);
   if (!r.ok) return r;
   refreshStats(w);
+  // At base (where healing is fast anyway) the extra health comes filled in. Elsewhere it
+  // doesn't, so buying and refunding health can't be used as a free heal in the field.
+  if (inBase(w)) w.progress.player.health += Math.max(0, w.stats.maxHealth - maxBefore);
   w.events.push({ type: "purchased" });
   questEvent(w, { kind: "buyUpgrade" });
   return r;
@@ -23,6 +28,27 @@ export function openDoor(w: World, door: DoorDef): UnlockResult {
   refreshObstacles(w);
   w.events.push({ type: "doorUnlocked", door: door.id });
   questEvent(w, { kind: "unlockDoor", door: door.id });
+  return r;
+}
+
+export type RespecActionResult = RespecResult | { ok: false; reason: "notAtBase" | "cargoAboard" };
+
+/** True when a respec is currently allowed (at base, empty hold, nothing being captured). */
+export function respecBlocker(w: World): "notAtBase" | "cargoAboard" | null {
+  if (!inBase(w)) return "notAtBase";
+  // A smaller hold or fewer tentacles must never strand cargo or reserved captures.
+  if (w.progress.cargo.length > 0 || w.tentacles.some(Boolean)) return "cargoAboard";
+  return null;
+}
+
+/** Free mutation reset with full refund of what was actually paid. */
+export function respec(w: World): RespecActionResult {
+  const blocked = respecBlocker(w);
+  if (blocked) return { ok: false, reason: blocked };
+  const r = respecUpgrades(w.progress);
+  if (!r.ok) return r;
+  refreshStats(w);
+  w.progress.player.health = Math.min(w.progress.player.health, w.stats.maxHealth);
   return r;
 }
 

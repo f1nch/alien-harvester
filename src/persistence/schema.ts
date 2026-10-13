@@ -4,10 +4,10 @@ import { goalTarget, QUEST_BY_ID } from "../content/quests";
 import { isTargetType, TARGETS } from "../content/targets";
 import { UPGRADE_IDS } from "../content/upgrades";
 import { MAX_TIER } from "../content/evolution";
-import { capAtTier, computeStats } from "../domain/economy";
+import { capAtTier, computeStats, tableCostForLevels } from "../domain/economy";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const CONTENT_VERSION = 1;
 
 export interface Settings {
@@ -64,6 +64,22 @@ function migrate(raw: Obj): Obj | null {
     const progress = isObj(m.progress) ? { ...m.progress, firstDeathForgiven: false } : m.progress;
     m = { ...m, schemaVersion: 4, progress };
   }
+  if (m.schemaVersion === 4) {
+    // v5 records what was paid per track and lifetime purchases (seeded from current levels).
+    // The bump also stops older builds from loading saves that hold the newer tracks.
+    if (isObj(m.progress) && isObj(m.progress.upgrades)) {
+      const levels = m.progress.upgrades;
+      const upgradeSpent: Record<string, number> = {};
+      let bought = 0;
+      for (const id of UPGRADE_IDS) {
+        const lvl = Number.isInteger(levels[id]) ? (levels[id] as number) : 0;
+        upgradeSpent[id] = tableCostForLevels(id, Math.max(0, lvl));
+        bought += Math.max(0, lvl);
+      }
+      m = { ...m, progress: { ...m.progress, upgradeSpent, mutationsBought: bought } };
+    }
+    m = { ...m, schemaVersion: 5 };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
@@ -102,6 +118,18 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
     if (!Number.isInteger(lvl) || (lvl as number) < 0) return null;
     progress.upgrades[id] = Math.min(lvl as number, capAtTier(id, progress.evolution));
   }
+
+  if (!isObj(p.upgradeSpent)) return null;
+  for (const id of UPGRADE_IDS) {
+    const spent = p.upgradeSpent[id];
+    // Tracks added after this save was written start with nothing spent.
+    if (spent !== undefined && !isNonNeg(spent)) return null;
+    progress.upgradeSpent[id] = (spent as number | undefined) ?? tableCostForLevels(id, progress.upgrades[id]);
+  }
+  if (!Number.isInteger(p.mutationsBought) || (p.mutationsBought as number) < 0) return null;
+  let levels = 0;
+  for (const id of UPGRADE_IDS) levels += progress.upgrades[id];
+  progress.mutationsBought = Math.max(p.mutationsBought as number, levels);
 
   // Rebuild drops from content definitions rather than trusting stored numbers,
   // and drop anything beyond current capacity.

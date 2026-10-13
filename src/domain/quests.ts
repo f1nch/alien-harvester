@@ -1,4 +1,4 @@
-import { CURRENCIES, type Currency } from "../content/currencies";
+import { CURRENCIES, roundCents, type Currency } from "../content/currencies";
 import { goalTarget, QUESTS, type QuestDef } from "../content/quests";
 import type { TargetTypeId } from "../content/targets";
 import { addXp } from "./levels";
@@ -65,7 +65,7 @@ function complete(p: ProgressState, q: QuestDef, out: QuestOutcome): void {
   state.count = goalTarget(q.goal);
   for (const c of CURRENCIES) {
     const amount = q.reward[c];
-    if (amount) p.banked[c] += amount;
+    if (amount) p.banked[c] = roundCents(p.banked[c] + amount);
   }
   if (q.reward.xp) out.levelsGained.push(...addXp(p, q.reward.xp));
   out.completed.push(q);
@@ -81,7 +81,7 @@ export function applyQuestEvent(p: ProgressState, e: QuestEvent): QuestOutcome {
     const n = contribution(q, e);
     if (n <= 0) continue;
     const state = (p.quests[q.id] ??= { count: 0, done: false });
-    state.count = Math.min(goalTarget(q.goal), state.count + n);
+    state.count = Math.min(goalTarget(q.goal), roundCents(state.count + n));
     if (state.count >= goalTarget(q.goal)) complete(p, q, out);
   }
   // Quests unlocked just now may already be satisfied by existing state.

@@ -8,6 +8,8 @@ const valid = () => {
   const p = newProgress(FACILITY);
   p.banked.biomass = 42;
   p.upgrades.cargoCapacity = 2;
+  p.upgradeSpent.cargoCapacity = 65;
+  p.mutationsBought = 2;
   p.cargo.push({ type: "worker", weight: 2, reward: { biomass: 3 } });
   p.spawnCooldowns[FACILITY.spawns[0]!.id] = 3.5;
   return toSaveFile(p, defaultSettings());

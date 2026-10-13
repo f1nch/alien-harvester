@@ -26,6 +26,10 @@ export interface ProgressState {
   cargo: CargoDrop[];
   xp: number;
   upgrades: Record<UpgradeId, number>;
+  /** What was actually paid into each track (in that track's currency); respec refunds exactly this. */
+  upgradeSpent: Record<UpgradeId, number>;
+  /** Lifetime mutation levels bought. Respec doesn't reduce it, so gates on it can't be refunded. */
+  mutationsBought: number;
   player: { x: number; z: number; health: number };
   /** Remaining respawn seconds per spawn point; 0 means its target is alive. */
   spawnCooldowns: Record<string, number>;
@@ -39,7 +43,11 @@ export interface ProgressState {
 
 export function newProgress(map: MapDef): ProgressState {
   const upgrades = {} as Record<UpgradeId, number>;
-  for (const id of UPGRADE_IDS) upgrades[id] = 0;
+  const upgradeSpent = {} as Record<UpgradeId, number>;
+  for (const id of UPGRADE_IDS) {
+    upgrades[id] = 0;
+    upgradeSpent[id] = 0;
+  }
   const spawnCooldowns: Record<string, number> = {};
   for (const s of map.spawns) spawnCooldowns[s.id] = 0;
   return {
@@ -47,6 +55,8 @@ export function newProgress(map: MapDef): ProgressState {
     cargo: [],
     xp: 0,
     upgrades,
+    upgradeSpent,
+    mutationsBought: 0,
     player: { x: map.playerSpawn.x, z: map.playerSpawn.z, health: 100 },
     spawnCooldowns,
     quests: {},
