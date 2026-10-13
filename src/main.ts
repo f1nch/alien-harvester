@@ -21,6 +21,7 @@ import { exportFileName, exportText, IMPORT_ERRORS, parseImport } from "./persis
 import { acquireActiveTabLock, SaveStore } from "./persistence/store";
 import { GameRenderer } from "./render/renderer";
 import { Hud } from "./ui/hud";
+import { Floaters } from "./ui/floaters";
 import { InputController } from "./ui/input";
 
 const AUTOSAVE_TICKS = SIM_HZ * 10;
@@ -222,6 +223,8 @@ async function boot(): Promise<void> {
 
   const renderer = new GameRenderer(canvas, room, { reducedEffects: settings.reducedEffects });
   const input = new InputController(zone);
+  const floaters = new Floaters(uiRoot, !settings.reducedEffects);
+  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢" } as const;
   const loop = new FixedLoop((dt) => stepWorld(world, dt), { hz: SIM_HZ, maxStepsPerFrame: 5 });
   renderer.snapCamera(world);
   if (import.meta.env.DEV) {
@@ -381,6 +384,23 @@ async function boot(): Promise<void> {
     if (events.length) {
       renderer.handleEvents(events);
       let saveNow = false;
+      // Total this frame's deposits into one floater per currency over the base.
+      const deposited = emptyWallet();
+      let leveled = 0;
+      for (const e of events) {
+        if (e.type === "deposited") for (const c of CURRENCIES) deposited[c] += (e.drop.reward[c] ?? 0) * world.stats.yieldPercent / 100;
+        if (e.type === "levelUp") leveled = e.level;
+      }
+      const basePt = renderer.worldToScreen(room.base.x, 1.2, room.base.z);
+      if (basePt) {
+        CURRENCIES.filter((c) => deposited[c] > 0).forEach((c, i) => {
+          floaters.spawn(`+${Math.round(deposited[c] * 10) / 10} ${ICON[c]}`, basePt.x + i * 46 - 23, basePt.y);
+        });
+      }
+      if (leveled) {
+        const pt = renderer.worldToScreen(world.player.x, 2.2, world.player.z);
+        if (pt) floaters.spawn(`Level ${leveled}!`, pt.x, pt.y, "level");
+      }
       for (const e of events) {
         if (e.type === "deposited") depositUnsaved = true;
         else if (e.type === "depositComplete") saveNow = true;

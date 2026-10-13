@@ -163,6 +163,16 @@ export const FACILITY: MapDef = {
     ...spawns("security-a", "armoredGuard", [[-5, 64], [7, 59], [0, 73], [9, 70]], 1.5),
     ...spawns("security-t", "technician", [[-10, 53], [10, 66], [2, 48]], 2),
     ...spawns("reactor-boss", "boss", [[0, 85]], 0),
+    // Extra crews for a busier facility. New IDs, so existing saves just gain them.
+    ...spawns("containment-crew", "worker", [
+      [-9, -9], [-8, -11], [9, -8], [8, -11], [-2, -1], [0, 0], [-9, 5], [9, 1], [1, 11], [-1, 13],
+    ], 2),
+    ...spawns("service-crew-r", "runner", [[-3, 36], [7, 21]], 4),
+    ...spawns("service-crew-t", "technician", [[-12, 27], [2, 35]], 2),
+    ...spawns("service-crew-w", "worker", [[8, 43], [-8, 20], [6, 30]]),
+    ...spawns("security-crew-t", "technician", [[-2, 58], [6, 74]], 2),
+    // Panicked staff trapped in the reactor hall.
+    ...spawns("reactor-staff", "worker", [[-8, 94], [8, 94], [-8, 78], [8, 78]], 1.5),
   ],
 };
 

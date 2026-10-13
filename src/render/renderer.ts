@@ -1,12 +1,13 @@
 import {
-  Camera, Color3, Color4, DirectionalLight, Engine, FreeCamera, GlowLayer, HemisphericLight, Mesh, MeshBuilder,
-  Scene, ShadowGenerator, StandardMaterial, Vector3,
+  Camera, Color3, Color4, DefaultRenderingPipeline, DirectionalLight, Engine, FreeCamera, GlowLayer, HemisphericLight, ImageProcessingConfiguration, Matrix, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, Vector3,
 } from "@babylonjs/core";
 import { zoneAt, type MapDef, type Rect } from "../content/map";
 import { inBase } from "../game/systems/deposit";
 import type { GameEvent, World } from "../game/world";
 import { CreatureView } from "./creature";
 import { CrowdView } from "./crowd";
+import { Effects } from "./effects";
+import { buildDressing, type Dressing } from "./dressing";
 import { StructuresView } from "./structures";
 import { buildEnvironment, updateDoors, type Environment } from "./environment";
 
@@ -31,6 +32,10 @@ export class GameRenderer {
   private creature: CreatureView;
   private crowd: CrowdView;
   private structures: StructuresView;
+  private dressing: Dressing;
+  private effects: Effects;
+  private shakeAmount = 0;
+  private reducedEffects: boolean;
   private env: Environment;
   private bars: Bar[] = [];
   private radiusRing: Mesh;
@@ -84,6 +89,23 @@ export class GameRenderer {
     this.creature = new CreatureView(scene, shadows);
     this.crowd = new CrowdView(scene, shadows);
     this.structures = new StructuresView(scene, shadows);
+    this.dressing = buildDressing(scene, map, opts.reducedEffects);
+    this.effects = new Effects(scene, !opts.reducedEffects);
+    this.reducedEffects = opts.reducedEffects;
+    if (!opts.reducedEffects) {
+      // Anti-aliasing, filmic tone mapping and a soft vignette. Bloom stays off: the glow
+      // layer already handles emissive neon, and doubling it washes the scene out.
+      const pipeline = new DefaultRenderingPipeline("post", false, scene, [this.camera]);
+      pipeline.fxaaEnabled = true;
+      pipeline.imageProcessingEnabled = true;
+      pipeline.imageProcessing.toneMappingEnabled = true;
+      pipeline.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+      pipeline.imageProcessing.exposure = 1.3;
+      pipeline.imageProcessing.contrast = 1.12;
+      pipeline.imageProcessing.vignetteEnabled = true;
+      pipeline.imageProcessing.vignetteWeight = 1.1;
+      pipeline.imageProcessing.vignetteColor = new Color4(0.02, 0.0, 0.05, 0);
+    }
 
     const ringMat = new StandardMaterial("radiusMat", scene);
     ringMat.diffuseColor = Color3.Black();
@@ -143,14 +165,23 @@ export class GameRenderer {
       if (e.type === "captured") {
         this.crowd.captured(e.target);
         this.creature.gulp();
+        this.effects.burst("capture", e.target.x, 0.9, e.target.z, e.target.def.behavior === "boss" ? 120 : 18);
       } else if (e.type === "deposited") {
         this.depositPulse = 1;
+        this.effects.burst("deposit", this.map.base.x, 0.2, this.map.base.z, 6);
       } else if (e.type === "playerHit") {
         this.creature.gulp();
+        this.effects.burst("hit", this.creaturePos.x, 0.9, this.creaturePos.z, 22);
+        this.shake(Math.min(0.5, e.damage / 60));
+      } else if (e.type === "bossStunned") {
+        this.shake(0.35);
+      } else if (e.type === "levelUp") {
+        this.effects.burst("levelUp", this.creaturePos.x, 0.3, this.creaturePos.z, 60);
       } else if (e.type === "died") {
         // Respawn is a teleport: cut the camera instead of panning across the map.
         this.snapNext = true;
       } else if (e.type === "evolved") {
+        this.effects.burst("evolve", this.creaturePos.x, 0.8, this.creaturePos.z, 140);
         this.creature.setForm(e.tier, true);
         this.shownForm = e.tier;
       }
@@ -167,6 +198,7 @@ export class GameRenderer {
 
     this.crowd.update(dt, w.targets, alpha, this.creaturePos);
     this.structures.update(w, alpha, dt);
+    this.dressing.update(dt);
 
     this.goals.length = w.tentacles.length;
     w.tentacles.forEach((t, i) => {
@@ -221,6 +253,27 @@ export class GameRenderer {
     this.scene.render();
   }
 
+  shake(amount: number): void {
+    if (this.reducedEffects) return;
+    this.shakeAmount = Math.max(this.shakeAmount, amount);
+  }
+
+  /** Screen position (CSS pixels) of a world point, for HUD floaters. Null when off screen. */
+  worldToScreen(x: number, y: number, z: number): { x: number; y: number } | null {
+    const engine = this.engine;
+    const w = engine.getRenderWidth();
+    const h = engine.getRenderHeight();
+    const p = Vector3.Project(
+      new Vector3(x, y, z),
+      Matrix.Identity(),
+      this.scene.getTransformMatrix(),
+      this.camera.viewport.toGlobal(w, h),
+    );
+    if (p.z < 0 || p.z > 1) return null;
+    const scale = engine.getHardwareScalingLevel();
+    return { x: p.x * scale, y: p.y * scale };
+  }
+
   /** Snap the camera and doors to the current state (used after loading). */
   snapCamera(w: World): void {
     updateDoors(this.env, w.progress.unlockedDoors, 0, true);
@@ -249,7 +302,11 @@ export class GameRenderer {
     this.look.x += (tx - this.look.x) * k;
     this.look.z += (tz - this.look.z) * k;
 
-    this.camera.position.set(this.look.x + CAMERA_OFFSET.x, CAMERA_OFFSET.y, this.look.z + CAMERA_OFFSET.z);
-    this.camera.setTarget(new Vector3(this.look.x, 0, this.look.z + 0.5));
+    // Brief, decaying shake on heavy hits (never with reduced effects).
+    this.shakeAmount = Math.max(0, this.shakeAmount - dt * 1.8);
+    const sx = this.shakeAmount > 0 ? (Math.random() - 0.5) * this.shakeAmount : 0;
+    const sz = this.shakeAmount > 0 ? (Math.random() - 0.5) * this.shakeAmount : 0;
+    this.camera.position.set(this.look.x + CAMERA_OFFSET.x + sx, CAMERA_OFFSET.y, this.look.z + CAMERA_OFFSET.z + sz);
+    this.camera.setTarget(new Vector3(this.look.x + sx, 0, this.look.z + 0.5 + sz));
   }
 }

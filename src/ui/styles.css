@@ -463,3 +463,23 @@ html, body {
 .import-preview.error { border-color: var(--warn); color: var(--warn); }
 .btn-danger { background: #6b2a2a; border-color: #ff7a6a; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Floating feedback numbers */
+.floaters { position: absolute; inset: 0; pointer-events: none !important; overflow: hidden; }
+.floater {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--accent);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  animation: float-up 1.2s ease-out forwards;
+}
+.floater.level { color: #c9a8ff; font-size: 22px; }
+@keyframes float-up {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.8); }
+  15% { opacity: 1; transform: translate(-50%, -60%) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -260%) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .floater { animation-duration: 0.01s; } }
