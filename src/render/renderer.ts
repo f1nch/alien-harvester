@@ -4,7 +4,10 @@ import {
 import { zoneAt, type MapDef, type Rect } from "../content/map";
 import { inBase } from "../game/systems/deposit";
 import type { GameEvent, World } from "../game/world";
-import { CreatureView } from "./creature";
+import type { LoadedCreatureSource } from "./creatureAssets";
+import { CREATURE_FORMS, creatureModelPath, describeSource, isGlb, logSource, type CreatureForm } from "./creatureContract";
+import type { CreatureLook } from "./creatureLook";
+import { ProceduralCreature } from "./proceduralCreature";
 import { CrowdView } from "./crowd";
 import { Effects } from "./effects";
 import { buildDressing, type Dressing } from "./dressing";
@@ -16,6 +19,8 @@ const CAMERA_FOV = 0.62;
 
 export interface RenderOptions {
   reducedEffects: boolean;
+  /** Load creature GLBs when present. False keeps the procedural creature. */
+  creatureModels: boolean;
 }
 
 interface Bar {
@@ -29,7 +34,7 @@ export class GameRenderer {
   private camera: FreeCamera;
   private look = new Vector3();
   private cameraZone: Rect;
-  private creature: CreatureView;
+  private creature: CreatureLook;
   private crowd: CrowdView;
   private structures: StructuresView;
   private dressing: Dressing;
@@ -49,6 +54,13 @@ export class GameRenderer {
   /** Evolution tier currently shown by the creature model. */
   private shownForm = 0;
   private snapNext = false;
+  /**
+   * Where each creature form's look comes from. Ready containers are held for the GLB
+   * creature (next step of the asset plan); until then the procedural creature shows.
+   */
+  private creatureSources: Record<CreatureForm, LoadedCreatureSource>;
+  /** Called whenever a creature source changes (dev panel status). */
+  onCreatureSourcesChanged: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement, private map: MapDef, opts: RenderOptions) {
     this.engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false, powerPreference: "high-performance" }, false);
@@ -86,7 +98,7 @@ export class GameRenderer {
 
     this.env = buildEnvironment(scene, map, shadows);
     this.glow?.addExcludedMesh(this.env.basePad);
-    this.creature = new CreatureView(scene, shadows);
+    this.creature = new ProceduralCreature(scene, shadows);
     this.crowd = new CrowdView(scene, shadows);
     this.structures = new StructuresView(scene, shadows);
     this.dressing = buildDressing(scene, map, opts.reducedEffects);
@@ -151,6 +163,44 @@ export class GameRenderer {
 
     this.cameraZone = map.zones[0]?.rect ?? map.bounds;
     this.resize();
+
+    const initial: LoadedCreatureSource = { kind: opts.creatureModels ? "loading" : "forced" };
+    this.creatureSources = { larval: initial, evolved: initial };
+    if (opts.creatureModels) for (const form of CREATURE_FORMS) void this.loadCreatureModel(form);
+  }
+
+  /** Loads in the background; the procedural creature stays until a model is ready. */
+  private async loadCreatureModel(form: CreatureForm): Promise<void> {
+    const url = `${import.meta.env.BASE_URL}${creatureModelPath(form)}`;
+    const source = await this.fetchCreatureModel(form, url);
+    logSource(form, url, source);
+    this.creatureSources[form] = source;
+    this.onCreatureSourcesChanged?.();
+  }
+
+  private async fetchCreatureModel(form: CreatureForm, url: string): Promise<LoadedCreatureSource> {
+    let bytes: Uint8Array;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return { kind: "missing" };
+      bytes = new Uint8Array(await res.arrayBuffer());
+    } catch {
+      return { kind: "missing" };
+    }
+    // Dev servers answer unknown paths with index.html and status 200, so check the bytes.
+    if (!isGlb(bytes)) return { kind: "missing" };
+    try {
+      // Only now download the glTF loader: without model files it never leaves the server.
+      const { loadCreatureGlb } = await import("./creatureAssets");
+      return await loadCreatureGlb(this.scene, form, bytes);
+    } catch (err) {
+      return { kind: "failed", reason: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /** e.g. "larval: GLB · evolved: procedural (no model)". */
+  creatureStatus(): string {
+    return CREATURE_FORMS.map((f) => `${f}: ${describeSource(this.creatureSources[f])}`).join(" · ");
   }
 
   resize(): void {
@@ -170,7 +220,7 @@ export class GameRenderer {
         this.depositPulse = 1;
         this.effects.burst("deposit", this.map.base.x, 0.2, this.map.base.z, 6);
       } else if (e.type === "playerHit") {
-        this.creature.gulp();
+        this.creature.hurt();
         this.effects.burst("hit", this.creaturePos.x, 0.9, this.creaturePos.z, 22);
         this.shake(Math.min(0.5, e.damage / 60));
       } else if (e.type === "bossStunned") {

@@ -225,20 +225,20 @@ The goal: the game uses the GLB when it's present and valid, and the current pro
 
 4. **Loading and fallback** (`render/creatureAssets.ts`):
    - The renderer **starts with `ProceduralCreature` immediately**, so the game is playable before any download finishes, and starts loading both GLBs in the background.
-   - Each file is fetched as bytes from `/models/creature_<form>.glb`. A missing file or a body that doesn't start with the `glTF` magic bytes counts as **missing**. (Vite's dev server answers missing paths with `index.html` and status 200, so the status code alone isn't enough.) Valid bytes are loaded with `LoadAssetContainerAsync` from **`@babylonjs/loaders`** (new dependency, pinned to the same version as `@babylonjs/core`; only the glTF loader is imported).
-   - The container is **checked against the contract**: `Creature` armature, `body` bone, at least one `socket.tentacle.*`, the `Tentacle` mesh with 10 bones, and the `idle` and `move` animations. The checker works on a plain summary (names and counts), so it's unit-tested without Babylon.
+   - The renderer fetches each file as bytes from `/models/creature_<form>.glb`. A missing file or a body that doesn't start with the `glTF` magic bytes counts as **missing**. (Vite's dev server answers missing paths with `index.html` and status 200, so the status code alone isn't enough.) Only then does it dynamic-import `creatureAssets` and the glTF loader from **`@babylonjs/loaders`** (pinned to the same version as `@babylonjs/core`; only the glTF loader is registered), so a game without model files never downloads loader code. Loading uses `LoadAssetContainerAsync` with `animationStartMode: NONE`, and nothing is added to the scene until the GLB creature uses it.
+   - The container is **checked against the contract** (`render/creatureContract.ts`). Required: a `Creature` node, a `body` bone, at least one `socket.tentacle.N`, and the `idle` and `move` animations; a `Tentacle` that is present must have exactly the 10 tentacle bones. Warnings (the file still loads): no `root` bone, fewer than 8 sockets, missing optional animations, no tentacle, over the triangle budget. So the one-bone greybox from Part 3 loads. Blender's `.001` duplicate names get a "rename it" hint. The checker works on a plain summary (names and counts), so it's unit-tested without Babylon.
    - **Each form falls back independently.** Missing file: procedural, logged with `console.info`. Invalid file: procedural, with a `console.warn` listing every problem. Missing optional pieces degrade instead: no `hurt` falls back to `gulp`, and no `Tentacle` uses today's procedural tubes on the GLB body. This lets you ship the larval form before the evolved one exists.
    - When a form loads, the renderer swaps it in at the start of the next frame (copying heading and current form), then disposes the procedural meshes it no longer needs.
    - Files under `public/` aren't bundled, so the build never fails because a model is absent. The offline service worker (Milestone 1) will precache `/models/*.glb`.
 
-5. **Dev tools:** the Dev panel shows the creature source per form (`GLB`, `procedural (missing)`, `procedural (invalid: …)`), and `?creature=procedural` forces the fallback for side-by-side comparison. Neither ships in production.
+5. **Dev tools:** the Dev panel shows the creature source per form (`GLB`, `procedural (no model)`, `procedural (invalid: …)`; the console lists each problem), and `?creature=procedural` forces the fallback for side-by-side comparison. Neither ships in production.
 
 ### Order of work
 
 | Step | Work | Check |
 | --- | --- | --- |
-| 1 | Extract `CreatureLook` and `tentacleCurve`; no visible change | Tests, typecheck, build; the game looks identical on port 5200 |
-| 2 | Loader, magic-byte check, contract checker, fallback | Unit tests for the checker; with no files present the game is unchanged and logs "missing" |
+| 1 ✅ | Extract `CreatureLook` and `tentacleCurve`; no visible change | Tests, typecheck, build; the game looks identical on port 5200 |
+| 2 ✅ | Loader, magic-byte check, contract checker, fallback | Unit tests for the checker; with no files present the game is unchanged and logs "missing" |
 | 3 | `GltfCreature` body, sockets and idle/move, using your **greybox** export (Part 3, step 2) | Scale against humans, facing direction, feet on the floor, in the browser at the mobile preset |
 | 4 | Tentacle bone driving | Extend, bend, attach and retract with 1 to 8 tentacles; the boss's multi-tentacle capture |
 | 5 | Layered capture, gulp and hurt; evolution swap; material overrides | Visual review through the game camera |

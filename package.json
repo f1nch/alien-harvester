@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "@babylonjs/core": "9.30.0",
+    "@babylonjs/loaders": "9.30.0",
     "dexie": "4.4.6"
   },
   "devDependencies": {
+    "babylonjs-gltf2interface": "9.30.0",
     "fake-indexeddb": "6.2.5",
     "typescript": "5.9.3",
     "vite": "8.3.4",

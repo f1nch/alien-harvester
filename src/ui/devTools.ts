@@ -11,7 +11,12 @@ export interface DevActions {
  * Dev-only testing panel. Only imported behind `import.meta.env.DEV`, so it is
  * stripped from production builds and never becomes a player-facing shortcut.
  */
-export function mountDevTools(root: HTMLElement, actions: DevActions): void {
+export interface DevTools {
+  /** Shows where the creature's look comes from (GLB or procedural, per form). */
+  setCreatureStatus(text: string): void;
+}
+
+export function mountDevTools(root: HTMLElement, actions: DevActions): DevTools {
   const toggle = document.createElement("button");
   toggle.className = "btn dev-toggle";
   toggle.textContent = "Dev";
@@ -54,9 +59,19 @@ export function mountDevTools(root: HTMLElement, actions: DevActions): void {
     button("Devolve", "Return to the previous evolution form", () => actions.devolve()),
   );
 
+  const creature = document.createElement("div");
+  creature.className = "dev-row dev-status";
+  creature.setAttribute("aria-live", "polite");
+  panel.append(creature);
+
   toggle.addEventListener("click", () => {
     const open = panel.classList.toggle("hidden") === false;
     toggle.setAttribute("aria-expanded", String(open));
   });
   root.append(toggle, panel);
+  return {
+    setCreatureStatus(text) {
+      creature.textContent = `Creature: ${text}`;
+    },
+  };
 }

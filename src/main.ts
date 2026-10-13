@@ -221,7 +221,9 @@ async function boot(): Promise<void> {
     world = createWorld(room, newProgress(room), seed);
   }
 
-  const renderer = new GameRenderer(canvas, room, { reducedEffects: settings.reducedEffects });
+  // Dev builds can force the procedural creature for side-by-side comparison.
+  const forceProcedural = import.meta.env.DEV && new URLSearchParams(location.search).get("creature") === "procedural";
+  const renderer = new GameRenderer(canvas, room, { reducedEffects: settings.reducedEffects, creatureModels: !forceProcedural });
   const input = new InputController(zone);
   const floaters = new Floaters(uiRoot, !settings.reducedEffects);
   const ICON = { biomass: "◆", genetic: "✦", parts: "⬢" } as const;
@@ -234,7 +236,7 @@ async function boot(): Promise<void> {
         refreshHud();
         void save();
       };
-      mountDevTools(uiRoot, {
+      const dev = mountDevTools(uiRoot, {
         grant: (currency, amount) => {
           world.progress.banked[currency] += amount;
           after();
@@ -262,6 +264,8 @@ async function boot(): Promise<void> {
           after();
         },
       });
+      dev.setCreatureStatus(renderer.creatureStatus());
+      renderer.onCreatureSourcesChanged = () => dev.setCreatureStatus(renderer.creatureStatus());
     });
     // Debug hook for automated checks: advance the simulation deterministically.
     Object.assign(window, {
