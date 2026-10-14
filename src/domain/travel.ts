@@ -1,4 +1,4 @@
-import { currentBiome } from "./biome";
+import { currentBiome, nextFloorId } from "./biome";
 import { computeStats } from "./economy";
 import type { ProgressState } from "./progress";
 import { vatLevel } from "./structures";
@@ -16,6 +16,8 @@ export function enterNextBiome(p: ProgressState): void {
     throw new Error("enterNextBiome: bank cargo and stock first");
   }
   p.depth += 1;
+  p.floor = nextFloorId(p.floor);
+  p.visits = { ...p.visits, [p.floor]: (p.visits[p.floor] ?? 0) + 1 };
   const map = currentBiome(p).def.map;
   p.unlockedDoors = [];
   p.quests = {};

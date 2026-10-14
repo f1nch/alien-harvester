@@ -17,9 +17,9 @@ describe("Specimen vaults", () => {
     expect(BIOMES[2]).toBe(SPECIMEN_VAULTS);
     expect(biomeAt(2).name).toBe("Specimen vaults");
     expect(biomeAt(2).region).toBe("Facility floor B3");
-    expect(biomeAt(3).name).toBe("Research wing II");
-    expect(biomeAt(4).name).toBe("Cryo labs II");
-    expect(biomeAt(5).name).toBe("Specimen vaults II");
+    expect(biomeAt(3).name).toBe("Hangar");
+    expect(biomeAt(4).name).toBe("Research wing II");
+    expect(biomeAt(6).name).toBe("Specimen vaults II");
   });
 
   it("follows Cryo labs: moving on from depth 1 lands in the vaults, starting its quests", () => {
@@ -46,11 +46,11 @@ describe("Specimen vaults", () => {
     expect(SPECIMEN_VAULTS.summon.types).toEqual(["handler", "lurker"]);
   });
 
-  it("the third endless form asks for this floor by name", () => {
+  it("the third endless form asks for depth 2", () => {
     const p = newProgress(VAULTS_MAP);
     p.depth = 1;
     p.evolution = 2;
-    expect(evolutionRequirements(p).some((r) => r.label === "Reach Specimen vaults" && !r.met)).toBe(true);
+    expect(evolutionRequirements(p).some((r) => r.label === "Reach depth 2" && !r.met)).toBe(true);
   });
 
   it("cravings only ask for creatures in rooms you can reach", () => {
@@ -146,7 +146,7 @@ describe("v14 saves", () => {
     expect(p.banked.parts).toBe(before.parts + outpost.parts!);
     expect(p.cargo[0]!.reward).toEqual(scaleReward(biomeAt(2).targets.runner.reward, SUMMON.rewardMultiplier));
     // Unchanged floors refund nothing: their base and wave are still there.
-    const same = parseSave(v13At(6))!.progress;
+    const same = parseSave(v13At(12))!.progress;
     expect(same.banked.biomass).toBe(before.biomass);
   });
 
@@ -163,12 +163,12 @@ describe("v14 saves", () => {
   });
 
   it("leaves depths whose floor is the same alone", () => {
-    for (const depth of [1, 7]) {
+    for (const depth of [1, 13]) {
       const s = v13At(depth);
       s.progress.unlockedDoors = ["cryo-door-cold"];
       expect(parseSave(s)!.progress.unlockedDoors, `depth ${depth}`).toEqual(["cryo-door-cold"]);
     }
-    for (const depth of [0, 1, 6, 7]) {
+    for (const depth of [0, 1, 12, 13]) {
       const p = parseSave(v13At(depth))!.progress;
       expect(p.reactorRepaired, `depth ${depth}`).toBe(true);
       expect(p.summon).toEqual({ waves: 2, left: 4 });

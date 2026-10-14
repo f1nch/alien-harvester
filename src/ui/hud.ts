@@ -17,7 +17,7 @@ import { cargoWeight } from "../domain/progress";
 import { activeQuests, questCount } from "../domain/quests";
 import type { TargetEntity, World } from "../game/world";
 import { reactorRequirements, summonRequirements } from "../domain/reactor";
-import { biomeAt, clearRequirements } from "../domain/biome";
+import { clearRequirements, nextBiome } from "../domain/biome";
 import { BOOSTS, FRENZY, SUMMON, type BoostId } from "../content/feeding";
 import { COLD } from "../content/cold";
 import { MUTAGEN, MUTAGEN_IDS, type MutagenId } from "../content/mutagen";
@@ -838,7 +838,7 @@ export class Hud {
     const exit = w.biome.def.exit;
     const reqs = clearRequirements(p);
     const open = reqs.every((r) => r.met);
-    const next = biomeAt(p.depth + 1);
+    const next = nextBiome(p);
     this.exitCard.setAttribute("aria-label", exit.name);
     this.exitTitle.textContent = open ? `${exit.name} — powered` : `${exit.name} — no power`;
     this.exitNote.textContent = open
@@ -945,8 +945,8 @@ export class Hud {
     for (const kind of STRUCTURE_KINDS) {
       const row = this.structureRows.get(kind)!;
       const s = p.structures[kind];
-      // Crystal-built helpers stay out of the way until you've seen a crystal.
-      const hidden = (kind === "refinery" || kind === "catcher") && !s.built && p.banked.crystals <= 0;
+      // Crystal-built helpers stay out of the way until you've seen a crystal (or alloy: the refinery makes it, and the catcher comes with it).
+      const hidden = (kind === "refinery" || kind === "catcher") && !s.built && p.banked.crystals <= 0 && p.banked.alloy <= 0;
       row.root.classList.toggle("hidden", hidden);
       if (hidden) continue;
       const zoneName = (site: { x: number; z: number }) => (zoneAt(w.map, site.x, site.z)?.name ?? "facility").toLowerCase();

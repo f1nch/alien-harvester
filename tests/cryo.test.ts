@@ -232,8 +232,8 @@ describe("Cryo labs play", () => {
     expect(parsed.unlockedDoors).toEqual([]);
     expect(parsed.quests).toEqual({});
     expect(parsed.cravings).toEqual([]);
-    // Depths that are the facility both then and now (6: 6 % 2 = 6 % 3 = 0) keep their progress.
-    const even = toSaveFile({ ...p, depth: 6 }, defaultSettings()) as any;
+    // Depths that are the facility in every floor order (12: 12 % 2 = 12 % 3 = 12 % 4 = 0) keep their progress.
+    const even = toSaveFile({ ...p, depth: 12 }, defaultSettings()) as any;
     even.schemaVersion = 10;
     expect(parseSave(even)!.progress.reactorRepaired).toBe(true);
   });

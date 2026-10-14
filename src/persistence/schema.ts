@@ -6,7 +6,7 @@ import { isMutagenId, MUTAGEN } from "../content/mutagen";
 import { inBestiary } from "../domain/bestiary";
 import { CRAVING_KINDS, type Craving, type CravingKind } from "../domain/cravings";
 import { feedingTuning } from "../domain/mutagen";
-import { biomeAt, MAX_DEPTH, scaleAt, scaleCost, scaleReward, type ActiveBiome } from "../domain/biome";
+import { biomeAt, floorDef, MAX_DEPTH, scaleAt, scaleCost, scaleReward, type ActiveBiome } from "../domain/biome";
 import { BIOMES } from "../content/biomes";
 import { SUMMON } from "../content/feeding";
 import { UPGRADE_IDS, UPGRADES } from "../content/upgrades";
@@ -21,7 +21,7 @@ import { CATCHER, DRONE, REFINERY, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 export const CONTENT_VERSION = 1;
 
 /** The level cap before endless levels (v9). */
@@ -64,6 +64,40 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
  */
 export const MAX_AMOUNT = 1e100;
 const isNonNeg = (v: unknown): v is number => isNum(v) && v >= 0 && v <= MAX_AMOUNT;
+
+/**
+ * A floor was added to the hand-made list, so depth d now plays BIOMES[d % now] instead of
+ * BIOMES[d % before] (new floors are only ever appended, so BIOMES[d % before] is still the
+ * floor the save was on). Where that changes the floor, its progress (doors, quests,
+ * objective, cravings, the reward wave and the forward base) starts over. Currencies,
+ * mutations, evolution and carried cargo are kept, and what was paid into that floor's
+ * forward base and an unfinished reward wave is refunded.
+ */
+function remapFloors(progress: unknown, before: number, now: number, waveGrowth: number): unknown {
+  if (!isObj(progress) || !Number.isInteger(progress.depth) || (progress.depth as number) < 0) return progress;
+  const depth = progress.depth as number;
+  if (depth % before === depth % now) return progress;
+  const was = BIOMES[depth % before]!;
+  const k = scaleAt(depth).cost;
+  const refunds: Reward[] = [];
+  const st = progress.structures;
+  if (isObj(st) && isObj(st.outpost) && st.outpost.built === true) refunds.push(scaleCost(was.outpost.cost, k));
+  const sm = progress.summon;
+  if (isObj(sm) && isNum(sm.left) && sm.left > 0 && Number.isInteger(sm.waves) && (sm.waves as number) >= 1) {
+    refunds.push(scaleCost(scaleCost(was.summon.cost, k), Math.min(1e6, waveGrowth ** ((sm.waves as number) - 1))));
+  }
+  let banked = progress.banked;
+  if (isObj(banked) && refunds.length) {
+    const b: Obj = { ...banked };
+    for (const r of refunds) for (const c of CURRENCIES) if (r[c] && isNum(b[c] ?? 0)) b[c] = roundCents(((b[c] as number | undefined) ?? 0) + r[c]!);
+    banked = b;
+  }
+  const structures = isObj(st) && isObj(st.outpost) ? { ...st, outpost: { built: false, level: 0 } } : st;
+  return {
+    ...progress, banked, unlockedDoors: [], quests: {}, reactorRepaired: false, cravings: [], spawnCooldowns: {},
+    summon: { waves: 0, left: 0 }, structures,
+  };
+}
 
 /**
  * Bring older schemas up to date, one version at a time, without mutating the
@@ -166,36 +200,22 @@ function migrate(raw: Obj): Obj | null {
     m = { ...m, schemaVersion: 13, progress };
   }
   if (m.schemaVersion === 13) {
-    // v14 adds Specimen vaults as the third floor, so depth d now plays biome d % 3
-    // instead of d % 2. Where that changes the floor, its progress (doors, quests,
-    // objective, cravings, the reward wave and the forward base) starts over there.
-    // Currencies, mutations, evolution and carried cargo are kept, and what was paid
-    // into that floor's forward base and an unfinished reward wave is refunded.
+    // v14 adds Specimen vaults as the third floor: depth d plays biome d % 3, not d % 2.
+    m = { ...m, schemaVersion: 14, progress: remapFloors(m.progress, 2, 3, 1.2) };
+  }
+  if (m.schemaVersion === 14) {
+    // v15 saves which floor is being played, so appending floors (the hangar now, portal
+    // worlds later) never moves anyone. Saves stay on the floor they were on (d % 3) with
+    // all its progress; new floors come up in story order when they next move on.
     let progress = m.progress;
-    if (isObj(progress) && Number.isInteger(progress.depth) && (progress.depth as number) % 2 !== (progress.depth as number) % 3) {
-      const depth = progress.depth as number;
-      const was = BIOMES[depth % 2]!; // indices 0 and 1 are the same floors in both orders
-      const k = scaleAt(depth).cost;
-      const refunds: Reward[] = [];
-      const st = progress.structures;
-      if (isObj(st) && isObj(st.outpost) && st.outpost.built === true) refunds.push(scaleCost(was.outpost.cost, k));
-      const sm = progress.summon;
-      if (isObj(sm) && isNum(sm.left) && sm.left > 0 && Number.isInteger(sm.waves) && (sm.waves as number) >= 1) {
-        refunds.push(scaleCost(scaleCost(was.summon.cost, k), Math.min(1e6, 1.2 ** ((sm.waves as number) - 1))));
-      }
-      let banked = progress.banked;
-      if (isObj(banked) && refunds.length) {
-        const b: Obj = { ...banked };
-        for (const r of refunds) for (const c of CURRENCIES) if (r[c] && isNum(b[c] ?? 0)) b[c] = roundCents(((b[c] as number | undefined) ?? 0) + r[c]!);
-        banked = b;
-      }
-      const structures = isObj(st) && isObj(st.outpost) ? { ...st, outpost: { built: false, level: 0 } } : st;
-      progress = {
-        ...progress, banked, unlockedDoors: [], quests: {}, reactorRepaired: false, cravings: [], spawnCooldowns: {},
-        summon: { waves: 0, left: 0 }, structures,
-      };
+    if (isObj(progress) && Number.isInteger(progress.depth) && (progress.depth as number) >= 0) {
+      // Visits as a run through the three floors to this depth would have made them.
+      const d = progress.depth as number;
+      const visits: Record<string, number> = {};
+      for (let i = 0; i < 3; i++) visits[BIOMES[i]!.id] = d >= i ? Math.floor((d - i) / 3) + 1 : 0;
+      progress = { ...progress, floor: BIOMES[d % 3]!.id, visits };
     }
-    m = { ...m, schemaVersion: 14, progress };
+    m = { ...m, schemaVersion: 15, progress };
   }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
@@ -254,10 +274,24 @@ export function parseSave(raw: unknown): SaveFile | null {
 
   // First: depth picks the biome, which every later check (map, quests, caps, cargo) uses.
   if (!Number.isInteger(p.depth) || (p.depth as number) < 0 || (p.depth as number) > MAX_DEPTH) return null;
-  const biome = biomeAt(p.depth as number);
+  if (typeof p.floor !== "string" || !floorDef(p.floor)) return null;
+  // A run meets floor i no sooner than depth i (depth 0 is always the first floor).
+  if ((p.depth as number) < BIOMES.indexOf(floorDef(p.floor)!)) return null;
+  const visit = isObj(p.visits) && Number.isInteger(p.visits[p.floor]) ? Math.max(1, Math.min(p.visits[p.floor] as number, MAX_DEPTH + 1)) : 1;
+  const biome = biomeAt(p.depth as number, p.floor, visit);
   const room = biome.def.map;
   const progress = newProgress(room);
   progress.depth = biome.depth;
+  progress.floor = biome.def.id;
+  if (!isObj(p.visits)) return null;
+  progress.visits = {};
+  for (const [id, n] of Object.entries(p.visits)) {
+    if (!floorDef(id)) continue;
+    if (!Number.isInteger(n) || (n as number) < 0) return null;
+    progress.visits[id] = Math.min(n as number, MAX_DEPTH + 1);
+  }
+  // The floor being played has been visited at least this once.
+  progress.visits[progress.floor] = Math.max(1, progress.visits[progress.floor] ?? 0);
 
   if (!isObj(p.banked)) return null;
   progress.banked = emptyWallet();

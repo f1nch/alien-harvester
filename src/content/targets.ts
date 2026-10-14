@@ -6,7 +6,9 @@ export type TargetTypeId =
   // Cryo labs
   | "cryoScientist" | "frostRunner" | "patrolDrone" | "cryoSentinel"
   // Specimen vaults
-  | "handler" | "lurker" | "chimera" | "specimenTank" | "alphaSpecimen";
+  | "handler" | "lurker" | "chimera" | "specimenTank" | "alphaSpecimen"
+  // Hangar
+  | "dockhand" | "mechanic" | "loaderMech" | "fuelCell" | "overseerMech";
 
 /** "static": never moves (supply pods). */
 export type TargetBehavior = "wander" | "flee" | "guard" | "boss" | "static";
@@ -309,6 +311,92 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       chargeDamage: 32,
       chargeCooldown: 3.6,
       walkSpeed: 1.3,
+    },
+  },
+  // --- Hangar (floor B4). Depth-0 equivalents. Machine parts are the floor's currency.
+  // Dockhand: ground crew in hi-vis, hauling salvage.
+  dockhand: {
+    id: "dockhand",
+    name: "Dockhand",
+    behavior: "wander",
+    resistance: 30,
+    weight: 2,
+    reward: { biomass: 5, parts: 1 },
+    xp: 12,
+    speed: 0.9,
+    respawnSeconds: 10,
+  },
+  // Mechanic: quick and wary, pockets full of spare parts.
+  mechanic: {
+    id: "mechanic",
+    name: "Mechanic",
+    behavior: "flee",
+    resistance: 28,
+    weight: 2,
+    reward: { biomass: 4, parts: 2 },
+    xp: 13,
+    speed: 1.2,
+    fleeSpeed: 3,
+    fleeRadius: 4.8,
+    respawnSeconds: 10,
+  },
+  // Loader mech: a lifting exoskeleton that swings its forks at you. Heavy and slow.
+  loaderMech: {
+    id: "loaderMech",
+    name: "Loader mech",
+    behavior: "guard",
+    resistance: 66,
+    weight: 4,
+    reward: { biomass: 10, parts: 3 },
+    xp: 26,
+    speed: 0.9,
+    combat: {
+      detectRadius: 7,
+      leashRadius: 10,
+      chaseSpeed: 2.2,
+      attackRange: 2,
+      damage: 19,
+      windupSeconds: 0.7,
+      cooldownSeconds: 2,
+      heldCreepSpeed: 0.5,
+    },
+    respawnSeconds: 18,
+  },
+  // Fuel cell: a sealed canister of starship fuel. It never moves; crack it open for parts.
+  fuelCell: {
+    id: "fuelCell",
+    name: "Fuel cell",
+    behavior: "static",
+    resistance: 70,
+    weight: 3,
+    reward: { biomass: 6, parts: 4, alloy: 1 },
+    xp: 18,
+    speed: 0,
+    respawnSeconds: 45,
+  },
+  // The overseer mech guards the portal chamber: slow, armoured, with a long, heavy charge.
+  overseerMech: {
+    id: "overseerMech",
+    name: "Overseer mech",
+    behavior: "boss",
+    resistance: 1350,
+    weight: 0,
+    reward: { parts: 16, biomass: 180, genetic: 14, alloy: 3 },
+    xp: 550,
+    speed: 0.9,
+    multiGrab: true,
+    captureDecaySeconds: 20,
+    respawnSeconds: 180,
+    bossTuning: {
+      ...WARDEN,
+      slamRadius: 3.6,
+      slamDamage: 30,
+      slamWindup: 1.2,
+      chargeWindup: 1.5,
+      chargeSpeed: 9.5,
+      chargeDistance: 14,
+      chargeDamage: 38,
+      walkSpeed: 0.95,
     },
   },
   // Supply pod: a crate of stolen stock. Quick to crack open, light, and it may hold a

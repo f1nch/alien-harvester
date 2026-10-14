@@ -127,13 +127,33 @@ export function roman(n: number): string {
   return out;
 }
 
-const cache = new Map<number, ActiveBiome>();
+const cache = new Map<string, ActiveBiome>();
 
-export function biomeAt(depth: number): ActiveBiome {
-  const hit = cache.get(depth);
+/** The hand-made floor with this persistent ID, if any. */
+export function floorDef(id: string): BiomeDef | undefined {
+  return BIOMES.find((b) => b.id === id);
+}
+
+/** The floor after this one: the next in story order, wrapping round to the first. */
+export function nextFloorId(id: string): string {
+  const i = BIOMES.findIndex((b) => b.id === id);
+  return BIOMES[(i + 1) % BIOMES.length]!.id;
+}
+
+/**
+ * A floor as played at a depth. Which floor is saved (progress.floor), so appending new
+ * floors never changes the floor a player is on. Without one (previews, tests), depth d
+ * defaults to the floor a fresh run reaches there: BIOMES[d % length].
+ * `visit` is which time this floor is being played (1 = the first, with its story; 2+ get
+ * a numeral); without it, a fresh run's count at that depth.
+ */
+export function biomeAt(depth: number, floor?: string, visit?: number): ActiveBiome {
+  const def = (floor !== undefined ? floorDef(floor) : undefined) ?? BIOMES[depth % BIOMES.length]!;
+  const index = BIOMES.indexOf(def);
+  const cycle = visit !== undefined ? Math.max(0, visit - 1) : depth <= index ? 0 : Math.max(1, Math.floor((depth - index) / BIOMES.length));
+  const key = `${def.id}@${depth}#${cycle}`;
+  const hit = cache.get(key);
   if (hit) return hit;
-  const def = BIOMES[depth % BIOMES.length]!;
-  const cycle = Math.floor(depth / BIOMES.length);
   const scale = scaleAt(depth);
   const targets = {} as Record<TargetTypeId, TargetDef>;
   for (const id of Object.keys(TARGETS) as TargetTypeId[]) targets[id] = depth === 0 ? TARGETS[id] : scaleTarget(TARGETS[id], scale);
@@ -152,12 +172,18 @@ export function biomeAt(depth: number): ActiveBiome {
     objective: { ...def.objective, repair: scaleRequirements(def.objective.repair, depth) },
     summonCost: depth === 0 ? def.summon.cost : scaleCost(def.summon.cost, scale.cost),
   };
-  cache.set(depth, biome);
+  cache.set(key, biome);
   return biome;
 }
 
 export function currentBiome(p: ProgressState): ActiveBiome {
-  return biomeAt(p.depth);
+  return biomeAt(p.depth, p.floor, p.visits[p.floor] ?? 1);
+}
+
+/** Where the way on leads: the next floor, one deeper. */
+export function nextBiome(p: ProgressState): ActiveBiome {
+  const next = nextFloorId(p.floor);
+  return biomeAt(p.depth + 1, next, (p.visits[next] ?? 0) + 1);
 }
 
 /** What still stands between the player and the way on, for the exit card. */
