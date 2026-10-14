@@ -1,5 +1,5 @@
 import { roundCents } from "../content/currencies";
-import type { TargetTypeId } from "../content/targets";
+import { TARGETS, type TargetTypeId } from "../content/targets";
 import type { ProgressState } from "./progress";
 
 /** Lifetime captures per creature type that pay out, and what each pays. */
@@ -14,7 +14,7 @@ export const BESTIARY_POWER_PERCENT = 1;
 
 /** Creatures only: supply pods aren't anyone. */
 export function inBestiary(type: TargetTypeId): boolean {
-  return type !== "pod";
+  return !TARGETS[type].loot;
 }
 
 export function milestonesReached(count: number): number {

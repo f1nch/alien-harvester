@@ -967,7 +967,7 @@ export class Hud {
           : "Not built. Hunts creatures near you and flies them to the nearest pad.";
       } else if (kind === "outpost") {
         row.status.textContent = p.structures.outpost.built
-          ? `Built in the ${zoneName(w.biome.def.sites.outpost)}. Bank here; it's heated, too.`
+          ? `Built in the ${zoneName(w.biome.def.sites.outpost)}. Bank here${w.map.zones.some((z) => z.cold) ? "; it's heated, too" : ""}.`
           : `Not built. A second pad to bank at, in the ${zoneName(w.biome.def.sites.outpost)}. One per floor.`;
       } else if (kind === "vat") {
         const v = p.structures.vat;

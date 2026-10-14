@@ -4,6 +4,7 @@ import { FACILITY, type MapDef } from "./map";
 import { QUESTS, type QuestDef } from "./quests";
 import type { TargetTypeId } from "./targets";
 import { CRYO_LABS } from "./cryo";
+import { SPECIMEN_VAULTS } from "./vaults";
 import { REACTOR } from "./reactor";
 
 /** The machine a biome's quest chain ends at (the reactor console in the facility). */
@@ -94,4 +95,5 @@ export const BIOMES: readonly BiomeDef[] = [
     summon: { cost: { biomass: 60 }, types: ["worker", "runner", "technician"] },
   },
   CRYO_LABS,
+  SPECIMEN_VAULTS,
 ];

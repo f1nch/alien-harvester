@@ -107,7 +107,7 @@ export function updateCapture(w: World, dt: number): void {
 function lightestTarget(w: World): number {
   let min = Infinity;
   // Creatures only: a light supply pod mustn't hide that no creature fits any more.
-  for (const t of w.targets) if (t.def.weight > 0 && t.def.behavior !== "static") min = Math.min(min, t.def.weight);
+  for (const t of w.targets) if (t.def.weight > 0 && !t.def.loot) min = Math.min(min, t.def.weight);
   return Number.isFinite(min) ? min : 0;
 }
 

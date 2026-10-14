@@ -232,8 +232,8 @@ describe("Cryo labs play", () => {
     expect(parsed.unlockedDoors).toEqual([]);
     expect(parsed.quests).toEqual({});
     expect(parsed.cravings).toEqual([]);
-    // Even depths are still the facility: nothing is reset.
-    const even = toSaveFile({ ...p, depth: 2 }, defaultSettings()) as any;
+    // Depths that are the facility both then and now (6: 6 % 2 = 6 % 3 = 0) keep their progress.
+    const even = toSaveFile({ ...p, depth: 6 }, defaultSettings()) as any;
     even.schemaVersion = 10;
     expect(parseSave(even)!.progress.reactorRepaired).toBe(true);
   });

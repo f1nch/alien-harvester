@@ -219,7 +219,7 @@ export const CRYO_LABS: BiomeDef = {
     name: "Heat exchanger",
     task: "Restart the heat exchanger",
     doneTitle: "Heat exchanger running",
-    doneBody: "Warmth floods the floor and the freight elevator below shudders awake. It's at the far end of the frozen core: take it down when you're ready.",
+    doneBody: "Warmth floods the floor and the freight elevator below shudders awake. It's just inside the frozen core: take it down when you're ready.",
     x: 0,
     z: 109.5,
     halfSize: 0.9,

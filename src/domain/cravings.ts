@@ -37,6 +37,7 @@ const WEIGHTS: Record<CravingKind, number> = { capture: 4, burst: 2, bankTrip: 2
 const CAPTURE_GOAL: Partial<Record<TargetTypeId, number>> = {
   worker: 12, runner: 6, technician: 6, guard: 5, armoredGuard: 3,
   cryoScientist: 6, frostRunner: 6, patrolDrone: 5,
+  handler: 6, lurker: 6, chimera: 4, specimenTank: 3,
 };
 
 /** A full-enough hold for "bank a full hold": share of capacity. */
@@ -44,7 +45,12 @@ export const FULL_HOLD = 0.8;
 
 export function describeCraving(c: Craving): string {
   switch (c.kind) {
-    case "capture": return `Catch ${c.goal} ${TARGETS[c.target!].name.toLowerCase()}${c.goal === 1 ? "" : "s"}`;
+    case "capture": {
+      const def = TARGETS[c.target!];
+      // Things that never move (specimen tanks) are cracked open rather than caught.
+      const verb = def.behavior === "static" ? "Crack open" : "Catch";
+      return `${verb} ${c.goal} ${def.name.toLowerCase()}${c.goal === 1 ? "" : "s"}`;
+    }
     case "burst": return `Catch ${c.goal} within ${c.seconds} s`;
     case "bankTrip": return `Bank ${c.goal} biomass in one trip`;
     case "frenzy": return "Start a feeding frenzy";

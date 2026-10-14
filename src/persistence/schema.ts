@@ -1,4 +1,4 @@
-import { CURRENCIES, emptyWallet } from "../content/currencies";
+import { CURRENCIES, emptyWallet, roundCents, type Reward } from "../content/currencies";
 import { reachableZones, zoneAtOrDoorway, type MapDef } from "../content/map";
 import { goalTarget } from "../content/quests";
 import { isTargetType, TARGETS } from "../content/targets";
@@ -6,7 +6,8 @@ import { isMutagenId, MUTAGEN } from "../content/mutagen";
 import { inBestiary } from "../domain/bestiary";
 import { CRAVING_KINDS, type Craving, type CravingKind } from "../domain/cravings";
 import { feedingTuning } from "../domain/mutagen";
-import { biomeAt, MAX_DEPTH, scaleReward, type ActiveBiome } from "../domain/biome";
+import { biomeAt, MAX_DEPTH, scaleAt, scaleCost, scaleReward, type ActiveBiome } from "../domain/biome";
+import { BIOMES } from "../content/biomes";
 import { SUMMON } from "../content/feeding";
 import { UPGRADE_IDS, UPGRADES } from "../content/upgrades";
 import { EVOLUTIONS, MAX_TIER } from "../content/evolution";
@@ -20,7 +21,7 @@ import { CATCHER, DRONE, REFINERY, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 export const CONTENT_VERSION = 1;
 
 /** The level cap before endless levels (v9). */
@@ -164,6 +165,38 @@ function migrate(raw: Obj): Obj | null {
       : m.progress;
     m = { ...m, schemaVersion: 13, progress };
   }
+  if (m.schemaVersion === 13) {
+    // v14 adds Specimen vaults as the third floor, so depth d now plays biome d % 3
+    // instead of d % 2. Where that changes the floor, its progress (doors, quests,
+    // objective, cravings, the reward wave and the forward base) starts over there.
+    // Currencies, mutations, evolution and carried cargo are kept, and what was paid
+    // into that floor's forward base and an unfinished reward wave is refunded.
+    let progress = m.progress;
+    if (isObj(progress) && Number.isInteger(progress.depth) && (progress.depth as number) % 2 !== (progress.depth as number) % 3) {
+      const depth = progress.depth as number;
+      const was = BIOMES[depth % 2]!; // indices 0 and 1 are the same floors in both orders
+      const k = scaleAt(depth).cost;
+      const refunds: Reward[] = [];
+      const st = progress.structures;
+      if (isObj(st) && isObj(st.outpost) && st.outpost.built === true) refunds.push(scaleCost(was.outpost.cost, k));
+      const sm = progress.summon;
+      if (isObj(sm) && isNum(sm.left) && sm.left > 0 && Number.isInteger(sm.waves) && (sm.waves as number) >= 1) {
+        refunds.push(scaleCost(scaleCost(was.summon.cost, k), Math.min(1e6, 1.2 ** ((sm.waves as number) - 1))));
+      }
+      let banked = progress.banked;
+      if (isObj(banked) && refunds.length) {
+        const b: Obj = { ...banked };
+        for (const r of refunds) for (const c of CURRENCIES) if (r[c] && isNum(b[c] ?? 0)) b[c] = roundCents(((b[c] as number | undefined) ?? 0) + r[c]!);
+        banked = b;
+      }
+      const structures = isObj(st) && isObj(st.outpost) ? { ...st, outpost: { built: false, level: 0 } } : st;
+      progress = {
+        ...progress, banked, unlockedDoors: [], quests: {}, reactorRepaired: false, cravings: [], spawnCooldowns: {},
+        summon: { waves: 0, left: 0 }, structures,
+      };
+    }
+    m = { ...m, schemaVersion: 14, progress };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
@@ -179,8 +212,9 @@ function parseDrop(d: unknown, biome: ActiveBiome): CargoDrop | null {
   if (d.type === "refinery") return refineryBatchDrop(biome.depth);
   if (!isTargetType(d.type)) return null;
   const def = biome.targets[d.type];
-  // A reward-wave catch keeps its multiplier, but only for creatures this floor summons.
-  if (d.summoned === true && biome.def.summon.types.includes(def.id)) {
+  // A reward-wave catch keeps its multiplier, but only for creatures some floor summons
+  // (cargo can come from the floor a depth used to be, before v14 added a floor).
+  if (d.summoned === true && BIOMES.some((b) => b.summon.types.includes(def.id))) {
     return { type: def.id, weight: def.weight, reward: scaleReward(def.reward, SUMMON.rewardMultiplier), summoned: true };
   }
   return { type: def.id, weight: def.weight, reward: { ...def.reward } };

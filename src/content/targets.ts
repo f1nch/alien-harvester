@@ -4,7 +4,9 @@ import type { Reward } from "./currencies";
 export type TargetTypeId =
   | "worker" | "runner" | "technician" | "guard" | "armoredGuard" | "boss" | "pod"
   // Cryo labs
-  | "cryoScientist" | "frostRunner" | "patrolDrone" | "cryoSentinel";
+  | "cryoScientist" | "frostRunner" | "patrolDrone" | "cryoSentinel"
+  // Specimen vaults
+  | "handler" | "lurker" | "chimera" | "specimenTank" | "alphaSpecimen";
 
 /** "static": never moves (supply pods). */
 export type TargetBehavior = "wander" | "flee" | "guard" | "boss" | "static";
@@ -49,6 +51,11 @@ export interface TargetDef {
   respawnSeconds: number;
   /** Boss fight numbers; the reactor warden's when absent. */
   bossTuning?: BossTuning;
+  /**
+   * Loot, not a creature (supply pods): may hold a power-up, and skips combos, cravings
+   * and the bestiary. Static creatures (specimen tanks) are not loot.
+   */
+  loot?: boolean;
 }
 
 export const TARGETS: Record<TargetTypeId, TargetDef> = {
@@ -219,12 +226,98 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       walkSpeed: 1,
     },
   },
+  // --- Specimen vaults (floor B3). Depth-0 equivalents, like Cryo labs.
+  // Handler: a keeper in a padded suit with a catch-pole. Steady genetic material.
+  handler: {
+    id: "handler",
+    name: "Handler",
+    behavior: "wander",
+    resistance: 36,
+    weight: 3,
+    reward: { biomass: 5, genetic: 2 },
+    xp: 15,
+    speed: 0.9,
+    respawnSeconds: 12,
+  },
+  // Lurker: an escaped experiment, quick and shy, slipping between the tanks.
+  lurker: {
+    id: "lurker",
+    name: "Lurker",
+    behavior: "flee",
+    resistance: 28,
+    weight: 2,
+    reward: { biomass: 6, genetic: 2 },
+    xp: 13,
+    speed: 1.3,
+    fleeSpeed: 3.1,
+    fleeRadius: 5,
+    respawnSeconds: 10,
+  },
+  // Chimera: a failed hybrid that fights back with a lunging bite.
+  chimera: {
+    id: "chimera",
+    name: "Chimera",
+    behavior: "guard",
+    resistance: 62,
+    weight: 4,
+    reward: { biomass: 10, genetic: 3, parts: 1 },
+    xp: 26,
+    speed: 1.1,
+    combat: {
+      detectRadius: 7.5,
+      leashRadius: 10,
+      chaseSpeed: 2.6,
+      attackRange: 1.7,
+      damage: 17,
+      windupSeconds: 0.55,
+      cooldownSeconds: 1.7,
+      heldCreepSpeed: 0.7,
+    },
+    respawnSeconds: 18,
+  },
+  // Specimen tank: a sealed tank with something rich in genes floating inside. Heavy, slow
+  // to crack, and it never moves.
+  specimenTank: {
+    id: "specimenTank",
+    name: "Specimen tank",
+    behavior: "static",
+    resistance: 80,
+    weight: 4,
+    reward: { biomass: 6, genetic: 7 },
+    xp: 20,
+    speed: 0,
+    respawnSeconds: 45,
+  },
+  // The alpha specimen: the facility's prize experiment. Fast, with quick charges.
+  alphaSpecimen: {
+    id: "alphaSpecimen",
+    name: "Alpha specimen",
+    behavior: "boss",
+    resistance: 1250,
+    weight: 0,
+    reward: { genetic: 35, biomass: 160, parts: 5 },
+    xp: 500,
+    speed: 1.2,
+    multiGrab: true,
+    captureDecaySeconds: 20,
+    respawnSeconds: 180,
+    bossTuning: {
+      ...WARDEN,
+      slamDamage: 24,
+      chargeWindup: 1.25,
+      chargeSpeed: 10,
+      chargeDamage: 32,
+      chargeCooldown: 3.6,
+      walkSpeed: 1.3,
+    },
+  },
   // Supply pod: a crate of stolen stock. Quick to crack open, light, and it may hold a
   // short power-up (content/feeding.ts). Not a creature, so the bestiary ignores it.
   pod: {
     id: "pod",
     name: "Supply pod",
     behavior: "static",
+    loot: true,
     resistance: 12,
     weight: 1,
     reward: { biomass: 8, genetic: 1 },

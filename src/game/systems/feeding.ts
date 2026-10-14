@@ -96,7 +96,7 @@ export function onCaptured(w: World, t: TargetEntity): void {
   const tuning = feedingTuning(p);
   const events: CravingEvent[] = [];
 
-  if (t.def.behavior === "static") {
+  if (t.def.loot) {
     // Supply pod: sometimes a short power-up.
     if (w.rng() < tuning.boostChance) {
       const ids = Object.keys(BOOSTS) as BoostId[];

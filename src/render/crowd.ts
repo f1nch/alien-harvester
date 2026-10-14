@@ -219,6 +219,87 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     add(MeshBuilder.CreateBox("sentinelVisor", { width: 0.55, height: 0.1, depth: 0.12 }, scene), glow, 2.52, 0, 0.36);
     // Heavy crystalline arms that swing as it stomps.
     pair("arm", 1.5, 0.28, dark, 1.05, 2.0);
+  } else if (type === "handler") {
+    // Handler: padded olive keeper suit, face shield, and a long catch-pole held forward.
+    const suit = mat(scene, "handlerSuit", 0.42, 0.48, 0.28);
+    const pad = mat(scene, "handlerPad", 0.3, 0.34, 0.2, 0.2);
+    add(MeshBuilder.CreateCapsule("handlerBody", { height: 0.7, radius: 0.27, tessellation: 12 }, scene), suit, 0.78);
+    add(MeshBuilder.CreateBox("handlerVest", { width: 0.5, height: 0.34, depth: 0.4 }, scene), pad, 0.84);
+    add(MeshBuilder.CreateSphere("handlerHead", { diameter: 0.32, segments: 10 }, scene), skin, 1.16);
+    add(MeshBuilder.CreateBox("handlerShield", { width: 0.3, height: 0.2, depth: 0.04 }, scene), mat(scene, "handlerVisor", 0.6, 0.85, 0.75, 0.9), 1.16, 0, 0.17);
+    const pole = MeshBuilder.CreateCylinder("handlerPole", { height: 1.1, diameter: 0.05, tessellation: 6 }, scene);
+    pole.rotation.x = Math.PI / 2.2;
+    add(pole, mat(scene, "handlerPoleMat", 0.75, 0.75, 0.7, 0.5), 0.85, 0.3, 0.4);
+    add(MeshBuilder.CreateTorus("handlerLoop", { diameter: 0.18, thickness: 0.03, tessellation: 12 }, scene), mat(scene, "handlerLoopMat", 0.95, 0.6, 0.1), 0.95, 0.3, 0.95);
+    pair("leg", 0.42, 0.1, pad, 0.12, 0.42);
+    pair("arm", 0.44, 0.085, suit, 0.33, 0.98);
+  } else if (type === "lurker") {
+    // Lurker: a low, pale, many-eyed escapee on spindly legs. No clothes: plainly not staff.
+    const hide = mat(scene, "lurkerHide", 0.75, 0.8, 0.7, 0.3);
+    const eye = mat(scene, "lurkerEye", 0, 0, 0);
+    eye.emissiveColor = new Color3(0.6, 1, 0.3);
+    const body = MeshBuilder.CreateSphere("lurkerBody", { diameter: 0.6, segments: 12 }, scene);
+    body.scaling.set(0.8, 0.6, 1.3);
+    body.bakeCurrentTransformIntoVertices();
+    add(body, hide, 0.6);
+    add(MeshBuilder.CreateSphere("lurkerHead", { diameter: 0.3, segments: 10 }, scene), hide, 0.72, 0, 0.38);
+    for (const [x, y] of [[-0.07, 0.8], [0.07, 0.8], [0, 0.86]]) {
+      add(MeshBuilder.CreateSphere("lurkerEyeBall", { diameter: 0.07, segments: 6 }, scene), eye, y!, x!, 0.5);
+    }
+    pair("leg", 0.5, 0.045, hide, 0.16, 0.5);
+    pair("arm", 0.5, 0.045, hide, 0.16, 0.62);
+  } else if (type === "chimera") {
+    // Chimera: a hunched hybrid with a plated back, bone spurs, and a glowing red maw.
+    const flesh = mat(scene, "chimeraFlesh", 0.55, 0.3, 0.32, 0.2);
+    const plate = mat(scene, "chimeraPlate", 0.3, 0.26, 0.22, 0.5);
+    const maw = mat(scene, "chimeraMaw", 0, 0, 0);
+    maw.emissiveColor = new Color3(1, 0.2, 0.15);
+    const body = MeshBuilder.CreateSphere("chimeraBody", { diameter: 0.8, segments: 12 }, scene);
+    body.scaling.set(0.9, 0.75, 1.2);
+    body.bakeCurrentTransformIntoVertices();
+    add(body, flesh, 0.8);
+    add(MeshBuilder.CreateBox("chimeraBack", { width: 0.6, height: 0.16, depth: 0.7 }, scene), plate, 1.1, 0, -0.05);
+    for (const z of [-0.25, 0.05, 0.3]) {
+      add(MeshBuilder.CreateCylinder("chimeraSpur", { diameterTop: 0, diameterBottom: 0.12, height: 0.3, tessellation: 6 }, scene), plate, 1.3, 0, z);
+    }
+    add(MeshBuilder.CreateSphere("chimeraHead", { diameter: 0.42, segments: 10 }, scene), flesh, 0.95, 0, 0.5);
+    add(MeshBuilder.CreateBox("chimeraJaw", { width: 0.26, height: 0.06, depth: 0.12 }, scene), maw, 0.88, 0, 0.7);
+    pair("leg", 0.45, 0.1, flesh, 0.22, 0.48);
+    pair("arm", 0.55, 0.1, plate, 0.4, 0.95);
+  } else if (type === "specimenTank") {
+    // Specimen tank: a glass cylinder of green fluid with a dark shape inside, on a base.
+    const metal = mat(scene, "tankMetal", 0.35, 0.38, 0.42, 0.6);
+    const glass = mat(scene, "tankGlass", 0.3, 0.8, 0.5, 0.9);
+    glass.alpha = 0.55;
+    glass.emissiveColor = new Color3(0.05, 0.35, 0.15);
+    add(MeshBuilder.CreateCylinder("tankBase", { height: 0.18, diameter: 0.8, tessellation: 16 }, scene), metal, 0.09);
+    add(MeshBuilder.CreateCylinder("tankGlass", { height: 1.1, diameter: 0.66, tessellation: 16 }, scene), glass, 0.73);
+    add(MeshBuilder.CreateSphere("tankSpecimen", { diameter: 0.34, segments: 8 }, scene), mat(scene, "tankShape", 0.15, 0.2, 0.15), 0.75);
+    add(MeshBuilder.CreateCylinder("tankCap", { height: 0.14, diameter: 0.74, tessellation: 16 }, scene), metal, 1.34);
+  } else if (type === "alphaSpecimen") {
+    // The alpha specimen: a towering four-armed hybrid with a crown of spines and a green core.
+    const hide = mat(scene, "alphaHide", 0.35, 0.18, 0.3, 0.3);
+    const bone = mat(scene, "alphaBone", 0.85, 0.82, 0.72, 0.4);
+    const glow = mat(scene, "alphaGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.5, 1, 0.3);
+    add(MeshBuilder.CreateCapsule("alphaBody", { height: 2.2, radius: 0.75, tessellation: 14 }, scene), hide, 1.15);
+    add(MeshBuilder.CreateSphere("alphaChest", { diameter: 1.5, segments: 12 }, scene), hide, 1.6);
+    add(MeshBuilder.CreateSphere("alphaCore", { diameter: 0.45, segments: 10 }, scene), glow, 1.6, 0, 0.62);
+    add(MeshBuilder.CreateSphere("alphaHead", { diameter: 0.8, segments: 12 }, scene), hide, 2.5, 0, 0.1);
+    add(MeshBuilder.CreateBox("alphaEyes", { width: 0.5, height: 0.08, depth: 0.12 }, scene), glow, 2.55, 0, 0.45);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 4 - 0.5) * 1.6;
+      const spine = MeshBuilder.CreateCylinder("alphaSpine", { diameterTop: 0, diameterBottom: 0.2, height: 0.75, tessellation: 6 }, scene);
+      spine.rotation.z = -a * 0.6;
+      add(spine, bone, 3.0, Math.sin(a) * 0.4, -0.1);
+    }
+    for (const side of [-1, 1]) {
+      const lower = MeshBuilder.CreateCapsule("alphaLowerArm", { height: 1.0, radius: 0.18, tessellation: 8 }, scene);
+      lower.rotation.z = side * 0.4;
+      add(lower, bone, 1.1, side * 1.0, 0.2);
+    }
+    // Heavy upper arms that swing as it stomps.
+    pair("arm", 1.5, 0.28, hide, 1.05, 2.0);
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     const coat = mat(scene, "techCoat", 0.92, 0.95, 0.97);

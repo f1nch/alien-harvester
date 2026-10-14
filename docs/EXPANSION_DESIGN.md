@@ -135,7 +135,7 @@ Saves: v11 adds the crystals and alloy currencies and Thermal fat (chill is tran
 
 ## Phase C: Endless
 
-- **Biome 3** (hand-made, theme to be decided: e.g. an orbital shipyard with mech guards).
+- **Biome 3: Specimen vaults (C2, done):** facility floor B3, where the facility keeps its real experiments. Intake, holding pens, tank hall, surgical theatre, alpha containment. Handlers (keepers), lurkers (escaped, they flee), chimeras (hybrids that fight back), specimen tanks (static, cracked open for genetic material) and the alpha specimen boss. Genetic material is the floor's currency (gates, summons). Saves v14: depth d now plays biome d % 3; floors that changed (d % 2 != d % 3) start over, refunding a built forward base and an unfinished wave. Next hand-made floor: the hangar (B4), then portal worlds.
 - **Cycling:** after biome 3, biomes repeat at higher depth with a numeral and a new tint.
 - **Endless evolution (C1, done):** tier `t` (t ≥ 2) requires reaching depth `t − 1`, genetic material and alloy (×1.6 per tier from 80 genetic and 10 alloy), and mutation levels (22, then +12 per tier). Each tier adds +25% capture power and +20% max health (summed, not compounded, so tiers never run away from the per-depth scaling), +2 cargo levels, and a slightly bigger body (capped). The first two endless tiers add a tentacle: that's all that fits under the cap of 8 with every tentacle upgrade, so a tentacle level bought later is never wasted.
 - **Alloy sink (C1, done):** capture-power levels past 24 also cost alloy (4, ×1.06 per level), refunded by a respec.
