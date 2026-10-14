@@ -173,7 +173,7 @@ describe("capturing the warden", () => {
 describe("reactor repair", () => {
   it("needs the warden defeated plus parts and biomass; one transaction, once", () => {
     const p = lateGame();
-    p.banked = { biomass: 1000, genetic: 0, parts: 50 };
+    p.banked = { biomass: 1000, genetic: 0, parts: 50, mutagen: 0, crystals: 0, alloy: 0 };
     expect(repairReactor(p)).toEqual({ ok: false, reason: "requirements" });
     expect(p.banked.parts).toBe(50);
     p.quests["q-boss"] = { count: 1, done: true };
@@ -188,7 +188,7 @@ describe("reactor repair", () => {
   it("the game action emits the completion event; the console is reachable", () => {
     const p = lateGame();
     p.quests["q-boss"] = { count: 1, done: true };
-    p.banked = { biomass: 300, genetic: 0, parts: 15 };
+    p.banked = { biomass: 300, genetic: 0, parts: 15, mutagen: 0, crystals: 0, alloy: 0 };
     const w = createWorld(FACILITY, p);
     w.player.x = REACTOR.x;
     w.player.z = REACTOR.z - 2;
@@ -221,21 +221,21 @@ describe("play time and saves", () => {
     v7.schemaVersion = 7;
     delete v7.progress.reactorRepaired;
     delete v7.progress.playSeconds;
-    const parsed = parseSave(v7, FACILITY)!;
+    const parsed = parseSave(v7)!;
     expect(parsed.schemaVersion).toBe(SCHEMA_VERSION);
     expect(parsed.progress).toMatchObject({ reactorRepaired: false, playSeconds: 0 });
 
     const p = lateGame();
     p.reactorRepaired = true;
     p.playSeconds = 4321.5;
-    expect(parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))), FACILITY)!.progress)
+    expect(parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))))!.progress)
       .toMatchObject({ reactorRepaired: true, playSeconds: 4321.5 });
   });
 
   it("a boss drop in cargo survives save and reload", () => {
     const p = lateGame();
     p.cargo.push({ type: "boss", weight: 0, reward: { ...TARGETS.boss.reward } });
-    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))), FACILITY)!;
+    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))))!;
     expect(parsed.progress.cargo[0]).toMatchObject({ type: "boss", reward: { parts: 5 } });
   });
 });
@@ -288,7 +288,7 @@ describe("warden review regressions", () => {
   it("repair needs the player at the console", () => {
     const p = lateGame();
     p.quests["q-boss"] = { count: 1, done: true };
-    p.banked = { biomass: 300, genetic: 0, parts: 15 };
+    p.banked = { biomass: 300, genetic: 0, parts: 15, mutagen: 0, crystals: 0, alloy: 0 };
     const w = createWorld(FACILITY, p);
     expect(repair(w)).toEqual({ ok: false, reason: "notAtConsole" });
     expect(p.reactorRepaired).toBe(false);

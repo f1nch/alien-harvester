@@ -18,7 +18,7 @@ const valid = () => {
 describe("save schema", () => {
   it("round-trips through JSON", () => {
     const s = valid();
-    const parsed = parseSave(JSON.parse(JSON.stringify(s)), FACILITY);
+    const parsed = parseSave(JSON.parse(JSON.stringify(s)));
     expect(parsed).toEqual(s);
   });
 
@@ -47,17 +47,17 @@ describe("save schema", () => {
     ["unknown cargo type", { ...valid(), progress: { ...valid().progress, cargo: [{ type: "dragon", weight: 1, reward: {} }] } }],
     ["fractional upgrade", { ...valid(), progress: { ...valid().progress, upgrades: { capturePower: 1.5 } } }],
   ])("rejects malformed input: %s", (_name, raw) => {
-    expect(parseSave(raw, FACILITY)).toBeNull();
+    expect(parseSave(raw)).toBeNull();
   });
 
   it("clamps upgrade levels above the cap", () => {
     const s = valid();
     s.progress.upgrades.moveSpeed = 999;
-    expect(parseSave(s, FACILITY)!.progress.upgrades.moveSpeed).toBe(5);
+    expect(parseSave(s)!.progress.upgrades.moveSpeed).toBe(5);
   });
 
   it("restores cooldowns so reloading does not respawn captured targets early", () => {
-    const s = parseSave(valid(), FACILITY)!;
+    const s = parseSave(valid())!;
     const w = createWorld(FACILITY, s.progress);
     expect(w.targets).toHaveLength(FACILITY.spawns.length - 1);
   });
@@ -76,7 +76,7 @@ describe("save hardening", () => {
   it("rebuilds cargo from content and caps it at capacity", () => {
     const s = valid() as unknown as { progress: { cargo: unknown[] } };
     s.progress.cargo = Array.from({ length: 50 }, () => ({ type: "worker", weight: 0, reward: { biomass: 1e308 } }));
-    const parsed = parseSave(s, FACILITY)!;
+    const parsed = parseSave(s)!;
     const capacity = 20 + 8 * 2; // valid() has cargoCapacity level 2
     expect(parsed.progress.cargo.reduce((n, d) => n + d.weight, 0)).toBeLessThanOrEqual(capacity);
     expect(parsed.progress.cargo.every((d) => d.reward.biomass === 3)).toBe(true);
@@ -85,7 +85,7 @@ describe("save hardening", () => {
   it("returns out-of-zone positions to spawn and clamps health", () => {
     const s = valid();
     s.progress.player = { x: 1e6, z: -1e6, health: 5000 };
-    const p = parseSave(s, FACILITY)!.progress.player;
+    const p = parseSave(s)!.progress.player;
     expect([p.x, p.z]).toEqual([FACILITY.playerSpawn.x, FACILITY.playerSpawn.z]);
     expect(p.health).toBe(100);
   });
@@ -93,9 +93,9 @@ describe("save hardening", () => {
   it("returns a player standing in a still-locked zone to spawn", () => {
     const s = valid();
     s.progress.player = { x: 0, z: 30, health: 100 }; // service wing, door locked
-    expect(parseSave(s, FACILITY)!.progress.player.z).toBe(FACILITY.playerSpawn.z);
+    expect(parseSave(s)!.progress.player.z).toBe(FACILITY.playerSpawn.z);
     s.progress.unlockedDoors = ["door-service"];
-    expect(parseSave(s, FACILITY)!.progress.player.z).toBe(30);
+    expect(parseSave(s)!.progress.player.z).toBe(30);
   });
 
   it("migrates a v1 save to the current schema without losing progress", () => {
@@ -103,7 +103,7 @@ describe("save hardening", () => {
     v1.schemaVersion = 1;
     delete v1.progress.quests;
     delete v1.progress.unlockedDoors;
-    const parsed = parseSave(v1, FACILITY)!;
+    const parsed = parseSave(v1)!;
     expect(parsed.schemaVersion).toBe(SCHEMA_VERSION);
     expect(parsed.progress.evolution).toBe(0);
     expect(parsed.progress.banked.biomass).toBe(42);
@@ -117,11 +117,11 @@ describe("save hardening", () => {
     const s = valid() as any;
     s.progress.quests = { "q-first-catch": { count: 99, done: false }, "q-removed": { count: 1, done: true } };
     s.progress.unlockedDoors = ["door-service", "door-gone"];
-    const parsed = parseSave(s, FACILITY)!;
+    const parsed = parseSave(s)!;
     expect(parsed.progress.quests).toEqual({ "q-first-catch": { count: 5, done: false } });
     expect(parsed.progress.unlockedDoors).toEqual(["door-service"]);
     s.progress.quests = { "q-first-catch": { count: "x", done: false } };
-    expect(parseSave(s, FACILITY)).toBeNull();
+    expect(parseSave(s)).toBeNull();
   });
 });
 
@@ -130,13 +130,13 @@ describe("position reachability", () => {
     const s = valid();
     s.progress.unlockedDoors = ["door-service"];
     s.progress.player = { x: 0, z: 17.5, health: 100 };
-    expect(parseSave(s, FACILITY)!.progress.player.z).toBe(17.5);
+    expect(parseSave(s)!.progress.player.z).toBe(17.5);
   });
 
   it("returns a player to spawn when an earlier door on the path is still locked", () => {
     const s = valid();
     s.progress.unlockedDoors = ["door-security"]; // service door still locked
     s.progress.player = { x: 0, z: 60, health: 100 };
-    expect(parseSave(s, FACILITY)!.progress.player.z).toBe(FACILITY.playerSpawn.z);
+    expect(parseSave(s)!.progress.player.z).toBe(FACILITY.playerSpawn.z);
   });
 });

@@ -5,6 +5,8 @@ export interface DevActions {
   addXp(amount: number): void;
   completeObjectives(): void;
   devolve(): void;
+  /** Open every door, finish every quest and the objective, and stand at the exit. */
+  clearBiome(): void;
 }
 
 /**
@@ -59,6 +61,7 @@ export function mountDevTools(root: HTMLElement, actions: DevActions): DevTools 
     button("Complete objectives", "Complete all current objectives", () => actions.completeObjectives()),
     button("Devolve", "Return to the previous evolution form", () => actions.devolve()),
   );
+  row("Biome", button("Clear floor", "Clear this biome and stand at the exit", () => actions.clearBiome()));
 
   const creature = document.createElement("div");
   creature.className = "dev-row dev-status";

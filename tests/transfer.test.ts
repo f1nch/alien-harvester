@@ -6,7 +6,7 @@ import { exportFileName, exportText, MAX_IMPORT_BYTES, parseImport } from "../sr
 
 const sample = () => {
   const p = newProgress(FACILITY);
-  p.banked = { biomass: 321.5, genetic: 12, parts: 3 };
+  p.banked = { biomass: 321.5, genetic: 12, parts: 3, mutagen: 0, crystals: 0, alloy: 0 };
   p.xp = 400;
   p.evolution = 1;
   p.unlockedDoors.push("door-service");
@@ -17,7 +17,7 @@ const sample = () => {
 describe("save export and import", () => {
   it("round-trips an exported save exactly, with a readable summary", () => {
     const s = sample();
-    const r = parseImport(exportText(s), FACILITY);
+    const r = parseImport(exportText(s));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.save).toEqual(s);
@@ -25,7 +25,7 @@ describe("save export and import", () => {
   });
 
   it("also accepts a bare save object (as stored)", () => {
-    expect(parseImport(JSON.stringify(sample()), FACILITY).ok).toBe(true);
+    expect(parseImport(JSON.stringify(sample())).ok).toBe(true);
   });
 
   it("runs migrations on older exported saves", () => {
@@ -33,7 +33,7 @@ describe("save export and import", () => {
     s.schemaVersion = 7;
     delete s.progress.reactorRepaired;
     delete s.progress.playSeconds;
-    const r = parseImport(JSON.stringify({ format: "alien-harvester-save", save: s }), FACILITY);
+    const r = parseImport(JSON.stringify({ format: "alien-harvester-save", save: s }));
     expect(r.ok && r.save.schemaVersion).toBe(SCHEMA_VERSION);
   });
 
@@ -46,17 +46,17 @@ describe("save export and import", () => {
     ["newer", JSON.stringify({ format: "alien-harvester-save", save: { schemaVersion: 999, progress: {} } })],
     ["invalid", JSON.stringify({ format: "alien-harvester-save", save: { schemaVersion: SCHEMA_VERSION, progress: { banked: "lots" } } })],
   ])("rejects %s input safely", (reason, text) => {
-    expect(parseImport(text, FACILITY)).toEqual({ ok: false, reason });
+    expect(parseImport(text)).toEqual({ ok: false, reason });
   });
 
   it("rejects oversized input before parsing it", () => {
-    expect(parseImport(" ".repeat(10) + "x".repeat(MAX_IMPORT_BYTES + 1), FACILITY)).toEqual({ ok: false, reason: "tooLarge" });
+    expect(parseImport(" ".repeat(10) + "x".repeat(MAX_IMPORT_BYTES + 1))).toEqual({ ok: false, reason: "tooLarge" });
   });
 
   it("rejects tampered values the same way storage loads do", () => {
     const s = JSON.parse(exportText(sample()));
     s.save.progress.banked.biomass = -50;
-    expect(parseImport(JSON.stringify(s), FACILITY)).toEqual({ ok: false, reason: "invalid" });
+    expect(parseImport(JSON.stringify(s))).toEqual({ ok: false, reason: "invalid" });
   });
 
   it("names files by date only", () => {
@@ -68,6 +68,6 @@ describe("import bounds", () => {
   it("rejects absurd amounts that could later overflow and block saving", () => {
     const s = JSON.parse(exportText(sample()));
     s.save.progress.upgradeSpent.capturePower = 1e308;
-    expect(parseImport(JSON.stringify(s), FACILITY)).toEqual({ ok: false, reason: "invalid" });
+    expect(parseImport(JSON.stringify(s))).toEqual({ ok: false, reason: "invalid" });
   });
 });

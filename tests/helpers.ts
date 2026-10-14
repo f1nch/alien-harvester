@@ -14,7 +14,7 @@ export function testMap(
 ): MapDef {
   return {
     bounds: BOUNDS,
-    zones: [{ id: "containment", name: "Test", rect: BOUNDS, tint: [1, 1, 1] }],
+    zones: [{ id: "containment", name: "Test", theme: "containment", rect: BOUNDS, tint: [1, 1, 1] }],
     base: { x: 0, z: -15, radius: 2 },
     playerSpawn: { x: 0, z: 0 },
     walls: [],

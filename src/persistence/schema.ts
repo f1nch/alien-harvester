@@ -1,21 +1,31 @@
-import { CURRENCIES, emptyWallet } from "../content/currencies";
+import { CURRENCIES, emptyWallet, roundCents, type Reward } from "../content/currencies";
 import { reachableZones, zoneAtOrDoorway, type MapDef } from "../content/map";
-import { goalTarget, QUEST_BY_ID } from "../content/quests";
+import { goalTarget } from "../content/quests";
 import { isTargetType, TARGETS } from "../content/targets";
-import { UPGRADE_IDS } from "../content/upgrades";
-import { MAX_TIER } from "../content/evolution";
+import { isMutagenId, MUTAGEN } from "../content/mutagen";
+import { inBestiary } from "../domain/bestiary";
+import { CRAVING_KINDS, type Craving, type CravingKind } from "../domain/cravings";
+import { feedingTuning } from "../domain/mutagen";
+import { biomeAt, MAX_DEPTH, scaleAt, scaleCost, scaleReward, type ActiveBiome } from "../domain/biome";
+import { BIOMES } from "../content/biomes";
+import { SUMMON } from "../content/feeding";
+import { UPGRADE_IDS, UPGRADES } from "../content/upgrades";
+import { EVOLUTIONS, MAX_TIER } from "../content/evolution";
 import { MAX_LEVEL } from "../content/levels";
 import { CHOICES_PER_LEVEL, isPerkId, PERKS } from "../content/perks";
-import { capAtTier, computeStats, tableCostForLevels } from "../domain/economy";
+import { capAt, computeStats, tableCostForLevels } from "../domain/economy";
 import { levelForXp } from "../domain/levels";
 import { queuePerkChoices } from "../domain/perks";
-import { droneCapacity, vatBatchDrop, vatLevel } from "../domain/structures";
-import { DRONE, VAT } from "../content/structures";
+import { catcherLevel, droneCapacity, refineryBatchDrop, refineryLevel, vatBatchDrop, vatLevel, type DroneState } from "../domain/structures";
+import { CATCHER, DRONE, REFINERY, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 14;
 export const CONTENT_VERSION = 1;
+
+/** The level cap before endless levels (v9). */
+const PRE_V9_MAX_LEVEL = 10;
 
 export interface Settings {
   leftHanded: boolean;
@@ -48,8 +58,11 @@ export function toSaveFile(progress: ProgressState, settings: Settings): SaveFil
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-/** Far beyond anything reachable in play, but small enough that sums can never overflow to Infinity. */
-const MAX_AMOUNT = 1e12;
+/**
+ * Bounds every saved amount. Amounts grow about 1.6x per biome, so this sits far above
+ * anything reachable at MAX_DEPTH (~1e66), yet sums of such values can't overflow to Infinity.
+ */
+export const MAX_AMOUNT = 1e100;
 const isNonNeg = (v: unknown): v is number => isNum(v) && v >= 0 && v <= MAX_AMOUNT;
 
 /**
@@ -81,7 +94,9 @@ function migrate(raw: Obj): Obj | null {
       const upgradeSpent: Record<string, number> = {};
       let bought = 0;
       for (const id of UPGRADE_IDS) {
-        const lvl = Number.isInteger(levels[id]) ? (levels[id] as number) : 0;
+        const raw = Number.isInteger(levels[id]) ? (levels[id] as number) : 0;
+        // v4 predates growth past the table, so no real v4 save holds more levels.
+        const lvl = Math.min(raw, UPGRADES[id].costs.length);
         upgradeSpent[id] = tableCostForLevels(id, Math.max(0, lvl));
         bought += Math.max(0, lvl);
       }
@@ -105,31 +120,144 @@ function migrate(raw: Obj): Obj | null {
     const progress = isObj(m.progress) ? { ...m.progress, reactorRepaired: false, playSeconds: 0 } : m.progress;
     m = { ...m, schemaVersion: 8, progress };
   }
+  if (m.schemaVersion === 8) {
+    // v9 adds biomes. Every earlier save is in the first one.
+    const progress = isObj(m.progress) ? { ...m.progress, depth: 0 } : m.progress;
+    m = { ...m, schemaVersion: 9, progress };
+  }
+  if (m.schemaVersion === 9) {
+    // v10 adds mutagen (a currency, parsed as 0 when absent), cravings, mutagen
+    // mutations and the bestiary. Everyone starts with none; cravings roll on load.
+    const progress = isObj(m.progress) ? { ...m.progress, cravings: [], cravingRolls: 0, mutagenLevels: {}, bestiary: {} } : m.progress;
+    m = { ...m, schemaVersion: 10, progress };
+  }
+  if (m.schemaVersion === 10) {
+    // v11 adds the cryo crystals and alloy currencies and the Thermal fat track; both parse
+    // as 0 when absent. The bump stops older builds loading saves that hold them.
+    // Before v11 every depth was the facility; odd depths are now Cryo labs, so that
+    // floor's progress (facility doors, quests, objective, cravings) starts over there.
+    let progress = m.progress;
+    if (isObj(progress) && Number.isInteger(progress.depth) && (progress.depth as number) % 2 === 1) {
+      progress = { ...progress, unlockedDoors: [], quests: {}, reactorRepaired: false, cravings: [], spawnCooldowns: {} };
+    }
+    m = { ...m, schemaVersion: 11, progress };
+  }
+  if (m.schemaVersion === 11) {
+    // v12 adds the refinery, the catcher and the forward base; none is built yet.
+    const st = isObj(m.progress) ? m.progress.structures : null;
+    const structures = isObj(st)
+      ? {
+          ...st,
+          refinery: { built: false, level: 0, stock: 0, timer: 0, running: false },
+          catcher: { built: false, level: 0, x: 0, z: 0, cargo: [] },
+          outpost: { built: false, level: 0 },
+        }
+      : st;
+    const progress = isObj(m.progress) ? { ...m.progress, structures } : m.progress;
+    m = { ...m, schemaVersion: 12, progress };
+  }
+  if (m.schemaVersion === 12) {
+    // v13 adds endless evolution tiers (the tier is still a number; only its cap rose),
+    // alloy paid into deep capture-power levels (none yet) and the objective machine's
+    // reward waves (none summoned). The bump stops older builds clamping the tier.
+    const progress = isObj(m.progress)
+      ? { ...m.progress, upgradeExtraSpent: {}, summon: { waves: 0, left: 0 } }
+      : m.progress;
+    m = { ...m, schemaVersion: 13, progress };
+  }
+  if (m.schemaVersion === 13) {
+    // v14 adds Specimen vaults as the third floor, so depth d now plays biome d % 3
+    // instead of d % 2. Where that changes the floor, its progress (doors, quests,
+    // objective, cravings, the reward wave and the forward base) starts over there.
+    // Currencies, mutations, evolution and carried cargo are kept, and what was paid
+    // into that floor's forward base and an unfinished reward wave is refunded.
+    let progress = m.progress;
+    if (isObj(progress) && Number.isInteger(progress.depth) && (progress.depth as number) % 2 !== (progress.depth as number) % 3) {
+      const depth = progress.depth as number;
+      const was = BIOMES[depth % 2]!; // indices 0 and 1 are the same floors in both orders
+      const k = scaleAt(depth).cost;
+      const refunds: Reward[] = [];
+      const st = progress.structures;
+      if (isObj(st) && isObj(st.outpost) && st.outpost.built === true) refunds.push(scaleCost(was.outpost.cost, k));
+      const sm = progress.summon;
+      if (isObj(sm) && isNum(sm.left) && sm.left > 0 && Number.isInteger(sm.waves) && (sm.waves as number) >= 1) {
+        refunds.push(scaleCost(scaleCost(was.summon.cost, k), Math.min(1e6, 1.2 ** ((sm.waves as number) - 1))));
+      }
+      let banked = progress.banked;
+      if (isObj(banked) && refunds.length) {
+        const b: Obj = { ...banked };
+        for (const r of refunds) for (const c of CURRENCIES) if (r[c] && isNum(b[c] ?? 0)) b[c] = roundCents(((b[c] as number | undefined) ?? 0) + r[c]!);
+        banked = b;
+      }
+      const structures = isObj(st) && isObj(st.outpost) ? { ...st, outpost: { built: false, level: 0 } } : st;
+      progress = {
+        ...progress, banked, unlockedDoors: [], quests: {}, reactorRepaired: false, cravings: [], spawnCooldowns: {},
+        summon: { waves: 0, left: 0 }, structures,
+      };
+    }
+    m = { ...m, schemaVersion: 14, progress };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
 
-/** Rebuild a cargo drop from content definitions rather than trusting stored numbers. */
-function parseDrop(d: unknown): CargoDrop | null {
+/**
+ * Rebuild a cargo drop from content definitions rather than trusting stored numbers.
+ * Cargo never leaves its biome (it's banked on the way out), so the current depth's
+ * payouts are the right ones.
+ */
+function parseDrop(d: unknown, biome: ActiveBiome): CargoDrop | null {
   if (!isObj(d)) return null;
-  if (d.type === "vat") return vatBatchDrop();
+  if (d.type === "vat") return vatBatchDrop(biome.depth);
+  if (d.type === "refinery") return refineryBatchDrop(biome.depth);
   if (!isTargetType(d.type)) return null;
-  const def = TARGETS[d.type];
+  const def = biome.targets[d.type];
+  // A reward-wave catch keeps its multiplier, but only for creatures some floor summons
+  // (cargo can come from the floor a depth used to be, before v14 added a floor).
+  if (d.summoned === true && BIOMES.some((b) => b.summon.types.includes(def.id))) {
+    return { type: def.id, weight: def.weight, reward: scaleReward(def.reward, SUMMON.rewardMultiplier), summoned: true };
+  }
   return { type: def.id, weight: def.weight, reward: { ...def.reward } };
+}
+
+function parseCraving(c: unknown, playSeconds: number, room: MapDef): Craving | null {
+  if (!isObj(c) || typeof c.kind !== "string" || !(CRAVING_KINDS as readonly string[]).includes(c.kind)) return null;
+  if (!isNonNeg(c.goal) || c.goal < 1 || !isNonNeg(c.progress) || !isNonNeg(c.reward) || c.reward > 1000) return null;
+  const kind = c.kind as CravingKind;
+  const out: Craving = { kind, goal: c.goal, progress: Math.min(c.progress, c.goal), reward: c.reward };
+  if (kind === "capture") {
+    if (!isTargetType(c.target) || !inBestiary(c.target) || TARGETS[c.target].behavior === "boss") return null;
+    // A creature that doesn't live on this floor could never be caught: the craving re-rolls.
+    if (!room.spawns.some((s) => s.type === c.target)) return null;
+    out.target = c.target;
+  }
+  if (kind === "burst") {
+    if (!isNum(c.seconds) || c.seconds <= 0 || c.seconds > 600) return null;
+    out.seconds = c.seconds;
+    // "Within T seconds" counts captures this session only: the window starts again on load.
+    out.progress = 0;
+    out.since = playSeconds;
+  }
+  return out;
 }
 
 /**
  * Validate an untrusted save (from storage or an import). Returns null if it
  * can't be trusted, so the caller can fall back without overwriting anything.
  */
-export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
+export function parseSave(raw: unknown): SaveFile | null {
   if (!isObj(raw)) return null;
   const m = migrate(raw);
   if (!m) return null;
   const p = m.progress;
   if (!isObj(p)) return null;
 
+  // First: depth picks the biome, which every later check (map, quests, caps, cargo) uses.
+  if (!Number.isInteger(p.depth) || (p.depth as number) < 0 || (p.depth as number) > MAX_DEPTH) return null;
+  const biome = biomeAt(p.depth as number);
+  const room = biome.def.map;
   const progress = newProgress(room);
+  progress.depth = biome.depth;
 
   if (!isObj(p.banked)) return null;
   progress.banked = emptyWallet();
@@ -144,13 +272,14 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
 
   // Parsed before upgrades: the tier decides each track's level cap.
   if (!Number.isInteger(p.evolution) || (p.evolution as number) < 0) return null;
-  progress.evolution = Math.min(p.evolution as number, MAX_TIER);
+  // Endless tier t needs depth t − 1 and depth never goes down, so nothing reachable is higher.
+  progress.evolution = Math.min(p.evolution as number, MAX_TIER, Math.max(EVOLUTIONS.length, progress.depth + 1));
 
   if (!isObj(p.upgrades)) return null;
   for (const id of UPGRADE_IDS) {
     const lvl = p.upgrades[id] ?? 0;
     if (!Number.isInteger(lvl) || (lvl as number) < 0) return null;
-    progress.upgrades[id] = Math.min(lvl as number, capAtTier(id, progress.evolution));
+    progress.upgrades[id] = Math.min(lvl as number, capAt(id, progress.evolution, progress.depth));
   }
 
   // Perks before cargo and health: they change capacity and maximum health.
@@ -169,6 +298,13 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
     if (spent !== undefined && !isNonNeg(spent)) return null;
     progress.upgradeSpent[id] = (spent as number | undefined) ?? tableCostForLevels(id, progress.upgrades[id]);
   }
+  if (!isObj(p.upgradeExtraSpent)) return null;
+  for (const id of UPGRADE_IDS) {
+    const spent = p.upgradeExtraSpent[id] ?? 0;
+    if (!isNonNeg(spent)) return null;
+    // Only tracks with a second price can have paid one.
+    progress.upgradeExtraSpent[id] = UPGRADES[id].extraCost ? spent : 0;
+  }
   if (!Number.isInteger(p.mutationsBought) || (p.mutationsBought as number) < 0) return null;
   let levels = 0;
   for (const id of UPGRADE_IDS) levels += progress.upgrades[id];
@@ -181,7 +317,7 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   const cargo: CargoDrop[] = [];
   let weight = 0;
   for (const d of p.cargo) {
-    const drop = parseDrop(d);
+    const drop = parseDrop(d, biome);
     if (!drop) return null;
     if (weight + drop.weight > capacity) break;
     weight += drop.weight;
@@ -205,7 +341,7 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   if (!isObj(p.quests)) return null;
   const quests: Record<string, QuestState> = {};
   for (const [id, q] of Object.entries(p.quests)) {
-    const def = QUEST_BY_ID.get(id);
+    const def = biome.questById.get(id);
     if (!def) continue; // quest removed from content: drop it
     if (!isObj(q) || !isNonNeg(q.count) || typeof q.done !== "boolean") return null;
     quests[id] = { count: Math.min(q.count, goalTarget(def.goal)), done: q.done };
@@ -230,6 +366,7 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   // Structures. A null value (fresh from the v6 migration) means nothing is built.
   if (p.structures !== null) {
     if (!isObj(p.structures) || !isObj(p.structures.vat) || !isObj(p.structures.drone)) return null;
+    if (!isObj(p.structures.refinery) || !isObj(p.structures.catcher) || !isObj(p.structures.outpost)) return null;
     const v = p.structures.vat;
     if (typeof v.built !== "boolean" || !Number.isInteger(v.level) || !isNonNeg(v.stock) || !isNonNeg(v.timer)) return null;
     const vat = progress.structures.vat;
@@ -241,28 +378,48 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
       vat.timer = Math.min(v.timer as number, lvl.batchSeconds);
     }
 
-    const dr = p.structures.drone;
-    if (typeof dr.built !== "boolean" || !Number.isInteger(dr.level) || !isNum(dr.x) || !isNum(dr.z) || !Array.isArray(dr.cargo)) return null;
-    const drone = progress.structures.drone;
-    drone.built = dr.built;
-    drone.level = dr.built ? Math.min(Math.max(1, dr.level as number), DRONE.levels.length) : 0;
-    // Cargo in transit is kept (rebuilt from content), up to the drone's capacity.
-    if (drone.built) {
-      const cap = droneCapacity(drone);
+    // Helpers: cargo in transit is kept (rebuilt from content), up to capacity.
+    const helper = (raw: Obj, out: DroneState, maxLevel: number, capacity: (s: DroneState) => number): boolean => {
+      if (typeof raw.built !== "boolean" || !Number.isInteger(raw.level) || !isNum(raw.x) || !isNum(raw.z) || !Array.isArray(raw.cargo)) return false;
+      out.built = raw.built;
+      out.level = raw.built ? Math.min(Math.max(1, raw.level as number), maxLevel) : 0;
+      if (!out.built) return true;
+      const cap = capacity(out);
       let load = 0;
-      for (const d of dr.cargo) {
-        const drop = parseDrop(d);
-        if (!drop) return null;
+      for (const d of raw.cargo) {
+        const drop = parseDrop(d, biome);
+        if (!drop) return false;
         if (load + drop.weight > cap) break;
         load += drop.weight;
-        drone.cargo.push(drop);
+        out.cargo.push(drop);
       }
-      const dz = zoneAtOrDoorway(room, dr.x as number, dr.z as number, progress.unlockedDoors);
+      const dz = zoneAtOrDoorway(room, raw.x as number, raw.z as number, progress.unlockedDoors);
       if (dz && reachableZones(room, progress.unlockedDoors).has(dz.id)) {
-        drone.x = dr.x as number;
-        drone.z = dr.z as number;
+        out.x = raw.x as number;
+        out.z = raw.z as number;
       }
+      return true;
+    };
+    if (!helper(p.structures.drone, progress.structures.drone, DRONE.levels.length, droneCapacity)) return null;
+    if (!helper(p.structures.catcher, progress.structures.catcher, CATCHER.levels.length, (c) => catcherLevel(c).capacity)) return null;
+
+    const r = p.structures.refinery;
+    if (typeof r.built !== "boolean" || !Number.isInteger(r.level) || !isNonNeg(r.stock) || !isNonNeg(r.timer) || typeof r.running !== "boolean") return null;
+    const refinery = progress.structures.refinery;
+    refinery.built = r.built;
+    refinery.level = r.built ? Math.min(Math.max(1, r.level as number), REFINERY.levels.length) : 0;
+    if (refinery.built) {
+      const lvl = refineryLevel(refinery);
+      refinery.stock = Math.min(Math.floor(r.stock as number), lvl.storage);
+      // A batch in progress was paid for: it keeps its remaining time.
+      refinery.running = r.running;
+      refinery.timer = r.running ? Math.min(r.timer as number, lvl.batchSeconds) : 0;
     }
+
+    const o = p.structures.outpost;
+    if (typeof o.built !== "boolean" || !Number.isInteger(o.level)) return null;
+    progress.structures.outpost.built = o.built;
+    progress.structures.outpost.level = o.built ? 1 : 0;
   }
 
   if (!isObj(p.spawnCooldowns)) return null;
@@ -276,8 +433,8 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   if (!Array.isArray(p.pendingPerks)) return null;
   for (const c of p.pendingPerks) {
     if (!isObj(c) || !Number.isInteger(c.level) || !Array.isArray(c.options)) return null;
-    // Grants scale with the level, so it must be a real one.
-    if ((c.level as number) < 2 || (c.level as number) > MAX_LEVEL) return null;
+    // Grants scale with the level, so it must be one the player has actually reached.
+    if ((c.level as number) < 2 || (c.level as number) > levelForXp(progress.xp)) return null;
     // Drop removed perks and duplicates; a choice left empty becomes a biomass cache.
     const options = [...new Set(c.options.filter(isPerkId))].slice(0, CHOICES_PER_LEVEL);
     progress.pendingPerks.push({ level: c.level as number, options: options.length ? options : ["biomassCache"] });
@@ -288,11 +445,46 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
     const levels: number[] = [];
     for (let l = 2; l <= levelForXp(progress.xp); l++) levels.push(l);
     queuePerkChoices(progress, levels, mulberry32(0x9e3779b9 ^ Math.floor(progress.xp)));
+  } else if (typeof raw.schemaVersion === "number" && raw.schemaVersion < 9) {
+    // Before v9 levels stopped at 10, so XP past that earned nothing. Those levels now
+    // exist: queue their choices, rolled from the save so reloading can't reroll them.
+    const levels: number[] = [];
+    for (let l = PRE_V9_MAX_LEVEL + 1; l <= levelForXp(progress.xp); l++) levels.push(l);
+    if (levels.length) queuePerkChoices(progress, levels, mulberry32(0x7f4a7c15 ^ Math.floor(progress.xp)));
   }
 
   if (typeof p.reactorRepaired !== "boolean" || !isNonNeg(p.playSeconds)) return null;
   progress.reactorRepaired = p.reactorRepaired;
   progress.playSeconds = p.playSeconds;
+
+  // A paid wave's uncaught creatures come back on load (game/world#spawnSummoned).
+  if (!isObj(p.summon) || !Number.isInteger(p.summon.waves) || !isNonNeg(p.summon.waves)) return null;
+  if (!Number.isInteger(p.summon.left) || (p.summon.left as number) < 0) return null;
+  progress.summon = { waves: p.summon.waves as number, left: Math.min(p.summon.left as number, SUMMON.count) };
+
+  // Mutagen mutations before cravings: they set how many cravings there can be.
+  if (!isObj(p.mutagenLevels)) return null;
+  for (const [id, lvl] of Object.entries(p.mutagenLevels)) {
+    if (!isMutagenId(id)) continue; // removed from content
+    if (!Number.isInteger(lvl) || (lvl as number) < 0) return null;
+    progress.mutagenLevels[id] = Math.min(lvl as number, MUTAGEN[id].costs.length);
+  }
+
+  if (!isObj(p.bestiary)) return null;
+  for (const [id, n] of Object.entries(p.bestiary)) {
+    if (!isTargetType(id) || !inBestiary(id)) continue;
+    if (!Number.isInteger(n) || !isNonNeg(n)) return null;
+    progress.bestiary[id] = n as number;
+  }
+
+  if (!Array.isArray(p.cravings) || !Number.isInteger(p.cravingRolls) || !isNonNeg(p.cravingRolls)) return null;
+  progress.cravingRolls = p.cravingRolls as number;
+  // Cravings are rebuilt field by field; anything odd is dropped (a fresh one rolls on load).
+  for (const c of p.cravings) {
+    const craving = parseCraving(c, progress.playSeconds, room);
+    if (craving) progress.cravings.push(craving);
+  }
+  progress.cravings = progress.cravings.slice(0, feedingTuning(progress).cravingSlots);
 
   const settings = defaultSettings();
   if (isObj(m.settings)) {

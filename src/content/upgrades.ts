@@ -8,7 +8,8 @@ export type UpgradeId =
   | "tentacles"
   | "maxHealth"
   | "regeneration"
-  | "resourceYield";
+  | "resourceYield"
+  | "thermalFat";
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -21,6 +22,22 @@ export interface UpgradeDef {
   costs: readonly number[];
   /** Level cap at each evolution tier (index = tier). Evolving raises the cap. */
   capByTier: readonly number[];
+  /**
+   * Tracks that keep scaling against tougher biomes. Past the cost table, each level
+   * multiplies the value by valueFactor and the price by costFactor, and every biome
+   * cleared adds capPerDepth levels to the cap. Tracks without it cap for good.
+   */
+  growth?: { valueFactor: number; costFactor: number; capPerDepth: number };
+  /**
+   * Levels added to the cap by each endless evolution tier (past the hand-made ones),
+   * priced past the table by compounding costFactor. Values stay linear.
+   */
+  perTier?: { levels: number; costFactor: number };
+  /**
+   * A second price from level fromLevel + 1 on: base, then ×costFactor per level.
+   * Tracked separately (upgradeExtraSpent) so a respec refunds it exactly.
+   */
+  extraCost?: { currency: Currency; fromLevel: number; base: number; costFactor: number };
 }
 
 // Costs are provisional, aimed at an upgrade every 1–4 minutes early on
@@ -36,6 +53,12 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "biomass",
     costs: [15, 35, 65, 110, 170, 250, 350, 480, 650, 850, 1100, 1400],
     capByTier: [8, 12],
+    // 8 levels per biome: 1.083^8 ≈ 1.89x power for 1.06^8 ≈ 1.6x price, matching
+    // 1.9x resistance and 1.6x payouts per depth.
+    growth: { valueFactor: 1.083, costFactor: 1.06, capPerDepth: 8 },
+    // Alloy sink: from level 25 (reachable from the third floor on), each level also
+    // costs refined alloy, growing at the same 1.06 per level.
+    extraCost: { currency: "alloy", fromLevel: 24, base: 4, costFactor: 1.06 },
   },
   cargoCapacity: {
     id: "cargoCapacity",
@@ -46,6 +69,7 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "biomass",
     costs: [20, 45, 80, 130, 195, 280, 390, 520, 700, 900, 1150, 1450],
     capByTier: [8, 12],
+    perTier: { levels: 2, costFactor: 1.06 },
   },
   captureRadius: {
     id: "captureRadius",
@@ -87,11 +111,14 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "biomass",
     costs: [40, 90, 160, 250, 360, 500, 680, 900],
     capByTier: [5, 8],
+    // 6 levels per biome: 1.07^6 ≈ 1.5x health, matching 1.5x enemy damage per depth.
+    growth: { valueFactor: 1.07, costFactor: 1.06, capPerDepth: 6 },
   },
+  // Percent of max health healed per second, so it keeps pace as health scales.
   regeneration: {
     id: "regeneration",
     name: "Regeneration",
-    unit: "/s",
+    unit: "%/s",
     base: 2,
     perLevel: 1,
     currency: "biomass",
@@ -108,6 +135,17 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "genetic",
     costs: [20, 45, 80, 130, 200],
     capByTier: [3, 5],
+  },
+  // Cold resistance: slows chill in freezing rooms (content/cold.ts). Paid in cryo crystals.
+  thermalFat: {
+    id: "thermalFat",
+    name: "Thermal fat",
+    unit: "% chill resist",
+    base: 0,
+    perLevel: 20,
+    currency: "crystals",
+    costs: [20, 45, 80, 130],
+    capByTier: [4, 4],
   },
 };
 

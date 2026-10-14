@@ -1,6 +1,7 @@
 import { CURRENCY_LABEL, roundCents } from "../content/currencies";
-import { CHOICES_PER_LEVEL, PERK_IDS, PERKS, type PerkDef, type PerkId } from "../content/perks";
+import { CHOICES_PER_LEVEL, PERK_IDS, PERKS, type LoopStat, type PerkDef, type PerkId } from "../content/perks";
 import type { ProgressState } from "./progress";
+import { scaleAt, tidy } from "./biome";
 
 /** A level-up choice. Options are rolled once and saved, so reloading never rerolls them. */
 export interface PerkChoice {
@@ -15,8 +16,9 @@ export function perkStacks(p: ProgressState, id: PerkId): number {
 /** Whether a perk may be offered or taken right now. */
 export function isLegal(p: ProgressState, id: PerkId): boolean {
   const def = PERKS[id];
-  if (def.requiresDoor && !p.unlockedDoors.includes(def.requiresDoor)) return false;
+  if (def.requiresDoor && p.unlockedDoors.length === 0 && p.depth === 0) return false;
   if (def.requiresVat && !p.structures.vat.built) return false;
+  if (def.requiresDepth !== undefined && p.depth < def.requiresDepth) return false;
   return def.maxStacks === null || perkStacks(p, id) < def.maxStacks;
 }
 
@@ -36,11 +38,14 @@ export function queuePerkChoices(p: ProgressState, levels: readonly number[], rn
   for (const level of levels) p.pendingPerks.push(rollPerkChoice(p, level, rng));
 }
 
-export function grantAmount(def: PerkDef, level: number): number {
-  return def.effect.kind === "grant" ? def.effect.base + def.effect.perLevel * level : 0;
+/** One-off grants grow with level and, like every payout, with depth. */
+export function grantAmount(def: PerkDef, level: number, depth: number): number {
+  if (def.effect.kind !== "grant") return 0;
+  const amount = def.effect.base + def.effect.perLevel * level;
+  return depth === 0 ? amount : tidy(amount * scaleAt(depth).reward);
 }
 
-export function describePerk(def: PerkDef, level: number): string {
+export function describePerk(def: PerkDef, level: number, depth: number): string {
   const e = def.effect;
   switch (e.kind) {
     case "percent": {
@@ -51,11 +56,19 @@ export function describePerk(def: PerkDef, level: number): string {
       return `+${e.percent}% ${stat}`;
     }
     case "flat":
-      if (e.stat === "regeneration") return `+${e.amount} health/s regeneration`;
+      if (e.stat === "regeneration") return `+${e.amount}% of max health/s regeneration`;
       if (e.stat === "farmPercent") return `+${e.amount}% vat production`;
       return `+${e.amount}% resource yield`;
     case "grant":
-      return `Gain ${grantAmount(def, level)} ${CURRENCY_LABEL[e.currency].toLowerCase()} now`;
+      return `Gain ${grantAmount(def, level, depth)} ${CURRENCY_LABEL[e.currency].toLowerCase()} now`;
+    case "loop":
+      switch (e.stat) {
+        case "frenzySeconds": return `+${e.amount} s feeding frenzy`;
+        case "comboWindow": return `+${e.amount} s to keep a combo going`;
+        case "cravingMutagen": return `+${e.amount} mutagen from each new craving`;
+        case "boostChance": return `+${e.amount}% chance of a power-up in supply pods`;
+        case "chillResist": return `+${e.amount}% chill resistance`;
+      }
   }
 }
 
@@ -96,7 +109,7 @@ function applyPerk(p: ProgressState, id: PerkId, level: number): void {
   const def = PERKS[id];
   if (def.effect.kind === "grant") {
     const c = def.effect.currency;
-    p.banked[c] = roundCents(p.banked[c] + grantAmount(def, level));
+    p.banked[c] = roundCents(p.banked[c] + grantAmount(def, level, p.depth));
   }
   p.perks[id] = perkStacks(p, id) + 1;
 }
@@ -107,12 +120,14 @@ export function perkBonuses(p: ProgressState): {
   regeneration: number;
   yieldPercent: number;
   farmPercent: number;
+  loop: Record<LoopStat, number>;
 } {
   const out = {
     percent: { cargoCapacity: 0, capturePower: 0, moveSpeed: 0, captureRadius: 0, maxHealth: 0 },
     regeneration: 0,
     yieldPercent: 0,
     farmPercent: 0,
+    loop: { frenzySeconds: 0, comboWindow: 0, cravingMutagen: 0, boostChance: 0, chillResist: 0 },
   };
   for (const id of PERK_IDS) {
     const n = perkStacks(p, id);
@@ -120,6 +135,7 @@ export function perkBonuses(p: ProgressState): {
     const e = PERKS[id].effect;
     if (e.kind === "percent") out.percent[e.stat] += e.percent * n;
     else if (e.kind === "flat") out[e.stat] += e.amount * n;
+    else if (e.kind === "loop") out.loop[e.stat] += e.amount * n;
   }
   return out;
 }

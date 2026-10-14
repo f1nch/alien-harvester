@@ -1,8 +1,8 @@
-import { cargoWeight } from "../../domain/progress";
+import { cargoWeight, type CargoDrop } from "../../domain/progress";
 import { dist2, hasLineOfSight } from "../geometry";
-import { WARDEN } from "../../content/reactor";
-import { gainXp, questEvent, type TargetEntity, type World } from "../world";
-import { bossStunned } from "./boss";
+import { gainXp, questEvent, retireTarget, type TargetEntity, type World } from "../world";
+import { bossStunned, bossTuning } from "./boss";
+import { onCaptured, onHelperCaptured } from "./feeding";
 
 /** Seconds a target may be out of reach before its progress starts to decay. */
 export const GRACE_SECONDS = 0.3;
@@ -72,7 +72,7 @@ export function updateCapture(w: World, dt: number): void {
     if (inReach(w, t)) {
       t.held = true;
       t.outOfReach = 0;
-      const bonus = bossStunned(t) ? WARDEN.stunnedCaptureBonus : 1;
+      const bonus = bossStunned(t) ? bossTuning(t).stunnedCaptureBonus : 1;
       t.progress += ((stats.capturePower * holderPower(count) * bonus) / t.def.resistance) * dt;
     } else {
       t.held = false;
@@ -106,7 +106,8 @@ export function updateCapture(w: World, dt: number): void {
 
 function lightestTarget(w: World): number {
   let min = Infinity;
-  for (const t of w.targets) if (t.def.weight > 0) min = Math.min(min, t.def.weight);
+  // Creatures only: a light supply pod mustn't hide that no creature fits any more.
+  for (const t of w.targets) if (t.def.weight > 0 && !t.def.loot) min = Math.min(min, t.def.weight);
   return Number.isFinite(min) ? min : 0;
 }
 
@@ -139,17 +140,36 @@ function assignTentacles(w: World): void {
   }
 }
 
+/** The catcher's catch: into its own hold. Counts for XP, quests and the bestiary. */
+export function catcherComplete(w: World, t: TargetEntity, into: CargoDrop[]): void {
+  for (let i = 0; i < w.tentacles.length; i++) if (w.tentacles[i] === t) w.tentacles[i] = null;
+  w.targets.splice(w.targets.indexOf(t), 1);
+  into.push(dropOf(t));
+  retireTarget(w, t);
+  w.events.push({ type: "catcherCaught", target: t });
+  onHelperCaptured(w, t);
+  gainXp(w, t.def.xp);
+  questEvent(w, { kind: "capture", target: t.def.id });
+}
+
 function complete(w: World, t: TargetEntity): void {
   const slot = w.tentacles.indexOf(t);
   for (let i = 0; i < w.tentacles.length; i++) if (w.tentacles[i] === t) w.tentacles[i] = null;
   w.targets.splice(w.targets.indexOf(t), 1);
-  w.progress.cargo.push({ type: t.def.id, weight: t.def.weight, reward: { ...t.def.reward } });
-  w.progress.spawnCooldowns[t.spawnId] = t.def.respawnSeconds;
+  w.progress.cargo.push(dropOf(t));
+  retireTarget(w, t);
   w.events.push({ type: "captured", target: t, slot });
+  onCaptured(w, t);
   gainXp(w, t.def.xp);
   questEvent(w, { kind: "capture", target: t.def.id });
   if (t.def.behavior === "boss") {
-    w.events.push({ type: "bossDefeated" });
+    w.events.push({ type: "bossDefeated", name: t.def.name });
     questEvent(w, { kind: "defeatBoss" });
   }
+}
+
+function dropOf(t: TargetEntity): CargoDrop {
+  const drop: CargoDrop = { type: t.def.id, weight: t.def.weight, reward: { ...t.def.reward } };
+  if (t.summoned) drop.summoned = true;
+  return drop;
 }

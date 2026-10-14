@@ -1,10 +1,13 @@
 import { dist2, hasLineOfSight, pointInRect } from "../geometry";
+import { onPlayerHit } from "./feeding";
+import { newTrip, refreshStats } from "../world";
 import type { TargetEntity, World } from "../world";
 import { inBase } from "./deposit";
 import { moveToward, pickGoal, wanderStep } from "./wander";
 
 /** Health restored per second while standing in the base. */
-export const BASE_HEAL_PER_SEC = 35;
+/** Base healing per second: 35% of max health (35/s at the starting 100). */
+export const BASE_HEAL_FRACTION = 0.35;
 /** Regeneration elsewhere (rate from the Regeneration track) starts after this long without being hit. */
 export const REGEN_DELAY = 4;
 /** Grace period after respawning, so the player can't be hit while getting their bearings. */
@@ -100,6 +103,7 @@ export function damagePlayer(w: World, amount: number, by: TargetEntity): boolea
   if (w.player.invulnerable > 0) return false;
   w.progress.player.health = Math.max(0, w.progress.player.health - amount);
   w.player.sinceHit = 0;
+  onPlayerHit(w);
   w.events.push({ type: "playerHit", damage: amount, by });
   return true;
 }
@@ -115,7 +119,7 @@ export function updatePlayerHealth(w: World, dt: number): void {
     return;
   }
   const max = w.stats.maxHealth;
-  if (inBase(w)) prog.health = Math.min(max, prog.health + BASE_HEAL_PER_SEC * dt);
+  if (inBase(w)) prog.health = Math.min(max, prog.health + Math.max(BASE_HEAL_FRACTION * max, w.stats.regeneration) * dt);
   else if (p.sinceHit >= REGEN_DELAY) prog.health = Math.min(max, prog.health + w.stats.regeneration * dt);
 }
 
@@ -129,6 +133,15 @@ export function die(w: World): void {
   const forgiven = !prog.firstDeathForgiven && prog.cargo.length > 0;
   const lost = forgiven ? [] : prog.cargo.splice(0);
   if (forgiven) prog.firstDeathForgiven = true;
+  // A lost hold ends the trip and the combo.
+  if (!forgiven) w.feeding.trip = newTrip();
+  w.feeding.combo = 0;
+  // Respawning at base means warming up.
+  w.chill = 0;
+  if (w.chillApplied > 0) {
+    w.chillApplied = 0;
+    refreshStats(w);
+  }
 
   // Cancel all capture progress.
   for (let i = 0; i < w.tentacles.length; i++) {

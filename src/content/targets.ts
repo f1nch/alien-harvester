@@ -1,8 +1,15 @@
+import { WARDEN, type BossTuning } from "./reactor";
 import type { Reward } from "./currencies";
 
-export type TargetTypeId = "worker" | "runner" | "technician" | "guard" | "armoredGuard" | "boss";
+export type TargetTypeId =
+  | "worker" | "runner" | "technician" | "guard" | "armoredGuard" | "boss" | "pod"
+  // Cryo labs
+  | "cryoScientist" | "frostRunner" | "patrolDrone" | "cryoSentinel"
+  // Specimen vaults
+  | "handler" | "lurker" | "chimera" | "specimenTank" | "alphaSpecimen";
 
-export type TargetBehavior = "wander" | "flee" | "guard" | "boss";
+/** "static": never moves (supply pods). */
+export type TargetBehavior = "wander" | "flee" | "guard" | "boss" | "static";
 
 /** Hostile behaviour tuning. Attacks are telegraphed: windup, then a strike that only lands if the player is still in range. */
 export interface CombatDef {
@@ -42,6 +49,13 @@ export interface TargetDef {
   /** Seconds for full capture progress to decay once out of reach (default 1). */
   captureDecaySeconds?: number;
   respawnSeconds: number;
+  /** Boss fight numbers; the reactor warden's when absent. */
+  bossTuning?: BossTuning;
+  /**
+   * Loot, not a creature (supply pods): may hold a power-up, and skips combos, cravings
+   * and the bestiary. Static creatures (specimen tanks) are not loot.
+   */
+  loot?: boolean;
 }
 
 export const TARGETS: Record<TargetTypeId, TargetDef> = {
@@ -136,6 +150,180 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
     multiGrab: true,
     captureDecaySeconds: 20,
     respawnSeconds: 180,
+  },
+  // --- Cryo labs (floor B2). Numbers are depth-0 equivalents; the floor's depth scales them.
+  // Cryo scientist: slow, padded against the cold, carrying crystal samples.
+  cryoScientist: {
+    id: "cryoScientist",
+    name: "Cryo scientist",
+    behavior: "wander",
+    resistance: 34,
+    weight: 3,
+    reward: { biomass: 3, crystals: 2 },
+    xp: 13,
+    speed: 0.7,
+    respawnSeconds: 12,
+  },
+  // Frost runner: quick and skittish, at home on the ice.
+  frostRunner: {
+    id: "frostRunner",
+    name: "Frost runner",
+    behavior: "flee",
+    resistance: 28,
+    weight: 2,
+    reward: { biomass: 7, crystals: 1 },
+    xp: 11,
+    speed: 1.2,
+    fleeSpeed: 2.9,
+    fleeRadius: 4.5,
+    respawnSeconds: 10,
+  },
+  // Patrol drone: a hovering security unit with a telegraphed shock jab.
+  patrolDrone: {
+    id: "patrolDrone",
+    name: "Patrol drone",
+    behavior: "guard",
+    resistance: 60,
+    weight: 3,
+    reward: { biomass: 8, parts: 1, crystals: 1 },
+    xp: 22,
+    speed: 1.2,
+    combat: {
+      detectRadius: 7,
+      leashRadius: 10,
+      chaseSpeed: 2.4,
+      attackRange: 1.8,
+      damage: 14,
+      windupSeconds: 0.5,
+      cooldownSeconds: 1.8,
+      heldCreepSpeed: 0.6,
+    },
+    respawnSeconds: 16,
+  },
+  // The cryo sentinel guards the frozen core. Its slam is a freezing pulse that chills.
+  cryoSentinel: {
+    id: "cryoSentinel",
+    name: "Cryo sentinel",
+    behavior: "boss",
+    resistance: 1100,
+    weight: 0,
+    reward: { crystals: 20, biomass: 140, genetic: 12, parts: 4 },
+    xp: 450,
+    speed: 1,
+    multiGrab: true,
+    captureDecaySeconds: 20,
+    respawnSeconds: 180,
+    bossTuning: {
+      ...WARDEN,
+      slamTrigger: 3.4,
+      slamRadius: 3.8,
+      slamDamage: 24,
+      slamWindup: 1.2,
+      slamChill: 0.6,
+      chargeWindup: 1.4,
+      chargeSpeed: 8,
+      chargeDamage: 30,
+      walkSpeed: 1,
+    },
+  },
+  // --- Specimen vaults (floor B3). Depth-0 equivalents, like Cryo labs.
+  // Handler: a keeper in a padded suit with a catch-pole. Steady genetic material.
+  handler: {
+    id: "handler",
+    name: "Handler",
+    behavior: "wander",
+    resistance: 36,
+    weight: 3,
+    reward: { biomass: 5, genetic: 2 },
+    xp: 15,
+    speed: 0.9,
+    respawnSeconds: 12,
+  },
+  // Lurker: an escaped experiment, quick and shy, slipping between the tanks.
+  lurker: {
+    id: "lurker",
+    name: "Lurker",
+    behavior: "flee",
+    resistance: 28,
+    weight: 2,
+    reward: { biomass: 6, genetic: 2 },
+    xp: 13,
+    speed: 1.3,
+    fleeSpeed: 3.1,
+    fleeRadius: 5,
+    respawnSeconds: 10,
+  },
+  // Chimera: a failed hybrid that fights back with a lunging bite.
+  chimera: {
+    id: "chimera",
+    name: "Chimera",
+    behavior: "guard",
+    resistance: 62,
+    weight: 4,
+    reward: { biomass: 10, genetic: 3, parts: 1 },
+    xp: 26,
+    speed: 1.1,
+    combat: {
+      detectRadius: 7.5,
+      leashRadius: 10,
+      chaseSpeed: 2.6,
+      attackRange: 1.7,
+      damage: 17,
+      windupSeconds: 0.55,
+      cooldownSeconds: 1.7,
+      heldCreepSpeed: 0.7,
+    },
+    respawnSeconds: 18,
+  },
+  // Specimen tank: a sealed tank with something rich in genes floating inside. Heavy, slow
+  // to crack, and it never moves.
+  specimenTank: {
+    id: "specimenTank",
+    name: "Specimen tank",
+    behavior: "static",
+    resistance: 80,
+    weight: 4,
+    reward: { biomass: 6, genetic: 7 },
+    xp: 20,
+    speed: 0,
+    respawnSeconds: 45,
+  },
+  // The alpha specimen: the facility's prize experiment. Fast, with quick charges.
+  alphaSpecimen: {
+    id: "alphaSpecimen",
+    name: "Alpha specimen",
+    behavior: "boss",
+    resistance: 1250,
+    weight: 0,
+    reward: { genetic: 35, biomass: 160, parts: 5 },
+    xp: 500,
+    speed: 1.2,
+    multiGrab: true,
+    captureDecaySeconds: 20,
+    respawnSeconds: 180,
+    bossTuning: {
+      ...WARDEN,
+      slamDamage: 24,
+      chargeWindup: 1.25,
+      chargeSpeed: 10,
+      chargeDamage: 32,
+      chargeCooldown: 3.6,
+      walkSpeed: 1.3,
+    },
+  },
+  // Supply pod: a crate of stolen stock. Quick to crack open, light, and it may hold a
+  // short power-up (content/feeding.ts). Not a creature, so the bestiary ignores it.
+  pod: {
+    id: "pod",
+    name: "Supply pod",
+    behavior: "static",
+    loot: true,
+    resistance: 12,
+    weight: 1,
+    reward: { biomass: 8, genetic: 1 },
+    xp: 4,
+    speed: 0,
+    respawnSeconds: 120,
   },
 };
 

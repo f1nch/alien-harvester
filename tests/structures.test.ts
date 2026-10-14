@@ -11,13 +11,16 @@ import { stepWorld } from "../src/game/step";
 import { die } from "../src/game/systems/combat";
 import { createWorld, SIM_DT, type World } from "../src/game/world";
 import { defaultSettings, parseSave, SCHEMA_VERSION, toSaveFile } from "../src/persistence/schema";
+import { BIOMES } from "../src/content/biomes";
+
+const VAT_SITE = BIOMES[0]!.sites.vat;
 
 /** Service wing open, plenty of resources. */
 function ready(): ProgressState {
   const p = newProgress(FACILITY);
   for (const id of ["q-first-catch", "q-first-bank", "q-first-upgrade", "q-open-service"]) p.quests[id] = { count: 999, done: true };
   p.unlockedDoors.push("door-service");
-  p.banked = { biomass: 5000, genetic: 500, parts: 0 };
+  p.banked = { biomass: 5000, genetic: 500, parts: 0, mutagen: 0, crystals: 0, alloy: 0 };
   return p;
 }
 
@@ -36,7 +39,7 @@ function totalValue(p: ProgressState): number {
 describe("biomass vat", () => {
   it("needs the service wing quest, and building is one transaction", () => {
     const p = newProgress(FACILITY);
-    p.banked = { biomass: 5000, genetic: 500, parts: 0 };
+    p.banked = { biomass: 5000, genetic: 500, parts: 0, mutagen: 0, crystals: 0, alloy: 0 };
     expect(advanceStructure(p, "vat")).toEqual({ ok: false, reason: "requirements" });
     expect(p.banked.biomass).toBe(5000);
     const q = ready();
@@ -87,11 +90,11 @@ describe("biomass vat", () => {
   it("building completes q-build-farm and pushes nearby targets out of the footprint", () => {
     const w = createWorld(FACILITY, ready());
     const t = w.targets.find((x) => zoneAt(FACILITY, x.x, x.z)?.id === "service")!;
-    t.x = VAT.site.x;
-    t.z = VAT.site.z;
+    t.x = VAT_SITE.x;
+    t.z = VAT_SITE.z;
     expect(buildStructure(w, "vat").ok).toBe(true);
     expect(isDone(w.progress, "q-build-farm")).toBe(true);
-    expect(Math.hypot(t.x - VAT.site.x, t.z - VAT.site.z)).toBeGreaterThan(VAT.halfSize);
+    expect(Math.hypot(t.x - VAT_SITE.x, t.z - VAT_SITE.z)).toBeGreaterThan(VAT.halfSize);
   });
 
   it("standing near it loads batches into cargo, within free capacity", () => {
@@ -99,8 +102,8 @@ describe("biomass vat", () => {
     advanceStructure(p, "vat");
     p.structures.vat.stock = 6;
     const w = createWorld(FACILITY, p);
-    w.player.x = VAT.site.x - 1.6;
-    w.player.z = VAT.site.z;
+    w.player.x = VAT_SITE.x - 1.6;
+    w.player.z = VAT_SITE.z;
     // Leave room for exactly two batches.
     while (cargoWeight(p.cargo) < w.stats.cargoCapacity - 2 * VAT.batch.weight) p.cargo.push({ type: "worker", weight: 2, reward: { biomass: 3 } });
     w.stats.captureRadius = 0;
@@ -154,7 +157,7 @@ describe("delivery drone", () => {
 
   it("never passes a locked door", () => {
     const p = newProgress(FACILITY);
-    p.banked = { biomass: 5000, genetic: 500, parts: 0 };
+    p.banked = { biomass: 5000, genetic: 500, parts: 0, mutagen: 0, crystals: 0, alloy: 0 };
     p.quests["q-open-service"] = { count: 1, done: true };
     advanceStructure(p, "drone");
     const w = createWorld(FACILITY, p);
@@ -202,7 +205,7 @@ describe("structure saves", () => {
     p.structures.drone.cargo.push({ type: "vat", weight: 2, reward: { biomass: 5 } });
     p.structures.drone.x = 0;
     p.structures.drone.z = 20;
-    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))), FACILITY)!;
+    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))))!;
     expect(parsed.progress.structures).toEqual(p.structures);
   });
 
@@ -210,7 +213,7 @@ describe("structure saves", () => {
     const v6 = JSON.parse(JSON.stringify(toSaveFile(newProgress(FACILITY), defaultSettings())));
     v6.schemaVersion = 6;
     delete v6.progress.structures;
-    const parsed = parseSave(v6, FACILITY)!;
+    const parsed = parseSave(v6)!;
     expect(parsed.schemaVersion).toBe(SCHEMA_VERSION);
     expect(parsed.progress.structures.vat.built).toBe(false);
     expect(parsed.progress.structures.drone.built).toBe(false);
@@ -226,7 +229,7 @@ describe("structure saves", () => {
     s.progress.structures.drone.cargo = Array.from({ length: 30 }, () => ({ type: "worker" }));
     s.progress.structures.drone.x = 0;
     s.progress.structures.drone.z = 60; // security sector: door still locked
-    const parsed = parseSave(s, FACILITY)!.progress.structures;
+    const parsed = parseSave(s)!.progress.structures;
     expect(parsed.vat.stock).toBe(vatLevel(parsed.vat).storage);
     expect(parsed.vat.timer).toBe(vatLevel(parsed.vat).batchSeconds);
     expect(cargoWeight(parsed.drone.cargo)).toBeLessThanOrEqual(droneCapacity(parsed.drone));

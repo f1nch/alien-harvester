@@ -1,4 +1,6 @@
 import { emptyWallet, type Reward, type Wallet } from "../content/currencies";
+import type { Craving } from "./cravings";
+import type { MutagenId } from "../content/mutagen";
 import type { MapDef } from "../content/map";
 import type { PerkId } from "../content/perks";
 import type { TargetTypeId } from "../content/targets";
@@ -6,14 +8,16 @@ import type { PerkChoice } from "./perks";
 import { newStructures, type StructuresState } from "./structures";
 import { UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 
-/** Where a drop came from: a captured target, or a batch from the biomass vat. */
-export type DropType = TargetTypeId | "vat";
+/** Where a drop came from: a captured target, or a batch from the biomass vat or the refinery. */
+export type DropType = TargetTypeId | "vat" | "refinery";
 
 /** A captured, not-yet-banked drop. Cargo is not a spendable wallet. */
 export interface CargoDrop {
   type: DropType;
   weight: number;
   reward: Reward;
+  /** From an objective machine's reward wave: the reward includes its multiplier. */
+  summoned?: true;
 }
 
 export interface QuestState {
@@ -34,6 +38,8 @@ export interface ProgressState {
   upgrades: Record<UpgradeId, number>;
   /** What was actually paid into each track (in that track's currency); respec refunds exactly this. */
   upgradeSpent: Record<UpgradeId, number>;
+  /** What was paid in each track's second currency (UpgradeDef.extraCost); 0 for tracks without one. */
+  upgradeExtraSpent: Record<UpgradeId, number>;
   /** Lifetime mutation levels bought. Respec doesn't reduce it, so gates on it can't be refunded. */
   mutationsBought: number;
   player: { x: number; z: number; health: number };
@@ -55,14 +61,34 @@ export interface ProgressState {
   reactorRepaired: boolean;
   /** Total simulated play time in seconds (never wall-clock), for the completion screen. */
   playSeconds: number;
+  /**
+   * Biomes cleared. Picks the current biome and its scaling; never goes down. Doors,
+   * quests, spawn timers and reactorRepaired belong to the current biome.
+   */
+  depth: number;
+  /** Current cravings (short goals paying mutagen). Reset when moving on. */
+  cravings: Craving[];
+  /** Cravings rolled so far: seeds the next roll, so reloading never rerolls. */
+  cravingRolls: number;
+  /** Mutagen mutation levels. Not refunded by respec. */
+  mutagenLevels: Partial<Record<MutagenId, number>>;
+  /** Lifetime captures per creature type. */
+  bestiary: Partial<Record<TargetTypeId, number>>;
+  /**
+   * The objective machine's reward waves on this floor: waves summoned so far, and
+   * summoned creatures not yet caught (a paid wave survives a reload). Reset on moving on.
+   */
+  summon: { waves: number; left: number };
 }
 
 export function newProgress(map: MapDef): ProgressState {
   const upgrades = {} as Record<UpgradeId, number>;
   const upgradeSpent = {} as Record<UpgradeId, number>;
+  const upgradeExtraSpent = {} as Record<UpgradeId, number>;
   for (const id of UPGRADE_IDS) {
     upgrades[id] = 0;
     upgradeSpent[id] = 0;
+    upgradeExtraSpent[id] = 0;
   }
   const spawnCooldowns: Record<string, number> = {};
   for (const s of map.spawns) spawnCooldowns[s.id] = 0;
@@ -72,6 +98,7 @@ export function newProgress(map: MapDef): ProgressState {
     xp: 0,
     upgrades,
     upgradeSpent,
+    upgradeExtraSpent,
     mutationsBought: 0,
     player: { x: map.playerSpawn.x, z: map.playerSpawn.z, health: 100 },
     spawnCooldowns,
@@ -84,6 +111,12 @@ export function newProgress(map: MapDef): ProgressState {
     structures: newStructures(map.base),
     reactorRepaired: false,
     playSeconds: 0,
+    depth: 0,
+    cravings: [],
+    cravingRolls: 0,
+    mutagenLevels: {},
+    bestiary: {},
+    summon: { waves: 0, left: 0 },
   };
 }
 

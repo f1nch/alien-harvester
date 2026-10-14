@@ -8,11 +8,18 @@ export interface Rect {
   maxZ: number;
 }
 
-export type ZoneId = "containment" | "service" | "security" | "reactor";
+/** Zone IDs are unique within a map (and persistent: door and spawn data name them). */
+export type ZoneId = string;
+
+/** How a zone is dressed (light colour, machinery). Several maps can share a theme. */
+export type ZoneTheme = "containment" | "service" | "security" | "reactor" | "dock" | "cold" | "vault" | "lab" | "core";
 
 export interface ZoneDef {
   id: ZoneId;
   name: string;
+  theme: ZoneTheme;
+  /** Freezing: chill builds here away from heat vents (content/cold.ts). */
+  cold?: boolean;
   rect: Rect;
   /** Floor tint so zones read as distinct places. */
   tint: [number, number, number];
@@ -49,17 +56,19 @@ export interface MapDef {
   props: Rect[];
   doors: DoorDef[];
   spawns: SpawnPoint[];
+  /** Warm spots in cold zones: standing here clears chill. */
+  heatVents?: Array<{ x: number; z: number; radius: number }>;
 }
 
-function box(x: number, z: number, w: number, d: number): Rect {
+export function box(x: number, z: number, w: number, d: number): Rect {
   return { minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 };
 }
 
-function rect(minX: number, maxX: number, minZ: number, maxZ: number): Rect {
+export function rect(minX: number, maxX: number, minZ: number, maxZ: number): Rect {
   return { minX, maxX, minZ, maxZ };
 }
 
-function spawns(prefix: string, type: TargetTypeId, spots: Array<[number, number]>, wanderRadius = 2.5): SpawnPoint[] {
+export function spawns(prefix: string, type: TargetTypeId, spots: Array<[number, number]>, wanderRadius = 2.5): SpawnPoint[] {
   return spots.map(([x, z], i) => ({ id: `${prefix}${i}`, type, x, z, wanderRadius }));
 }
 
@@ -72,10 +81,10 @@ function divider(minZ: number, maxZ: number): Rect[] {
 }
 
 const ZONES: ZoneDef[] = [
-  { id: "containment", name: "Containment", rect: rect(-11, 11, -17, 17), tint: [0.85, 0.9, 1.1] },
-  { id: "service", name: "Service wing", rect: rect(-14, 14, 18, 44), tint: [0.85, 1.1, 0.95] },
-  { id: "security", name: "Security sector", rect: rect(-12, 12, 45, 75), tint: [1.15, 0.85, 0.85] },
-  { id: "reactor", name: "Reactor hall", rect: rect(-10, 10, 76, 96), tint: [1.15, 0.95, 0.75] },
+  { id: "containment", name: "Containment", theme: "containment", rect: rect(-11, 11, -17, 17), tint: [0.85, 0.9, 1.1] },
+  { id: "service", name: "Service wing", theme: "service", rect: rect(-14, 14, 18, 44), tint: [0.85, 1.1, 0.95] },
+  { id: "security", name: "Security sector", theme: "security", rect: rect(-12, 12, 45, 75), tint: [1.15, 0.85, 0.85] },
+  { id: "reactor", name: "Reactor hall", theme: "reactor", rect: rect(-10, 10, 76, 96), tint: [1.15, 0.95, 0.75] },
 ];
 
 export const FACILITY: MapDef = {
@@ -173,6 +182,11 @@ export const FACILITY: MapDef = {
     ...spawns("security-crew-t", "technician", [[-2, 58], [6, 74]], 2),
     // Panicked staff trapped in the reactor hall.
     ...spawns("reactor-staff", "worker", [[-8, 94], [8, 94], [-8, 78], [8, 78]], 1.5),
+    // Supply pods: one per room, tucked in corners away from the main routes.
+    ...spawns("pod-containment", "pod", [[-9, 13]], 0),
+    ...spawns("pod-service", "pod", [[-12.5, 42.5]], 0),
+    ...spawns("pod-security", "pod", [[10.5, 73.5]], 0),
+    ...spawns("pod-reactor", "pod", [[8.5, 86]], 0),
   ],
 };
 

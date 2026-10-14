@@ -26,6 +26,10 @@ const FORMS: FormStyle[] = [
 
 const MORPH_SECONDS = 1.1;
 
+/** Endless tiers past the last style grow the body a little each, capped so the camera still frames it. */
+const GROWTH_PER_TIER = 0.07;
+const MAX_SIZE = 1.75;
+
 function glossyMaterial(scene: Scene, name: string): StandardMaterial {
   const m = new StandardMaterial(name, scene);
   m.diffuseColor = new Color3(0.07, 0.04, 0.1);
@@ -90,6 +94,7 @@ export class ProceduralCreature implements CreatureLook {
   private form = 0;
   private size = 1;
   private fromSize = 1;
+  private toSize = 1;
   /** 0..1 progress of the evolution morph; 1 when idle. */
   private morph = 1;
   private curve = {
@@ -218,10 +223,12 @@ export class ProceduralCreature implements CreatureLook {
   /** Switch evolution form. With animate, the body swells through a morph. */
   setForm(tier: number, animate: boolean): void {
     const style = FORMS[Math.min(tier, FORMS.length - 1)]!;
+    const size = Math.min(MAX_SIZE, style.size * (1 + GROWTH_PER_TIER * Math.max(0, tier - (FORMS.length - 1))));
     this.form = tier;
-    this.fromSize = animate ? this.size : style.size;
+    this.toSize = size;
+    this.fromSize = animate ? this.size : size;
     this.morph = animate ? 0 : 1;
-    if (!animate) this.size = style.size;
+    if (!animate) this.size = size;
     this.skin.diffuseColor = style.body.clone();
     // Replace (not mutate) the Fresnel parameters so the material is marked dirty.
     const f = this.skin.emissiveFresnelParameters!;
@@ -259,10 +266,10 @@ export class ProceduralCreature implements CreatureLook {
       // Overshoot then settle, so the evolution reads as a growth spurt.
       const k = this.morph;
       const swell = Math.sin(k * Math.PI) * 0.35;
-      this.size = this.fromSize + (style.size - this.fromSize) * k + swell;
+      this.size = this.fromSize + (this.toSize - this.fromSize) * k + swell;
       for (const m of this.spines) if (style.spines) m.scaling.setAll(Math.min(1, k * 1.4));
     } else {
-      this.size = style.size;
+      this.size = this.toSize;
     }
     const s = this.size;
     this.root.scaling.setAll(s);

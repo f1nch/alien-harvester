@@ -4,13 +4,19 @@ import { unlockDoor, type UnlockResult } from "../domain/doors";
 import { purchaseUpgrade, respecUpgrades, type PurchaseResult, type RespecResult } from "../domain/economy";
 import { evolve, type EvolveResult } from "../domain/evolution";
 import { choosePerk, claimFallback, type ChooseResult } from "../domain/perks";
-import { REACTOR } from "../content/reactor";
+import { CURRENCIES, emptyWallet, roundCents, type Wallet } from "../content/currencies";
+import { isBiomeCleared, MAX_DEPTH } from "../domain/biome";
+import { enterNextBiome } from "../domain/travel";
+import type { MutagenId } from "../content/mutagen";
+import { fillCravings } from "../domain/cravings";
+import { buyMutagen, type MutagenResult } from "../domain/mutagen";
 import { VAT } from "../content/structures";
-import { repairReactor, type RepairResult } from "../domain/reactor";
-import { advanceStructure, type StructureKind, type StructureResult } from "../domain/structures";
+import { repairReactor, startSummon, type RepairResult, type SummonResult } from "../domain/reactor";
+import { advanceStructure, refineryBatchDrop, vatBatchDrop, type StructureKind, type StructureResult } from "../domain/structures";
+import { releaseCatcher } from "./systems/catcher";
 import { dist2, resolveCircle } from "./geometry";
-import { inBase } from "./systems/deposit";
-import { PLAYER_RADIUS, TARGET_RADIUS, questEvent, refreshObstacles, refreshStats, type World } from "./world";
+import { bankDrop, inBase } from "./systems/deposit";
+import { PLAYER_RADIUS, TARGET_RADIUS, questEvent, refreshObstacles, refreshStats, spawnSummoned, type World } from "./world";
 
 /** Player-initiated actions. Each applies its domain transaction, then quest and event bookkeeping. */
 
@@ -33,6 +39,15 @@ export function openDoor(w: World, door: DoorDef): UnlockResult {
   refreshObstacles(w);
   w.events.push({ type: "doorUnlocked", door: door.id });
   questEvent(w, { kind: "unlockDoor", door: door.id });
+  return r;
+}
+
+/** Buy a mutagen mutation (loop tuning; a fourth craving rolls straight away). */
+export function buyMutagenMutation(w: World, id: MutagenId): MutagenResult {
+  const r = buyMutagen(w.progress, id);
+  if (!r.ok) return r;
+  fillCravings(w.progress);
+  w.events.push({ type: "purchased" });
   return r;
 }
 
@@ -89,6 +104,12 @@ export function buildStructure(w: World, kind: StructureKind): StructureResult {
     d.x = w.dronePrev.x = w.map.base.x;
     d.z = w.dronePrev.z = w.map.base.z;
   }
+  if (kind === "catcher" && r.built) {
+    // A new catcher starts beside you.
+    const c = w.progress.structures.catcher;
+    c.x = w.catcherPrev.x = w.player.x;
+    c.z = w.catcherPrev.z = w.player.z;
+  }
   refreshObstacles(w);
   // The vat's footprint may now cover a target or the player: push them clear.
   resolveCircle(w.player, PLAYER_RADIUS, w.map.bounds, w.obstacles);
@@ -101,13 +122,65 @@ export function buildStructure(w: World, kind: StructureKind): StructureResult {
 }
 
 export function nearReactor(w: World): boolean {
-  return dist2(w.player.x, w.player.z, REACTOR.x, REACTOR.z) <= REACTOR.interactRadius ** 2;
+  const o = w.biome.objective;
+  return dist2(w.player.x, w.player.z, o.x, o.z) <= o.interactRadius ** 2;
+}
+
+/** The exit card shows within this distance of the exit: what's left to do, or where it leads. */
+export const EXIT_INTERACT_RADIUS = 3;
+
+export function nearExit(w: World): boolean {
+  const e = w.biome.def.exit;
+  return dist2(w.player.x, w.player.z, e.x, e.z) <= EXIT_INTERACT_RADIUS ** 2;
+}
+
+export type LeaveResult = { ok: true; banked: Wallet } | { ok: false; reason: "notAtExit" | "notCleared" | "deepest" };
+
+/**
+ * Moves on to the next biome in one synchronous step: every cargo drop, the drone's load
+ * and the vat's stock are banked through bankDrop, then per-biome state resets. The
+ * caller saves and rebuilds the world for the new map.
+ */
+export function leaveBiome(w: World): LeaveResult {
+  if (!nearExit(w)) return { ok: false, reason: "notAtExit" };
+  if (!isBiomeCleared(w.progress)) return { ok: false, reason: "notCleared" };
+  if (w.progress.depth >= MAX_DEPTH) return { ok: false, reason: "deepest" };
+  const p = w.progress;
+  const before = { ...p.banked };
+  const { vat, drone, catcher, refinery } = p.structures;
+  const drops = [...p.cargo, ...drone.cargo, ...catcher.cargo];
+  for (let i = 0; i < vat.stock; i++) drops.push(vatBatchDrop(p.depth));
+  for (let i = 0; i < refinery.stock; i++) drops.push(refineryBatchDrop(p.depth));
+  p.cargo = [];
+  drone.cargo = [];
+  catcher.cargo = [];
+  vat.stock = 0;
+  refinery.stock = 0;
+  releaseCatcher(w);
+  for (const t of w.tentacles) if (t) t.progress = 0;
+  for (const drop of drops) bankDrop(w, drop);
+  const banked = emptyWallet();
+  for (const c of CURRENCIES) banked[c] = roundCents(p.banked[c] - before[c]);
+  enterNextBiome(p);
+  w.events.push({ type: "biomeLeft", depth: p.depth });
+  return { ok: true, banked };
 }
 
 export function repair(w: World): RepairResult | { ok: false; reason: "notAtConsole" } {
   if (!nearReactor(w)) return { ok: false, reason: "notAtConsole" };
   const r = repairReactor(w.progress);
   if (r.ok) w.events.push({ type: "reactorRepaired" });
+  return r;
+}
+
+/** Feeds the finished objective machine to summon a reward wave around it. */
+export function summonWave(w: World): SummonResult | { ok: false; reason: "notAtConsole" } {
+  if (!nearReactor(w)) return { ok: false, reason: "notAtConsole" };
+  const r = startSummon(w.progress);
+  if (r.ok) {
+    spawnSummoned(w);
+    w.events.push({ type: "waveSummoned", count: r.count });
+  }
   return r;
 }
 

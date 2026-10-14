@@ -33,7 +33,7 @@ beforeEach(async () => {
 
 describe("SaveStore", () => {
   it("rotates current into previous on each write", async () => {
-    const store = new SaveStore(FACILITY);
+    const store = new SaveStore();
     await store.write(snapshot(1));
     await store.write(snapshot(2));
     const r = await store.load();
@@ -41,7 +41,7 @@ describe("SaveStore", () => {
   });
 
   it("refuses to write an invalid snapshot and keeps the good one", async () => {
-    const store = new SaveStore(FACILITY);
+    const store = new SaveStore();
     await store.write(snapshot(5));
     const bad = snapshot(0);
     bad.progress.banked.biomass = Infinity;
@@ -51,7 +51,7 @@ describe("SaveStore", () => {
   });
 
   it("restores previous when current is corrupt, quarantines it, and never rotates it back in", async () => {
-    const store = new SaveStore(FACILITY);
+    const store = new SaveStore();
     await store.write(snapshot(7));
     await store.write(snapshot(7));
     await rawPut("current", { schemaVersion: 1, progress: "garbage" });
@@ -63,13 +63,13 @@ describe("SaveStore", () => {
     // Writing after recovery must not evict the good previous with the corrupt current.
     await store.write(snapshot(8));
     await rawPut("current", "garbage again");
-    const r2 = await new SaveStore(FACILITY).load();
+    const r2 = await new SaveStore().load();
     expect(r2.status === "ok" && r2.save?.progress.banked.biomass).toBe(7);
   });
 
   it("reports a newer-schema save instead of starting fresh", async () => {
     await rawPut("current", { ...snapshot(3), schemaVersion: 99 });
-    expect(await new SaveStore(FACILITY).load()).toEqual({ status: "newer" });
+    expect(await new SaveStore().load()).toEqual({ status: "newer" });
   });
 });
 
@@ -80,19 +80,19 @@ describe("pre-migration snapshot", () => {
     delete v1.progress.quests;
     delete v1.progress.unlockedDoors;
     await rawPut("current", v1);
-    const store = new SaveStore(FACILITY);
+    const store = new SaveStore();
     const r = await store.load();
     expect(r.status === "ok" && r.save?.progress.banked.biomass).toBe(9);
     await store.write(snapshot(10));
     await store.write(snapshot(11));
-    await new SaveStore(FACILITY).load();
+    await new SaveStore().load();
     expect(await rawKeys()).toContain("premigration:v1");
   });
 });
 
 describe("import", () => {
   it("backs up the current save permanently, then replaces it", async () => {
-    const store = new SaveStore(FACILITY);
+    const store = new SaveStore();
     await store.write(snapshot(1));
     await store.write(snapshot(2));
     await store.importSave(snapshot(99));
@@ -107,7 +107,7 @@ describe("import", () => {
   });
 
   it("refuses an invalid import and leaves the current save alone", async () => {
-    const store = new SaveStore(FACILITY);
+    const store = new SaveStore();
     await store.write(snapshot(7));
     const bad = snapshot(0);
     bad.progress.banked.biomass = Number.NaN;
@@ -119,7 +119,7 @@ describe("import", () => {
 
 describe("import review regressions", () => {
   it("never reuses a backup number after a gap", async () => {
-    const store = new SaveStore(FACILITY);
+    const store = new SaveStore();
     await store.write(snapshot(1));
     await rawPut("preimport:3", { marker: "keep me" });
     await store.importSave(snapshot(2));
@@ -129,7 +129,7 @@ describe("import review regressions", () => {
   });
 
   it("importing with no current save backs nothing up and still works", async () => {
-    const store = new SaveStore(FACILITY);
+    const store = new SaveStore();
     await store.importSave(snapshot(42));
     const r = await store.load();
     expect(r.status === "ok" && r.save?.progress.banked.biomass).toBe(42);

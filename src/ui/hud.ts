@@ -1,25 +1,38 @@
-import type { DoorDef } from "../content/map";
+import { zoneAt, type DoorDef } from "../content/map";
 import { goalTarget } from "../content/quests";
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 import { doorRequirements } from "../domain/doors";
 import { FORM_NAMES } from "../content/evolution";
 import { CHOICES_PER_LEVEL, PERKS } from "../content/perks";
-import { DRONE, VAT } from "../content/structures";
-import { droneCapacity, nextStep, stepRequirements, vatLevel, type StructureKind } from "../domain/structures";
+import { CATCHER, DRONE, OUTPOST, REFINERY, VAT } from "../content/structures";
+
+import { catcherLevel, droneCapacity, nextStep, refineryIdle, refineryInput, refineryLevel, stepRequirements, STRUCTURE_KINDS, vatLevel, type StructureKind } from "../domain/structures";
 import { describePerk, isLegal, perkStacks } from "../domain/perks";
 import { CURRENCY_LABEL, type Currency } from "../content/currencies";
-import { cappedByEvolution, maxLevel, nextCost, upgradeValue } from "../domain/economy";
+import { canAfford, capRaise, maxLevel, nextCost, nextExtraCost, upgradePrice, upgradeValue } from "../domain/economy";
 import { evolutionRequirements, nextEvolution } from "../domain/evolution";
 import type { Requirement } from "../domain/requirements";
 import { levelProgress } from "../domain/levels";
 import { cargoWeight } from "../domain/progress";
 import { activeQuests, questCount } from "../domain/quests";
 import type { TargetEntity, World } from "../game/world";
-import { reactorRequirements } from "../domain/reactor";
+import { reactorRequirements, summonRequirements } from "../domain/reactor";
+import { biomeAt, clearRequirements } from "../domain/biome";
+import { BOOSTS, FRENZY, SUMMON, type BoostId } from "../content/feeding";
+import { COLD } from "../content/cold";
+import { MUTAGEN, MUTAGEN_IDS, type MutagenId } from "../content/mutagen";
+import { TARGETS, type TargetTypeId } from "../content/targets";
+import { BESTIARY_MILESTONES, inBestiary, milestonesReached } from "../domain/bestiary";
+import { describeCraving } from "../domain/cravings";
+import { mutagenLevel, nextMutagenCost } from "../domain/mutagen";
 import { MAX_IMPORT_BYTES, type SaveSummary } from "../persistence/transfer";
 
+export function structureName(kind: StructureKind): string {
+  return { vat: VAT.name, drone: DRONE.name, refinery: REFINERY.name, catcher: CATCHER.name, outpost: OUTPOST.name }[kind];
+}
+
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
-export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢" };
+export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰" };
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
@@ -32,8 +45,13 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 
 /** Only values the structures UI shows; never the vat timer or drone position, which change every tick. */
 function structureKey(w: World): string {
-  const { vat, drone } = w.progress.structures;
-  return [vat.built, vat.level, vat.stock, drone.built, drone.level, cargoWeight(drone.cargo), w.droneMode, w.stats.farmRate].join(",");
+  const { vat, drone, refinery, catcher, outpost } = w.progress.structures;
+  const k = w.catcher;
+  return [
+    vat.built, vat.level, vat.stock, drone.built, drone.level, cargoWeight(drone.cargo), w.droneMode, w.stats.farmRate,
+    refinery.built, refinery.level, refinery.stock, refinery.running,
+    catcher.built, catcher.level, cargoWeight(catcher.cargo), k.mode, outpost.built,
+  ].join(",");
 }
 
 function chip(icon: string, iconCls: string, label: string): { root: HTMLElement; value: HTMLElement } {
@@ -43,6 +61,13 @@ function chip(icon: string, iconCls: string, label: string): { root: HTMLElement
   const value = el("span", "chip-value", "0");
   root.append(el("span", `chip-icon ${iconCls}`, icon), el("span", "chip-label", label), value);
   return { root, value };
+}
+
+/** What the feeding meter and hints show; changes trigger a HUD redraw. */
+function feedKey(w: World): string {
+  const f = w.feeding;
+  const boosts = Object.entries(f.boosts).map(([id, left]) => `${id}${Math.ceil(left ?? 0)}`).join("");
+  return [f.combo, Math.ceil(f.frenzy), Math.ceil(f.prizedLeft), w.targets.some((t) => t.prized && t.held), w.targets.some((t) => t.prized), boosts].join(",");
 }
 
 export interface HudCallbacks {
@@ -55,6 +80,11 @@ export interface HudCallbacks {
   onRespec(): void;
   onBuildStructure(kind: StructureKind): void;
   onRepair(): void;
+  /** Feed the finished objective machine for a reward wave. */
+  onSummon(): void;
+  onBuyMutagen(id: MutagenId): void;
+  /** Take the way on (elevator or portal) to the next biome. */
+  onLeaveBiome(): void;
   onExportDownload(): void;
   onExportCopy(): void;
   /** Validate text (from a file or paste); the HUD then shows a preview or an error. */
@@ -81,6 +111,7 @@ function requirementList(list: HTMLElement, reqs: Requirement[]): void {
 }
 
 export interface HudState {
+  /** On a pad (the base or a forward base): the hold banks here. */
   inBase: boolean;
   /** Locked door the player is standing next to. */
   door: DoorDef | null;
@@ -90,9 +121,13 @@ export interface HudState {
   boss: TargetEntity | null;
   /** Standing at the reactor console. */
   atReactor: boolean;
+  /** Standing at the biome's way on (elevator or portal). */
+  atExit: boolean;
 }
 
 export interface CompletionStats {
+  title: string;
+  body: string;
   level: number;
   form: string;
   playSeconds: number;
@@ -105,6 +140,15 @@ export class Hud {
   private biomass: HTMLElement;
   private genetic: HTMLElement;
   private geneticChip: HTMLElement;
+  private mutagen: HTMLElement;
+  private crystals: HTMLElement;
+  private crystalsChip: HTMLElement;
+  private mutagenChip: HTMLElement;
+  private feedBox: HTMLElement;
+  private feedText: HTMLElement;
+  private feedFill: HTMLElement;
+  private mutagenRows = new Map<MutagenId, { level: HTMLElement; buy: HTMLButtonElement }>();
+  private bestiaryList: HTMLElement;
   private level: HTMLElement;
   private levelFill: HTMLElement;
   private levelText: HTMLElement;
@@ -133,20 +177,38 @@ export class Hud {
   private perkShownLevel = 0;
   private perkShownAt = 0;
   private panel: HTMLElement;
-  private rows = new Map<UpgradeId, { level: HTMLElement; value: HTMLElement; buy: HTMLButtonElement }>();
+  private rows = new Map<UpgradeId, { root: HTMLElement; level: HTMLElement; value: HTMLElement; buy: HTMLButtonElement }>();
   private evoForm: HTMLElement;
   private evoNext: HTMLElement;
   private evoDesc: HTMLElement;
   private evoList: HTMLElement;
   private evoBtn: HTMLButtonElement;
-  private structureRows = new Map<StructureKind, { status: HTMLElement; reqs: HTMLElement; btn: HTMLButtonElement }>();
+  private structureRows = new Map<StructureKind, { root: HTMLElement; status: HTMLElement; reqs: HTMLElement; btn: HTMLButtonElement }>();
   private droneStatus: HTMLElement;
+  private catcherStatus: HTMLElement;
+  private catcherText = "";
   private bossBar: HTMLElement;
   private bossFill: HTMLElement;
   private bossState: HTMLElement;
+  private bossName: HTMLElement;
+  private chillBox: HTMLElement;
+  private chillText: HTMLElement;
+  private chillFill: HTMLElement;
   private reactorCard: HTMLElement;
   private reactorList: HTMLElement;
   private reactorBtn: HTMLButtonElement;
+  private reactorNote: HTMLElement;
+  /** Once the objective is done, the card's button summons reward waves. */
+  private reactorSummons = false;
+  private exitCard: HTMLElement;
+  private exitTitle: HTMLElement;
+  private exitNote: HTMLElement;
+  private exitList: HTMLElement;
+  private exitBtn: HTMLButtonElement;
+  private exitNeedsConfirm = false;
+  private exitArmedAt = 0;
+  private completionTitle: HTMLElement;
+  private completionBody: HTMLElement;
   private reactorTitle: HTMLElement;
   private completion: HTMLElement;
   private importPreview: HTMLElement;
@@ -172,6 +234,12 @@ export class Hud {
     const gen = chip("✦", "genetic", "Genetic");
     this.genetic = gen.value;
     this.geneticChip = gen.root;
+    const cry = chip("❄", "crystals", "Cryo crystals");
+    this.crystals = cry.value;
+    this.crystalsChip = cry.root;
+    const mut = chip("✺", "mutagen", "Mutagen");
+    this.mutagen = mut.value;
+    this.mutagenChip = mut.root;
 
     const lvl = el("div", "chip level-chip");
     this.level = el("span", "chip-value", "Lv 1");
@@ -205,7 +273,24 @@ export class Hud {
     this.cargoBox.append(cargoLabel, bar);
     const bars = el("div", "hud-bars");
     bars.append(this.healthBox, this.cargoBox);
-    top.append(bio.root, gen.root, lvl, bars);
+    // Combo toward a feeding frenzy, or the frenzy itself: full width under the bars,
+    // so it never squeezes the objectives.
+    this.feedBox = el("div", "feed-meter hidden");
+    this.feedBox.setAttribute("role", "status");
+    this.feedText = el("span", "feed-text");
+    const feedBar = el("div", "cargo-bar");
+    this.feedFill = el("div", "feed-fill");
+    feedBar.append(this.feedFill);
+    this.feedBox.append(this.feedText, feedBar);
+    // Chill in freezing rooms: how cold, and what it's costing.
+    this.chillBox = el("div", "feed-meter chill-meter hidden");
+    this.chillBox.setAttribute("role", "status");
+    this.chillText = el("span", "feed-text");
+    const chillBar = el("div", "cargo-bar");
+    this.chillFill = el("div", "chill-fill");
+    chillBar.append(this.chillFill);
+    this.chillBox.append(this.chillText, chillBar);
+    top.append(bio.root, gen.root, cry.root, mut.root, lvl, bars, this.feedBox, this.chillBox);
 
     // Objectives and hints flow under the HUD so they never overlap it as it wraps.
     const sub = el("div", "hud-sub");
@@ -213,7 +298,8 @@ export class Hud {
     this.quests.setAttribute("aria-live", "polite");
     this.hint = el("div", "hint");
     this.droneStatus = el("div", "drone-status hidden");
-    sub.append(this.quests, this.hint, this.droneStatus);
+    this.catcherStatus = el("div", "drone-status hidden");
+    sub.append(this.quests, this.hint, this.droneStatus, this.catcherStatus);
     top.append(sub);
 
     this.doorCard = el("div", "door-card hidden");
@@ -233,7 +319,8 @@ export class Hud {
     this.bossBar = el("div", "boss-bar hidden");
     this.bossBar.setAttribute("role", "status");
     const bossHead = el("div", "boss-head");
-    bossHead.append(el("span", "boss-name", "Reactor warden"));
+    this.bossName = el("span", "boss-name");
+    bossHead.append(this.bossName);
     this.bossState = el("span", "boss-state");
     bossHead.append(this.bossState);
     const bossTrack = el("div", "cargo-bar");
@@ -246,15 +333,38 @@ export class Hud {
     this.reactorTitle = el("h3", undefined, "Reactor console");
     this.reactorList = el("ul", "door-reqs");
     this.reactorBtn = el("button", "btn btn-buy", "Repair the reactor");
-    this.reactorBtn.addEventListener("click", () => cb.onRepair());
-    this.reactorCard.append(this.reactorTitle, this.reactorList, this.reactorBtn);
+    this.reactorBtn.addEventListener("click", () => (this.reactorSummons ? cb.onSummon() : cb.onRepair()));
+    this.reactorNote = el("p", "exit-note hidden");
+    this.reactorCard.append(this.reactorTitle, this.reactorNote, this.reactorList, this.reactorBtn);
 
-    // Completion screen.
+    // The way on (elevator or portal): what's still needed, or where it leads.
+    this.exitCard = el("div", "door-card exit-card hidden");
+    this.exitCard.setAttribute("role", "region");
+    this.exitTitle = el("h3");
+    this.exitNote = el("p", "exit-note");
+    this.exitList = el("ul", "door-reqs");
+    this.exitBtn = el("button", "btn btn-buy");
+    this.exitBtn.addEventListener("click", () => {
+      // Leaving with a summoned wave still roaming forfeits it: two deliberate taps.
+      const now = performance.now();
+      if (!this.exitNeedsConfirm || (this.exitArmedAt && now - this.exitArmedAt >= 400 && now - this.exitArmedAt < 4000)) {
+        this.exitArmedAt = 0;
+        cb.onLeaveBiome();
+      } else {
+        this.exitArmedAt = now;
+        this.exitBtn.textContent = "Tap again to leave the wave behind";
+      }
+    });
+    this.exitCard.append(this.exitTitle, this.exitNote, this.exitList, this.exitBtn);
+
+    // Objective-complete screen (the reactor in the facility).
     this.completion = el("div", "panel completion hidden");
     this.completion.setAttribute("role", "dialog");
-    this.completion.setAttribute("aria-label", "Facility harvested");
+    this.completion.setAttribute("aria-label", "Objective complete");
     const cc = el("div", "panel-card");
-    cc.append(el("h2", undefined, "Reactor repaired"), el("p", "panel-note", "The facility is yours. Everything you harvested is kept, and you can keep playing."));
+    this.completionTitle = el("h2");
+    this.completionBody = el("p", "panel-note");
+    cc.append(this.completionTitle, this.completionBody);
     this.completionStats = el("dl", "completion-stats");
     const keep = el("button", "btn btn-buy", "Keep playing");
     keep.addEventListener("click", () => cb.onCloseCompletion());
@@ -303,7 +413,7 @@ export class Hud {
       buy.addEventListener("click", () => cb.onBuy(id));
       row.append(info, buy);
       card.append(row);
-      this.rows.set(id, { level, value, buy });
+      this.rows.set(id, { root: row, level, value, buy });
     }
     const evo = el("section", "evo");
     evo.setAttribute("aria-label", "Evolution");
@@ -323,18 +433,46 @@ export class Hud {
     const structures = el("section", "structures");
     structures.setAttribute("aria-label", "Structures");
     structures.append(el("h3", undefined, "Structures"));
-    for (const kind of ["vat", "drone"] as const) {
+    for (const kind of STRUCTURE_KINDS) {
       const row = el("div", "structure-row");
-      const name = el("div", "up-name", kind === "vat" ? VAT.name : DRONE.name);
+      const name = el("div", "up-name", structureName(kind));
       const status = el("div", "up-value");
       const reqs = el("ul", "door-reqs");
       const btn = el("button", "btn btn-buy");
       btn.addEventListener("click", () => cb.onBuildStructure(kind));
       row.append(name, status, reqs, btn);
       structures.append(row);
-      this.structureRows.set(kind, { status, reqs, btn });
+      this.structureRows.set(kind, { root: row, status, reqs, btn });
     }
     card.append(structures);
+
+    // Mutagen mutations: tune the loop (paid in mutagen from cravings, prized specimens, the bestiary).
+    const mutagenSection = el("section", "structures mutagen");
+    mutagenSection.setAttribute("aria-label", "Mutagen mutations");
+    mutagenSection.append(el("h3", undefined, "Mutagen mutations"), el("p", "panel-note", "Earned from cravings, prized specimens and the bestiary. Kept when you reset mutations."));
+    for (const id of MUTAGEN_IDS) {
+      const def = MUTAGEN[id];
+      const row = el("div", "up-row");
+      const info = el("div", "up-info");
+      const name = el("div", "up-name", def.name);
+      const level = el("span", "up-level");
+      name.append(level);
+      info.append(name, el("div", "up-value", def.perLevel));
+      const buy = el("button", "btn btn-buy");
+      buy.addEventListener("click", () => cb.onBuyMutagen(id));
+      row.append(info, buy);
+      mutagenSection.append(row);
+      this.mutagenRows.set(id, { level, buy });
+    }
+    card.append(mutagenSection);
+
+    // Bestiary: lifetime captures per creature, with milestones.
+    const bestiary = el("section", "structures bestiary");
+    bestiary.setAttribute("aria-label", "Bestiary");
+    bestiary.append(el("h3", undefined, "Bestiary"), el("p", "panel-note", `Milestones at ${BESTIARY_MILESTONES.map((m) => m.count).join(", ")} captures pay mutagen and add 1% capture power each.`));
+    this.bestiaryList = el("ul", "bestiary-list");
+    bestiary.append(this.bestiaryList);
+    card.append(bestiary);
 
     // Free respec, two-tap confirm, only at base.
     const respec = el("section", "respec");
@@ -430,7 +568,7 @@ export class Hud {
     this.vignette = el("div", "vignette");
     this.vignette.setAttribute("aria-hidden", "true");
 
-    root.append(this.vignette, top, this.bossBar, this.reactorCard, this.completion, this.doorCard, this.upgradeBtn, this.perkBtn, this.perkPanel, this.panel, this.toastEl, this.overlay);
+    root.append(this.vignette, top, this.bossBar, this.reactorCard, this.exitCard, this.completion, this.doorCard, this.upgradeBtn, this.perkBtn, this.perkPanel, this.panel, this.toastEl, this.overlay);
   }
 
   setLeftHanded(left: boolean): void {
@@ -495,10 +633,11 @@ export class Hud {
 
   update(w: World, s: HudState): void {
     const p = w.progress;
+    this.renderCatcher(w);
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.banked.parts, p.xp, cargo, cap, s.atReactor, p.reactorRepaired,
+      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, w.chillApplied, feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired, p.summon.left,
       s.boss ? `${Math.round(s.boss.progress * 100)}:${s.boss.boss?.state}` : "", s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
@@ -509,6 +648,16 @@ export class Hud {
     this.genetic.textContent = fmt(Math.floor(p.banked.genetic));
     // Genetic material appears once it matters, to keep the first minutes uncluttered.
     this.geneticChip.classList.toggle("hidden", p.banked.genetic === 0 && p.unlockedDoors.length === 0);
+    this.crystals.textContent = fmt(Math.floor(p.banked.crystals));
+    // Crystals appear on the first floor that has them, and stay once earned.
+    this.crystalsChip.classList.toggle("hidden", p.banked.crystals === 0 && !w.map.zones.some((z) => z.cold));
+    this.mutagen.textContent = fmt(Math.floor(p.banked.mutagen));
+    // Mutagen appears with the first one earned.
+    this.mutagenChip.classList.toggle("hidden", p.banked.mutagen === 0 && Object.keys(p.mutagenLevels).length === 0);
+    this.renderFeeding(w);
+    this.renderChill(w);
+    this.renderMutagen(w);
+    this.renderBestiary(w);
 
     const lp = levelProgress(p.xp);
     this.level.textContent = `Lv ${lp.level}`;
@@ -530,12 +679,17 @@ export class Hud {
     this.renderQuests(w);
     this.renderBoss(s.boss);
     this.renderReactor(w, s.atReactor);
+    this.renderExit(w, s.atExit);
     this.renderStructures(w);
     this.renderPerks(w);
     this.renderDoor(w, s.door);
 
     let hint = "";
+    const prized = w.targets.find((t) => t.prized);
+    const boosts = (Object.entries(w.feeding.boosts) as Array<[BoostId, number]>).map(([id, left]) => `${BOOSTS[id].name} ${Math.ceil(left)}s`);
     if (w.cargoFull && !s.inBase) hint = "Cargo full — return to base ▼";
+    else if (prized) hint = prized.held ? `★ Prized ${prized.def.name.toLowerCase()} in your grip — hold on!` : `★ A prized ${prized.def.name.toLowerCase()} is loose! ${Math.ceil(w.feeding.prizedLeft)}s`;
+    else if (boosts.length) hint = boosts.join(" · ");
     else if (s.inBase && cargo > 0) hint = "Depositing…";
     else if (p.xp === 0) hint = "Move near workers to capture them";
     this.hint.textContent = hint;
@@ -547,6 +701,8 @@ export class Hud {
       const def = UPGRADES[id];
       const row = this.rows.get(id)!;
       const lvl = p.upgrades[id];
+      const hidden = id === "thermalFat" && lvl === 0 && !w.map.zones.some((z) => z.cold);
+      row.root.classList.toggle("hidden", hidden);
       const cost = nextCost(p, id);
       const cur = upgradeValue(p, id);
       const next = upgradeValue(p, id, lvl + 1);
@@ -555,14 +711,19 @@ export class Hud {
         ? `${fmt(cur)}${def.unit} (max)`
         : `${fmt(cur)}${def.unit} → ${fmt(next)}${def.unit}`;
       if (cost === null) {
-        row.buy.textContent = cappedByEvolution(p, id) ? "Evolve to raise cap" : "Maxed";
+        const raise = capRaise(p, id);
+        row.buy.textContent = raise === "evolve" ? "Evolve to raise cap" : raise === "nextBiome" ? "Go deeper to raise cap" : "Maxed";
         row.buy.disabled = true;
       } else {
-        const can = p.banked[def.currency] >= cost;
-        affordable ||= can;
-        row.buy.textContent = `Buy · ${cost} ${CURRENCY_ICON[def.currency]}`;
+        // Deep capture-power levels also cost alloy (UpgradeDef.extraCost).
+        const extra = nextExtraCost(p, id);
+        const can = canAfford(p, upgradePrice(p, id)!);
+        affordable ||= can && !hidden;
+        const extraText = extra ? ` + ${fmt(extra.amount)} ${CURRENCY_ICON[extra.currency]}` : "";
+        row.buy.textContent = `Buy · ${fmt(cost)} ${CURRENCY_ICON[def.currency]}${extraText}`;
         row.buy.disabled = !can;
-        row.buy.setAttribute("aria-label", `Buy ${def.name} for ${cost} ${CURRENCY_LABEL[def.currency].toLowerCase()}`);
+        const extraLabel = extra ? ` and ${extra.amount} ${CURRENCY_LABEL[extra.currency].toLowerCase()}` : "";
+        row.buy.setAttribute("aria-label", `Buy ${def.name} for ${cost} ${CURRENCY_LABEL[def.currency].toLowerCase()}${extraLabel}`);
       }
     }
     this.respecBlocker = s.respecBlocker;
@@ -574,15 +735,28 @@ export class Hud {
   }
 
   private renderQuests(w: World): void {
-    const active = activeQuests(w.progress).slice(0, 3);
-    this.quests.classList.toggle("hidden", active.length === 0);
+    const p = w.progress;
+    const active = activeQuests(p).slice(0, 3);
+    // Once the quest chain is done there is still always a next step.
+    const next = active.length > 0 ? null
+      : !p.reactorRepaired ? w.biome.objective.task
+      : w.biome.def.exit.action;
     this.quests.replaceChildren(
-      el("div", "quests-title", "Objectives"),
+      el("div", "quests-title", w.biome.name),
+      ...(next ? [el("div", "quest", next)] : []),
       ...active.map((q) => {
         const row = el("div", "quest");
         const target = goalTarget(q.goal);
         row.append(el("span", "quest-name", q.title));
         if (target > 1) row.append(el("span", "quest-count", `${fmt(Math.floor(questCount(w.progress, q.id)))} / ${target}`));
+        return row;
+      }),
+      ...(p.cravings.length ? [el("div", "quests-title cravings-title", "Cravings")] : []),
+      ...p.cravings.map((c) => {
+        const row = el("div", "quest craving");
+        row.append(el("span", "quest-name", describeCraving(c)));
+        const count = c.goal > 1 ? `${fmt(Math.floor(c.progress))}/${c.goal} ` : "";
+        row.append(el("span", "quest-count", `${count}✺${c.reward}`));
         return row;
       }),
     );
@@ -597,6 +771,7 @@ export class Hud {
   private renderBoss(boss: TargetEntity | null): void {
     this.bossBar.classList.toggle("hidden", boss === null);
     if (!boss) return;
+    this.bossName.textContent = boss.def.name;
     const pct = Math.round(Math.max(0, Math.min(1, boss.progress)) * 100);
     this.bossFill.style.width = `${pct}%`;
     const state = boss.boss?.state;
@@ -609,23 +784,104 @@ export class Hud {
     this.bossBar.classList.toggle("danger", state === "chargeWindup" || state === "slamWindup");
   }
 
+  private renderFeeding(w: World): void {
+    const f = w.feeding;
+    const frenzy = f.frenzy > 0;
+    this.feedBox.classList.toggle("hidden", !frenzy && f.combo === 0);
+    this.feedBox.classList.toggle("frenzy", frenzy);
+    this.feedText.textContent = frenzy ? `FEEDING FRENZY · capture ×2 · ${Math.ceil(f.frenzy)}s` : `Combo ${f.combo} / ${FRENZY.combo}`;
+    this.feedFill.style.width = frenzy ? "100%" : `${(f.combo / FRENZY.combo) * 100}%`;
+  }
+
+  private renderChill(w: World): void {
+    const chill = w.chillApplied;
+    this.chillBox.classList.toggle("hidden", chill <= 0);
+    this.vignette.classList.toggle("cold", chill >= 0.5);
+    if (chill <= 0) return;
+    const pct = Math.round(chill * 100);
+    this.chillText.textContent = `❄ Chill ${pct}% · speed −${Math.round(COLD.speedPenalty * chill)}%, capture −${Math.round(COLD.powerPenalty * chill)}%${chill >= 1 ? " · find a heat vent" : ""}`;
+    this.chillFill.style.width = `${pct}%`;
+  }
+
+  private renderMutagen(w: World): void {
+    const p = w.progress;
+    for (const id of MUTAGEN_IDS) {
+      const row = this.mutagenRows.get(id)!;
+      row.level.textContent = ` Lv ${mutagenLevel(p, id)}/${MUTAGEN[id].costs.length}`;
+      const cost = nextMutagenCost(p, id);
+      row.buy.disabled = cost === null || p.banked.mutagen < cost;
+      row.buy.textContent = cost === null ? "Maxed" : `Buy · ${cost} ✺`;
+      row.buy.setAttribute("aria-label", cost === null ? `${MUTAGEN[id].name} maxed` : `Buy ${MUTAGEN[id].name} for ${cost} mutagen`);
+    }
+  }
+
+  private renderBestiary(w: World): void {
+    const p = w.progress;
+    const types = (Object.keys(TARGETS) as TargetTypeId[]).filter(inBestiary);
+    this.bestiaryList.replaceChildren(...types.map((t) => {
+      const n = p.bestiary[t] ?? 0;
+      const next = BESTIARY_MILESTONES.find((m) => n < m.count);
+      const li = el("li", n > 0 ? "seen" : "unseen");
+      li.append(
+        el("span", "req-label", n > 0 ? TARGETS[t].name : "???"),
+        el("span", "req-progress", next ? `${n} / ${next.count}` : `${n} · complete`),
+        el("span", "req-mark", "★".repeat(milestonesReached(n)) || "·"),
+      );
+      return li;
+    }));
+  }
+
+  private renderExit(w: World, near: boolean): void {
+    this.exitCard.classList.toggle("hidden", !near);
+    if (!near) return;
+    const p = w.progress;
+    const exit = w.biome.def.exit;
+    const reqs = clearRequirements(p);
+    const open = reqs.every((r) => r.met);
+    const next = biomeAt(p.depth + 1);
+    this.exitCard.setAttribute("aria-label", exit.name);
+    this.exitTitle.textContent = open ? `${exit.name} — powered` : `${exit.name} — no power`;
+    this.exitNote.textContent = open
+      ? `Leads to ${next.name}. You keep everything you've harvested, your mutations, perks and form. Unbanked cargo is banked on the way.`
+        + (p.summon.left > 0 ? ` The ${p.summon.left} summoned creatures still roaming stay behind.` : "")
+      : "Clear this floor to use it:";
+    if (open) this.exitList.replaceChildren();
+    else requirementList(this.exitList, reqs);
+    this.exitBtn.disabled = !open;
+    this.exitNeedsConfirm = open && p.summon.left > 0;
+    if (!this.exitNeedsConfirm) this.exitArmedAt = 0;
+    const armed = this.exitArmedAt > 0 && performance.now() - this.exitArmedAt < 4000;
+    this.exitBtn.textContent = !open ? "Not powered yet" : armed ? "Tap again to leave the wave behind" : exit.action;
+  }
+
   private renderReactor(w: World, near: boolean): void {
     this.reactorCard.classList.toggle("hidden", !near);
     if (!near) return;
     const p = w.progress;
+    this.reactorSummons = p.reactorRepaired;
+    this.reactorNote.classList.toggle("hidden", !p.reactorRepaired);
     if (p.reactorRepaired) {
-      this.reactorTitle.textContent = "Reactor online";
-      this.reactorList.replaceChildren();
-      this.reactorBtn.classList.add("hidden");
+      // A finished machine takes this floor's currency for a reward wave: a goal before leaving.
+      this.reactorTitle.textContent = w.biome.objective.doneTitle;
+      const left = p.summon.left;
+      this.reactorNote.textContent = left > 0
+        ? `Wave roaming: ${left} summoned ${left === 1 ? "creature" : "creatures"} left to catch.`
+        : `Feed it to summon a wave of ${SUMMON.count} creatures, each worth ${SUMMON.rewardMultiplier}× the usual payout.`;
+      const reqs = left > 0 ? [] : summonRequirements(p);
+      requirementList(this.reactorList, reqs);
+      const ok = left === 0 && reqs.every((r) => r.met);
+      this.reactorBtn.classList.remove("hidden");
+      this.reactorBtn.disabled = !ok;
+      this.reactorBtn.textContent = left > 0 ? "Wave in progress" : ok ? "Summon a wave" : "Can't afford a wave";
       return;
     }
-    this.reactorTitle.textContent = "Reactor console — damaged";
+    this.reactorTitle.textContent = `${w.biome.objective.name} — damaged`;
     const reqs = reactorRequirements(p);
     requirementList(this.reactorList, reqs);
     const ok = reqs.every((r) => r.met);
     this.reactorBtn.classList.remove("hidden");
     this.reactorBtn.disabled = !ok;
-    this.reactorBtn.textContent = ok ? "Repair the reactor" : "Requirements not met";
+    this.reactorBtn.textContent = ok ? w.biome.objective.task : "Requirements not met";
   }
 
   /** Show the result of checking an import: a summary to confirm, or why it was rejected. */
@@ -646,10 +902,14 @@ export class Hud {
       ["Form", s.form],
       ["Biomass", String(s.biomass)],
       ["Genetic material", String(s.genetic)],
-      ["Reactor parts", String(s.parts)],
+      ["Machine parts", String(s.parts)],
+      ["Mutagen", String(s.mutagen)],
+      ["Cryo crystals", String(s.crystals)],
+      ["Alloy", String(s.alloy)],
+      ["Location", s.place],
       ["Doors open", String(s.doorsOpen)],
       ["Objectives done", String(s.questsDone)],
-      ["Reactor repaired", s.reactorRepaired ? "Yes" : "No"],
+      ["Floor objective done", s.reactorRepaired ? "Yes" : "No"],
     ];
     const dl = el("dl", "completion-stats");
     dl.append(...rows.flatMap(([k, v]) => [el("dt", undefined, k), el("dd", undefined, v)]));
@@ -666,6 +926,8 @@ export class Hud {
   showCompletion(stats: CompletionStats | null): void {
     this.completion.classList.toggle("hidden", stats === null);
     if (!stats) return;
+    this.completionTitle.textContent = stats.title;
+    this.completionBody.textContent = stats.body;
     const h = Math.floor(stats.playSeconds / 3600);
     const m = Math.floor((stats.playSeconds % 3600) / 60);
     const rows: Array<[string, string]> = [
@@ -680,16 +942,40 @@ export class Hud {
 
   private renderStructures(w: World): void {
     const p = w.progress;
-    for (const kind of ["vat", "drone"] as const) {
+    for (const kind of STRUCTURE_KINDS) {
       const row = this.structureRows.get(kind)!;
       const s = p.structures[kind];
-      if (kind === "vat") {
+      // Crystal-built helpers stay out of the way until you've seen a crystal.
+      const hidden = (kind === "refinery" || kind === "catcher") && !s.built && p.banked.crystals <= 0;
+      row.root.classList.toggle("hidden", hidden);
+      if (hidden) continue;
+      const zoneName = (site: { x: number; z: number }) => (zoneAt(w.map, site.x, site.z)?.name ?? "facility").toLowerCase();
+      if (kind === "refinery") {
+        const r = p.structures.refinery;
+        const lvl = refineryLevel(r);
+        const input = refineryInput(p.depth);
+        const uses = `${fmt(input.biomass)} biomass + ${fmt(input.parts)} parts`;
+        const idle = refineryIdle(p);
+        row.status.textContent = r.built
+          ? `Level ${r.level} · ${r.stock}/${lvl.storage} alloy batches · ${idle === "full" ? "full: collect it" : idle === "input" ? `waiting for ${uses}` : "refining"}`
+          : `Not built. Turns ${uses} from your bank into alloy, in the ${zoneName(w.biome.def.sites.refinery)}.`;
+      } else if (kind === "catcher") {
+        const c = p.structures.catcher;
+        const lvl = catcherLevel(c);
+        row.status.textContent = c.built
+          ? `Level ${c.level} · grip ${lvl.powerPercent}% of yours · carries ${lvl.capacity}`
+          : "Not built. Hunts creatures near you and flies them to the nearest pad.";
+      } else if (kind === "outpost") {
+        row.status.textContent = p.structures.outpost.built
+          ? `Built in the ${zoneName(w.biome.def.sites.outpost)}. Bank here${w.map.zones.some((z) => z.cold) ? "; it's heated, too" : ""}.`
+          : `Not built. A second pad to bank at, in the ${zoneName(w.biome.def.sites.outpost)}. One per floor.`;
+      } else if (kind === "vat") {
         const v = p.structures.vat;
         const lvl = vatLevel(v);
         row.status.textContent = v.built
           ? `Level ${v.level} · ${v.stock}/${lvl.storage} batches · one every ${fmt(lvl.batchSeconds / w.stats.farmRate)}s`
-          : "Not built. Produces biomass batches in the service wing while you play.";
-      } else {
+          : `Not built. Produces biomass batches in the ${(zoneAt(w.map, w.biome.def.sites.vat.x, w.biome.def.sites.vat.z)?.name ?? "facility").toLowerCase()} while you play.`;
+      } else if (kind === "drone") {
         const d = p.structures.drone;
         row.status.textContent = d.built
           ? `Level ${d.level} · carries ${droneCapacity(d)}`
@@ -698,7 +984,7 @@ export class Hud {
       const next = nextStep(p, kind);
       if (!next) {
         row.reqs.replaceChildren();
-        row.btn.textContent = "Max level";
+        row.btn.textContent = kind === "outpost" ? "Built" : "Max level";
         row.btn.disabled = true;
         continue;
       }
@@ -707,7 +993,7 @@ export class Hud {
       const ok = reqs.every((r) => r.met);
       row.btn.disabled = !ok;
       row.btn.textContent = s.built ? `Upgrade to level ${s.level + 1}` : "Build";
-      const name = kind === "vat" ? VAT.name : DRONE.name;
+      const name = structureName(kind);
       row.btn.setAttribute("aria-label", s.built ? `Upgrade ${name} to level ${s.level + 1}` : `Build ${name}`);
     }
 
@@ -715,9 +1001,25 @@ export class Hud {
     this.droneStatus.classList.toggle("hidden", !d.built);
     if (d.built) {
       const load = `${fmt(cargoWeight(d.cargo))}/${droneCapacity(d)}`;
-      const label = { idle: "waiting at base", toPlayer: "coming to you", toVat: "collecting from the vat", toBase: "delivering" }[w.droneMode];
+      const label = { idle: "waiting at base", toPlayer: "coming to you", toVat: "collecting from the vat", toRefinery: "collecting alloy", toBase: "delivering" }[w.droneMode];
       this.droneStatus.textContent = `Drone: ${label} (${load})`;
     }
+  }
+
+  /** Every frame, but only touches the DOM when its text changes (the grip moves each tick). */
+  private renderCatcher(w: World): void {
+    const c = w.progress.structures.catcher;
+    let text = "";
+    if (c.built) {
+      const load = `${fmt(cargoWeight(c.cargo))}/${catcherLevel(c).capacity}`;
+      const prey = w.catcher.target;
+      const label = w.catcher.mode === "hunting" && prey ? `catching a ${prey.def.name.toLowerCase()} (${Math.round(w.catcher.progress * 10) * 10}%)` : w.catcher.mode === "toPad" ? "delivering" : "following you";
+      text = `Catcher: ${label} (${load})`;
+    }
+    if (text === this.catcherText) return;
+    this.catcherText = text;
+    this.catcherStatus.classList.toggle("hidden", text === "");
+    this.catcherStatus.textContent = text;
   }
 
   private renderPerks(w: World): void {
@@ -747,10 +1049,10 @@ export class Hud {
         card.append(
           el("span", "perk-icon", def.icon),
           el("span", "perk-name", def.name),
-          el("span", "perk-desc", legal ? describePerk(def, choice.level) : "Already at maximum"),
+          el("span", "perk-desc", legal ? describePerk(def, choice.level, p.depth) : "Already at maximum"),
           el("span", "perk-stacks", stacks),
         );
-        card.setAttribute("aria-label", `${def.name}: ${describePerk(def, choice.level)}${stacks ? `, taken ${stacks}` : ""}`);
+        card.setAttribute("aria-label", `${def.name}: ${describePerk(def, choice.level, p.depth)}${stacks ? `, taken ${stacks}` : ""}`);
         card.addEventListener("click", () => this.pick(i));
         return card;
       }),

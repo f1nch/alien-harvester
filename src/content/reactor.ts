@@ -15,7 +15,7 @@ export const REACTOR = {
 } as const;
 
 /** Tuning for the reactor warden's attacks. Every attack is telegraphed before it lands. */
-export const WARDEN = {
+export const WARDEN: Readonly<BossTuning> = {
   /** Uses the slam when the player is this close. */
   slamTrigger: 3,
   slamRadius: 3.2,
@@ -40,4 +40,28 @@ export const WARDEN = {
   heldSlow: 0.5,
   /** Capture progress multiplier while stunned. */
   stunnedCaptureBonus: 2,
-} as const;
+};
+
+/** Every number a boss fight uses. Bosses without their own use the warden's. */
+export interface BossTuning {
+  slamTrigger: number;
+  slamRadius: number;
+  slamDamage: number;
+  slamWindup: number;
+  /** Chill (0..1) the slam adds when it lands: the cryo sentinel's freezing pulse. */
+  slamChill?: number;
+  chargeMin: number;
+  chargeMax: number;
+  chargeWindup: number;
+  chargeSpeed: number;
+  chargeDistance: number;
+  chargeDamage: number;
+  chargeHitRadius: number;
+  chargeCooldown: number;
+  stunAfterCharge: number;
+  stunAfterImpact: number;
+  recover: number;
+  walkSpeed: number;
+  heldSlow: number;
+  stunnedCaptureBonus: number;
+}

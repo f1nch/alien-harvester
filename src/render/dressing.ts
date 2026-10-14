@@ -1,7 +1,7 @@
 import {
   Color3, Constants, DynamicTexture, MeshBuilder, Scene, StandardMaterial,
 } from "@babylonjs/core";
-import type { MapDef, Rect, ZoneDef, ZoneId } from "../content/map";
+import type { MapDef, Rect, ZoneDef, ZoneTheme } from "../content/map";
 
 /**
  * Purely visual set dressing: nothing here collides or affects gameplay. Repeated
@@ -35,18 +35,23 @@ function poolTexture(scene: Scene): DynamicTexture {
   return tex;
 }
 
-const POOL_TINT: Record<ZoneId, Color3> = {
+const POOL_TINT: Record<ZoneTheme, Color3> = {
   containment: new Color3(0.35, 0.45, 0.75),
   service: new Color3(0.3, 0.7, 0.45),
   security: new Color3(0.8, 0.3, 0.3),
   reactor: new Color3(0.9, 0.5, 0.2),
+  dock: new Color3(0.4, 0.5, 0.65),
+  cold: new Color3(0.45, 0.75, 1),
+  vault: new Color3(0.35, 0.6, 0.95),
+  lab: new Color3(0.55, 0.45, 0.85),
+  core: new Color3(0.3, 0.85, 1),
 };
 
 /** Additive light pools in a loose grid over each zone. */
 function lightPools(scene: Scene, map: MapDef): void {
   const tex = poolTexture(scene);
   for (const zone of map.zones) {
-    const mat = emissive(scene, `pool-${zone.id}`, POOL_TINT[zone.id]);
+    const mat = emissive(scene, `pool-${zone.id}`, POOL_TINT[zone.theme]);
     mat.opacityTexture = tex;
     mat.alphaMode = Constants.ALPHA_ADD;
     mat.disableDepthWrite = true;
@@ -120,8 +125,8 @@ function zoneLabels(scene: Scene, map: MapDef): void {
     mat.specularColor = Color3.Black();
     mat.alpha = 0.45;
     const plane = MeshBuilder.CreateGround(`label-${zone.id}`, { width: 7, height: 1.3 }, scene);
-    // Containment's label sits by the base; others just past their entrance door.
-    const z = zone.id === "containment" ? zone.rect.minZ + 10.5 : zone.rect.minZ + 2.4;
+    // The first zone's label sits by the base; others just past their entrance door.
+    const z = zone === map.zones[0] ? zone.rect.minZ + 10.5 : zone.rect.minZ + 2.4;
     plane.position.set((zone.rect.minX + zone.rect.maxX) / 2, 0.014, z);
     plane.material = mat;
     plane.freezeWorldMatrix();
@@ -197,6 +202,8 @@ function zoneMachinery(scene: Scene, map: MapDef): void {
   glass.emissiveColor = new Color3(0.03, 0.08, 0.06);
   glass.alpha = 0.3;
   const liquid = emissive(scene, "tubeLiquid", new Color3(0.15, 0.55, 0.3), 0.85);
+  const cryoLiquid = emissive(scene, "cryoLiquid", new Color3(0.55, 0.9, 1), 0.8);
+  const iceMat = iceMaterial(scene);
   const metal = new StandardMaterial("machMetal", scene);
   metal.diffuseColor = new Color3(0.22, 0.23, 0.28);
   metal.specularColor = new Color3(0.3, 0.3, 0.35);
@@ -216,7 +223,13 @@ function zoneMachinery(scene: Scene, map: MapDef): void {
   rackLight.material = blink;
   const pillar = MeshBuilder.CreateCylinder("conduit", { diameter: 0.45, height: 2.2, tessellation: 10 }, scene);
   pillar.material = conduit;
-  for (const m of [tube, fluid, capM, rack, rackLight, pillar]) m.isVisible = false;
+  const iceBlock = MeshBuilder.CreateBox("iceBlock", { width: 1.1, depth: 1.1, height: 0.9 }, scene);
+  iceBlock.material = iceMat;
+  const iceShard = MeshBuilder.CreateCylinder("iceShard", { diameterTop: 0, diameterBottom: 0.5, height: 1.1, tessellation: 5 }, scene);
+  iceShard.material = iceMat;
+  const cryoFluid = fluid.clone("cryoFluid");
+  cryoFluid.material = cryoLiquid;
+  for (const m of [tube, fluid, cryoFluid, capM, rack, rackLight, pillar, iceBlock, iceShard]) m.isVisible = false;
 
   const top = WALL_HEIGHT;
   const fills = map.walls.filter((w) => w.maxX - w.minX >= 2 && w.maxZ - w.minZ > 5);
@@ -224,32 +237,153 @@ function zoneMachinery(scene: Scene, map: MapDef): void {
     const cx = (w.minX + w.maxX) / 2;
     const zone = zoneFor(map, w);
     for (let z = w.minZ + 2; z < w.maxZ - 1; z += 3.2) {
-      if (zone === "containment") {
+      if (zone === "containment" || zone === "dock") {
         const tI = tube.createInstance("tubeI");
         tI.position.set(cx, top + 0.8, z);
         const fI = fluid.createInstance("fluidI");
         fI.position.set(cx, top + 0.6, z);
         const cI = capM.createInstance("capI");
         cI.position.set(cx, top + 1.65, z);
-      } else if (zone === "security") {
+      } else if (zone === "security" || zone === "lab") {
         const rI = rack.createInstance("rackI");
         rI.position.set(cx, top + 0.65, z);
         for (let k = 0; k < 3; k++) {
           const lI = rackLight.createInstance("rackLightI");
           lI.position.set(cx, top + 0.35 + k * 0.35, z - 0.8);
         }
-      } else if (zone === "reactor") {
+      } else if (zone === "reactor" || zone === "core") {
         const pI = pillar.createInstance("conduitI");
         pI.position.set(cx, top + 1.1, z);
+      } else if (zone === "vault") {
+        // Cryo-pod tubes: the containment tubes, filled with pale-cyan coolant.
+        const tI = tube.createInstance("cryoTubeI");
+        tI.position.set(cx, top + 0.8, z);
+        const fI = cryoFluid.createInstance("cryoFluidI");
+        fI.position.set(cx, top + 0.6, z);
+        const cI = capM.createInstance("cryoCapI");
+        cI.position.set(cx, top + 1.65, z);
+      } else if (zone === "cold") {
+        // Ice blocks, each turned and sized a little differently.
+        const k = Math.round(z * 3);
+        const bI = iceBlock.createInstance("iceBlockI");
+        bI.position.set(cx, top + 0.4, z);
+        bI.rotation.y = (k % 7) * 0.4;
+        bI.scaling.set(0.9 + (k % 3) * 0.15, 0.8 + (k % 4) * 0.2, 0.9 + (k % 5) * 0.1);
+        const sI = iceShard.createInstance("iceShardI");
+        sI.position.set(cx + ((k % 3) - 1) * 0.5, top + 1.2, z + 0.3);
+        sI.rotation.z = ((k % 5) - 2) * 0.12;
       }
     }
   }
 }
 
-function zoneFor(map: MapDef, w: Rect): ZoneId | null {
+function iceMaterial(scene: Scene): StandardMaterial {
+  const existing = scene.getMaterialByName("iceMat");
+  if (existing) return existing as StandardMaterial;
+  const m = new StandardMaterial("iceMat", scene);
+  m.diffuseColor = new Color3(0.7, 0.88, 1);
+  m.emissiveColor = new Color3(0.12, 0.22, 0.3);
+  m.specularColor = new Color3(0.8, 0.9, 1);
+  m.alpha = 0.7;
+  return m;
+}
+
+/** Icicle clusters on the wall fills of every cold zone. */
+function frostClusters(scene: Scene, map: MapDef): void {
+  const shard = MeshBuilder.CreateCylinder("icicle", { diameterTop: 0, diameterBottom: 0.3, height: 1, tessellation: 5 }, scene);
+  shard.material = iceMaterial(scene);
+  shard.isVisible = false;
+  for (const zone of map.zones) {
+    if (!zone.cold) continue;
+    const r = zone.rect;
+    const b = map.bounds;
+    for (const edgeX of [b.minX - 0.3, b.maxX + 0.3]) {
+      if (r.minX > b.minX || r.maxX < b.maxX) continue;
+      for (let z = r.minZ + 2; z < r.maxZ - 1; z += 3.1) {
+        for (let k = 0; k < 3; k++) {
+          const h = 0.6 + ((Math.round(z * 7) + k * 2) % 5) * 0.25;
+          const s = shard.createInstance(`edgeIce-${zone.id}-${edgeX}-${z}-${k}`);
+          s.scaling.set(1.6, h, 1.6);
+          s.position.set(edgeX + (edgeX < 0 ? -1 : 1) * k * 0.3, h / 2, z + (k - 1) * 0.45);
+          s.rotation.z = (edgeX < 0 ? 1 : -1) * (0.1 + k * 0.08);
+          s.freezeWorldMatrix();
+        }
+      }
+    }
+    for (const w of map.walls) {
+      const cz = (w.minZ + w.maxZ) / 2;
+      if (cz < r.minZ || cz > r.maxZ || w.maxX - w.minX < 2 || w.maxZ - w.minZ <= 5) continue;
+      const cx = (w.minX + w.maxX) / 2;
+      for (let z = w.minZ + 3.2; z < w.maxZ - 1; z += 4.8) {
+        // Three shards of different heights leaning apart, standing on the wall top.
+        for (let k = 0; k < 3; k++) {
+          const h = 0.5 + ((Math.round(z * 5) + k * 3) % 5) * 0.2;
+          const s = shard.createInstance(`icicle-${zone.id}-${z}-${k}`);
+          s.scaling.set(1, h, 1);
+          s.position.set(cx + (k - 1) * 0.35, WALL_HEIGHT + h / 2, z + (k % 2) * 0.3 - 0.15);
+          s.rotation.z = (k - 1) * 0.18;
+          s.freezeWorldMatrix();
+        }
+      }
+    }
+  }
+}
+
+/** Glowing floor grates over each heat vent, with a warm additive glow pool. Returns the pulse animator. */
+function heatVents(scene: Scene, map: MapDef): ((time: number) => void) | null {
+  const vents = map.heatVents;
+  if (!vents || vents.length === 0) return null;
+  const grateMat = new StandardMaterial("ventGrate", scene);
+  grateMat.diffuseColor = new Color3(0.25, 0.1, 0.04);
+  grateMat.specularColor = Color3.Black();
+  grateMat.emissiveColor = new Color3(0.9, 0.4, 0.1);
+  const slatMat = new StandardMaterial("ventSlat", scene);
+  slatMat.diffuseColor = new Color3(0.08, 0.06, 0.06);
+  slatMat.specularColor = Color3.Black();
+  const glowMat = emissive(scene, "ventGlow", new Color3(1, 0.55, 0.2));
+  glowMat.opacityTexture = poolTexture(scene);
+  glowMat.alphaMode = Constants.ALPHA_ADD;
+  glowMat.disableDepthWrite = true;
+
+  const grate = MeshBuilder.CreateCylinder("ventGrate", { diameter: 2, height: 0.03, tessellation: 24 }, scene);
+  grate.material = grateMat;
+  const slat = MeshBuilder.CreateBox("ventSlat", { width: 1, height: 0.02, depth: 0.1 }, scene);
+  slat.material = slatMat;
+  const glow = MeshBuilder.CreateGround("ventGlow", { width: 1, height: 1 }, scene);
+  glow.material = glowMat;
+  for (const m of [grate, slat, glow]) {
+    m.isVisible = false;
+    m.isPickable = false;
+  }
+  vents.forEach((v, i) => {
+    const g = grate.createInstance(`ventGrate${i}`);
+    g.position.set(v.x, 0.015, v.z);
+    g.scaling.set(v.radius, 1, v.radius);
+    g.freezeWorldMatrix();
+    for (let k = -2; k <= 2; k++) {
+      const o = k * v.radius * 0.36;
+      const s = slat.createInstance(`ventSlat${i}-${k}`);
+      s.position.set(v.x, 0.034, v.z + o);
+      s.scaling.x = 2 * Math.sqrt(Math.max(0, v.radius * v.radius - o * o)) * 0.92;
+      s.freezeWorldMatrix();
+    }
+    const p = glow.createInstance(`ventGlow${i}`);
+    p.position.set(v.x, 0.02, v.z);
+    p.scaling.set(v.radius * 3.6, 1, v.radius * 3.6);
+    p.freezeWorldMatrix();
+  });
+  return (time) => {
+    const pulse = 0.75 + 0.25 * Math.sin(time * 1.7);
+    grateMat.emissiveColor.set(0.9 * pulse, 0.4 * pulse, 0.1 * pulse);
+    glowMat.emissiveColor.set(1 * pulse, 0.55 * pulse, 0.2 * pulse);
+  };
+}
+
+/** The theme of the zone a wall section borders (by depth along the map). */
+function zoneFor(map: MapDef, w: Rect): ZoneTheme | null {
   const cz = (w.minZ + w.maxZ) / 2;
   const zone: ZoneDef | undefined = map.zones.find((z) => cz >= z.rect.minZ && cz <= z.rect.maxZ);
-  return zone?.id ?? null;
+  return zone?.theme ?? null;
 }
 
 export interface Dressing {
@@ -264,6 +398,8 @@ export function buildDressing(scene: Scene, map: MapDef, reducedEffects: boolean
   wallDetail(scene, map);
   pipes(scene, map);
   zoneMachinery(scene, map);
+  frostClusters(scene, map);
+  const pulseVents = heatVents(scene, map);
   const rackLights = scene.getMaterialByName("rackLights") as StandardMaterial;
   const conduitGlow = scene.getMaterialByName("conduitGlow") as StandardMaterial;
   let time = 0;
@@ -275,6 +411,7 @@ export function buildDressing(scene: Scene, map: MapDef, reducedEffects: boolean
       rackLights.emissiveColor.set(0.9 * blink, 0.25 * blink, 0.2 * blink);
       const pulse = 0.75 + 0.25 * Math.sin(time * 2.2);
       conduitGlow.emissiveColor.set(1 * pulse, 0.45 * pulse, 0.12 * pulse);
+      pulseVents?.(time);
     },
   };
 }

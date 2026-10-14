@@ -1,7 +1,7 @@
 import {
   Color3, InstancedMesh, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3,
 } from "@babylonjs/core";
-import { WARDEN } from "../content/reactor";
+import { WARDEN, type BossTuning } from "../content/reactor";
 import { TARGETS, type TargetTypeId } from "../content/targets";
 import type { TargetEntity } from "../game/world";
 
@@ -137,6 +137,169 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     add(MeshBuilder.CreateBox("armorVisorStrip", { width: 0.28, height: 0.06, depth: 0.08 }, scene), visor, 1.22, 0, 0.18);
     pair("leg", 0.46, 0.12, plate, 0.15, 0.47);
     pair("arm", 0.5, 0.11, suit, 0.43, 0.98);
+  } else if (type === "pod") {
+    // Supply pod: a squat crate with glowing seams, so it reads as loot rather than a person.
+    const shell = mat(scene, "podShell", 0.3, 0.32, 0.36, 0.4);
+    const seam = mat(scene, "podSeam", 0, 0, 0);
+    seam.emissiveColor = new Color3(1, 0.75, 0.25);
+    add(MeshBuilder.CreateBox("podBody", { width: 0.62, height: 0.46, depth: 0.62 }, scene), shell, 0.23);
+    add(MeshBuilder.CreateBox("podLid", { width: 0.68, height: 0.08, depth: 0.68 }, scene), shell, 0.5);
+    add(MeshBuilder.CreateBox("podSeamH", { width: 0.64, height: 0.05, depth: 0.64 }, scene), seam, 0.3);
+    add(MeshBuilder.CreateBox("podLight", { width: 0.14, height: 0.06, depth: 0.14 }, scene), seam, 0.57);
+  } else if (type === "cryoScientist") {
+    // Cryo scientist: puffy insulated parka, fur-lined hood, and a glowing crystal canister on the back.
+    const parka = mat(scene, "cryoParka", 0.78, 0.88, 0.97);
+    const fur = mat(scene, "cryoFur", 0.96, 0.97, 1);
+    const crystal = mat(scene, "cryoCanisterGlow", 0, 0, 0);
+    crystal.emissiveColor = new Color3(0.2, 0.9, 1);
+    add(MeshBuilder.CreateCapsule("cryoSciBody", { height: 0.7, radius: 0.29, tessellation: 12 }, scene), parka, 0.76);
+    add(MeshBuilder.CreateTorus("cryoSciBelt", { diameter: 0.56, thickness: 0.06, tessellation: 14 }, scene), mat(scene, "cryoBelt", 0.25, 0.3, 0.4), 0.7);
+    add(MeshBuilder.CreateSphere("cryoSciHead", { diameter: 0.3, segments: 10 }, scene), skin, 1.15, 0, 0.02);
+    // Hood: a fur ring around the face and a puffy cowl behind it.
+    const ruff = MeshBuilder.CreateTorus("cryoSciRuff", { diameter: 0.4, thickness: 0.11, tessellation: 14 }, scene);
+    ruff.rotation.x = Math.PI / 2.3;
+    add(ruff, fur, 1.16, 0, 0.03);
+    add(MeshBuilder.CreateSphere("cryoSciHood", { diameter: 0.42, segments: 10, slice: 0.6 }, scene), parka, 1.2, 0, -0.04);
+    add(MeshBuilder.CreateCylinder("cryoCanister", { height: 0.5, diameter: 0.2, tessellation: 10 }, scene), crystal, 0.9, 0, -0.34);
+    add(MeshBuilder.CreateBox("cryoCanisterStrap", { width: 0.3, height: 0.06, depth: 0.1 }, scene), mat(scene, "cryoStrap", 0.25, 0.3, 0.4), 0.9, 0, -0.3);
+    pair("leg", 0.4, 0.1, mat(scene, "cryoSciBoots", 0.3, 0.38, 0.5), 0.12, 0.4);
+    pair("arm", 0.42, 0.095, parka, 0.34, 0.98);
+  } else if (type === "frostRunner") {
+    // Frost runner: lean thermal suit, trailing scarf and goggles; no pack, so it reads sleek and fast.
+    const suit = mat(scene, "frostSuit", 0.82, 0.93, 1);
+    const scarf = mat(scene, "frostScarf", 0.35, 0.7, 0.95);
+    add(MeshBuilder.CreateCapsule("frostBody", { height: 0.64, radius: 0.14, tessellation: 10 }, scene), suit, 0.84);
+    add(MeshBuilder.CreateSphere("frostHead", { diameter: 0.28, segments: 10 }, scene), skin, 1.22);
+    add(MeshBuilder.CreateTorus("frostCowl", { diameter: 0.22, thickness: 0.09, tessellation: 12 }, scene), scarf, 1.07);
+    add(MeshBuilder.CreateCapsule("frostScarfTail", { height: 0.5, radius: 0.045, tessellation: 6 }, scene), scarf, 0.98, 0.07, -0.14);
+    const goggles = MeshBuilder.CreateBox("frostGoggles", { width: 0.27, height: 0.07, depth: 0.1 }, scene);
+    add(goggles, mat(scene, "frostLens", 0.15, 0.6, 0.9, 0.8), 1.24, 0, 0.12);
+    pair("leg", 0.56, 0.065, mat(scene, "frostLegs", 0.55, 0.78, 0.95), 0.07, 0.56);
+    pair("arm", 0.46, 0.05, suit, 0.19, 1.04);
+  } else if (type === "patrolDrone") {
+    // Patrol drone: a hovering rounded body with a red sensor eye and side rotors; no limbs.
+    const hull = mat(scene, "droneHull", 0.55, 0.6, 0.66, 0.6);
+    const dark = mat(scene, "droneDark", 0.14, 0.15, 0.2, 0.4);
+    const eye = mat(scene, "droneEye", 0, 0, 0);
+    eye.emissiveColor = new Color3(1, 0.1, 0.08);
+    const body = MeshBuilder.CreateSphere("droneBody", { diameter: 0.7, segments: 12 }, scene);
+    // Flatten now: the generic bake below resets scaling to SCALE.
+    body.scaling.y = 0.6;
+    body.bakeCurrentTransformIntoVertices();
+    add(body, hull, 1.0);
+    add(MeshBuilder.CreateSphere("droneEye", { diameter: 0.2, segments: 8 }, scene), eye, 1.0, 0, 0.3);
+    add(MeshBuilder.CreateTorus("droneBelt", { diameter: 0.72, thickness: 0.05, tessellation: 16 }, scene), dark, 0.98);
+    add(MeshBuilder.CreateCylinder("droneSensor", { height: 0.14, diameterTop: 0.04, diameterBottom: 0.1, tessellation: 6 }, scene), dark, 1.3);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateBox("droneFin", { width: 0.34, height: 0.04, depth: 0.2 }, scene), dark, 1.0, side * 0.5);
+      add(MeshBuilder.CreateCylinder("droneRotor", { height: 0.02, diameter: 0.3, tessellation: 12 }, scene), hull, 1.08, side * 0.58);
+    }
+  } else if (type === "cryoSentinel") {
+    // The cryo sentinel: an icy warden-sized figure with crystal spikes and a glowing visor.
+    const plate = mat(scene, "sentinelPlate", 0.78, 0.92, 0.98, 0.8);
+    const dark = mat(scene, "sentinelDark", 0.3, 0.46, 0.58, 0.5);
+    const glow = mat(scene, "sentinelGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.25, 0.95, 1);
+    add(MeshBuilder.CreateCapsule("sentinelBody", { height: 2.2, radius: 0.75, tessellation: 14 }, scene), dark, 1.15);
+    add(MeshBuilder.CreateBox("sentinelChest", { width: 1.7, height: 1.1, depth: 1.1 }, scene), plate, 1.55);
+    add(MeshBuilder.CreateSphere("sentinelCore", { diameter: 0.45, segments: 10 }, scene), glow, 1.55, 0, 0.55);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateSphere("sentinelShoulder", { diameter: 0.85, segments: 10 }, scene), plate, 2.05, side * 0.95);
+      const spike = MeshBuilder.CreateCylinder("sentinelShoulderSpike", { diameterTop: 0, diameterBottom: 0.28, height: 0.9, tessellation: 6 }, scene);
+      spike.rotation.z = -side * 0.55;
+      add(spike, plate, 2.65, side * 1.15);
+      const back = MeshBuilder.CreateCylinder("sentinelBackSpike", { diameterTop: 0, diameterBottom: 0.24, height: 0.8, tessellation: 6 }, scene);
+      back.rotation.x = -0.5;
+      add(back, glow, 2.0, side * 0.35, -0.8);
+    }
+    const crest = MeshBuilder.CreateCylinder("sentinelCrest", { diameterTop: 0, diameterBottom: 0.3, height: 0.8, tessellation: 6 }, scene);
+    crest.rotation.x = -0.3;
+    add(crest, plate, 3.0, 0, -0.1);
+    add(MeshBuilder.CreateSphere("sentinelHelm", { diameter: 0.8, segments: 12 }, scene), plate, 2.5);
+    add(MeshBuilder.CreateBox("sentinelVisor", { width: 0.55, height: 0.1, depth: 0.12 }, scene), glow, 2.52, 0, 0.36);
+    // Heavy crystalline arms that swing as it stomps.
+    pair("arm", 1.5, 0.28, dark, 1.05, 2.0);
+  } else if (type === "handler") {
+    // Handler: padded olive keeper suit, face shield, and a long catch-pole held forward.
+    const suit = mat(scene, "handlerSuit", 0.42, 0.48, 0.28);
+    const pad = mat(scene, "handlerPad", 0.3, 0.34, 0.2, 0.2);
+    add(MeshBuilder.CreateCapsule("handlerBody", { height: 0.7, radius: 0.27, tessellation: 12 }, scene), suit, 0.78);
+    add(MeshBuilder.CreateBox("handlerVest", { width: 0.5, height: 0.34, depth: 0.4 }, scene), pad, 0.84);
+    add(MeshBuilder.CreateSphere("handlerHead", { diameter: 0.32, segments: 10 }, scene), skin, 1.16);
+    add(MeshBuilder.CreateBox("handlerShield", { width: 0.3, height: 0.2, depth: 0.04 }, scene), mat(scene, "handlerVisor", 0.6, 0.85, 0.75, 0.9), 1.16, 0, 0.17);
+    const pole = MeshBuilder.CreateCylinder("handlerPole", { height: 1.1, diameter: 0.05, tessellation: 6 }, scene);
+    pole.rotation.x = Math.PI / 2.2;
+    add(pole, mat(scene, "handlerPoleMat", 0.75, 0.75, 0.7, 0.5), 0.85, 0.3, 0.4);
+    add(MeshBuilder.CreateTorus("handlerLoop", { diameter: 0.18, thickness: 0.03, tessellation: 12 }, scene), mat(scene, "handlerLoopMat", 0.95, 0.6, 0.1), 0.95, 0.3, 0.95);
+    pair("leg", 0.42, 0.1, pad, 0.12, 0.42);
+    pair("arm", 0.44, 0.085, suit, 0.33, 0.98);
+  } else if (type === "lurker") {
+    // Lurker: a low, pale, many-eyed escapee on spindly legs. No clothes: plainly not staff.
+    const hide = mat(scene, "lurkerHide", 0.75, 0.8, 0.7, 0.3);
+    const eye = mat(scene, "lurkerEye", 0, 0, 0);
+    eye.emissiveColor = new Color3(0.6, 1, 0.3);
+    const body = MeshBuilder.CreateSphere("lurkerBody", { diameter: 0.6, segments: 12 }, scene);
+    body.scaling.set(0.8, 0.6, 1.3);
+    body.bakeCurrentTransformIntoVertices();
+    add(body, hide, 0.6);
+    add(MeshBuilder.CreateSphere("lurkerHead", { diameter: 0.3, segments: 10 }, scene), hide, 0.72, 0, 0.38);
+    for (const [x, y] of [[-0.07, 0.8], [0.07, 0.8], [0, 0.86]]) {
+      add(MeshBuilder.CreateSphere("lurkerEyeBall", { diameter: 0.07, segments: 6 }, scene), eye, y!, x!, 0.5);
+    }
+    pair("leg", 0.5, 0.045, hide, 0.16, 0.5);
+    pair("arm", 0.5, 0.045, hide, 0.16, 0.62);
+  } else if (type === "chimera") {
+    // Chimera: a hunched hybrid with a plated back, bone spurs, and a glowing red maw.
+    const flesh = mat(scene, "chimeraFlesh", 0.55, 0.3, 0.32, 0.2);
+    const plate = mat(scene, "chimeraPlate", 0.3, 0.26, 0.22, 0.5);
+    const maw = mat(scene, "chimeraMaw", 0, 0, 0);
+    maw.emissiveColor = new Color3(1, 0.2, 0.15);
+    const body = MeshBuilder.CreateSphere("chimeraBody", { diameter: 0.8, segments: 12 }, scene);
+    body.scaling.set(0.9, 0.75, 1.2);
+    body.bakeCurrentTransformIntoVertices();
+    add(body, flesh, 0.8);
+    add(MeshBuilder.CreateBox("chimeraBack", { width: 0.6, height: 0.16, depth: 0.7 }, scene), plate, 1.1, 0, -0.05);
+    for (const z of [-0.25, 0.05, 0.3]) {
+      add(MeshBuilder.CreateCylinder("chimeraSpur", { diameterTop: 0, diameterBottom: 0.12, height: 0.3, tessellation: 6 }, scene), plate, 1.3, 0, z);
+    }
+    add(MeshBuilder.CreateSphere("chimeraHead", { diameter: 0.42, segments: 10 }, scene), flesh, 0.95, 0, 0.5);
+    add(MeshBuilder.CreateBox("chimeraJaw", { width: 0.26, height: 0.06, depth: 0.12 }, scene), maw, 0.88, 0, 0.7);
+    pair("leg", 0.45, 0.1, flesh, 0.22, 0.48);
+    pair("arm", 0.55, 0.1, plate, 0.4, 0.95);
+  } else if (type === "specimenTank") {
+    // Specimen tank: a glass cylinder of green fluid with a dark shape inside, on a base.
+    const metal = mat(scene, "tankMetal", 0.35, 0.38, 0.42, 0.6);
+    const glass = mat(scene, "tankGlass", 0.3, 0.8, 0.5, 0.9);
+    glass.alpha = 0.55;
+    glass.emissiveColor = new Color3(0.05, 0.35, 0.15);
+    add(MeshBuilder.CreateCylinder("tankBase", { height: 0.18, diameter: 0.8, tessellation: 16 }, scene), metal, 0.09);
+    add(MeshBuilder.CreateCylinder("tankGlass", { height: 1.1, diameter: 0.66, tessellation: 16 }, scene), glass, 0.73);
+    add(MeshBuilder.CreateSphere("tankSpecimen", { diameter: 0.34, segments: 8 }, scene), mat(scene, "tankShape", 0.15, 0.2, 0.15), 0.75);
+    add(MeshBuilder.CreateCylinder("tankCap", { height: 0.14, diameter: 0.74, tessellation: 16 }, scene), metal, 1.34);
+  } else if (type === "alphaSpecimen") {
+    // The alpha specimen: a towering four-armed hybrid with a crown of spines and a green core.
+    const hide = mat(scene, "alphaHide", 0.35, 0.18, 0.3, 0.3);
+    const bone = mat(scene, "alphaBone", 0.85, 0.82, 0.72, 0.4);
+    const glow = mat(scene, "alphaGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.5, 1, 0.3);
+    add(MeshBuilder.CreateCapsule("alphaBody", { height: 2.2, radius: 0.75, tessellation: 14 }, scene), hide, 1.15);
+    add(MeshBuilder.CreateSphere("alphaChest", { diameter: 1.5, segments: 12 }, scene), hide, 1.6);
+    add(MeshBuilder.CreateSphere("alphaCore", { diameter: 0.45, segments: 10 }, scene), glow, 1.6, 0, 0.62);
+    add(MeshBuilder.CreateSphere("alphaHead", { diameter: 0.8, segments: 12 }, scene), hide, 2.5, 0, 0.1);
+    add(MeshBuilder.CreateBox("alphaEyes", { width: 0.5, height: 0.08, depth: 0.12 }, scene), glow, 2.55, 0, 0.45);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 4 - 0.5) * 1.6;
+      const spine = MeshBuilder.CreateCylinder("alphaSpine", { diameterTop: 0, diameterBottom: 0.2, height: 0.75, tessellation: 6 }, scene);
+      spine.rotation.z = -a * 0.6;
+      add(spine, bone, 3.0, Math.sin(a) * 0.4, -0.1);
+    }
+    for (const side of [-1, 1]) {
+      const lower = MeshBuilder.CreateCapsule("alphaLowerArm", { height: 1.0, radius: 0.18, tessellation: 8 }, scene);
+      lower.rotation.z = side * 0.4;
+      add(lower, bone, 1.1, side * 1.0, 0.2);
+    }
+    // Heavy upper arms that swing as it stomps.
+    pair("arm", 1.5, 0.28, hide, 1.05, 2.0);
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     const coat = mat(scene, "techCoat", 0.92, 0.95, 0.97);
@@ -170,15 +333,17 @@ export class CrowdView {
   private time = 0;
   private seen = new Set<number>();
   private ringMat: StandardMaterial | null = null;
+  /** A golden halo over the prized specimen (there is at most one). */
+  private halo: Mesh | null = null;
   private fillMat: StandardMaterial | null = null;
 
   /** A ground strip the warden's charge will run along, filling as the windup completes. */
-  private makeLane(): { outline: Mesh; fill: Mesh } {
+  private makeLane(tuning: BossTuning): { outline: Mesh; fill: Mesh } {
     this.ensureTelegraphMaterials();
-    const width = WARDEN.chargeHitRadius * 2;
-    const outline = MeshBuilder.CreateGround("laneOutline", { width, height: WARDEN.chargeDistance }, this.scene);
+    const width = tuning.chargeHitRadius * 2;
+    const outline = MeshBuilder.CreateGround("laneOutline", { width, height: tuning.chargeDistance }, this.scene);
     outline.material = this.ringMat!;
-    const fill = MeshBuilder.CreateGround("laneFill", { width, height: WARDEN.chargeDistance }, this.scene);
+    const fill = MeshBuilder.CreateGround("laneFill", { width, height: tuning.chargeDistance }, this.scene);
     fill.material = this.fillMat!;
     outline.setEnabled(false);
     fill.setEnabled(false);
@@ -215,6 +380,28 @@ export class CrowdView {
 
   constructor(private scene: Scene, private shadows: ShadowGenerator | null) {}
 
+  private updateHalo(targets: readonly TargetEntity[], alpha: number): void {
+    const prized = targets.find((t) => t.prized);
+    if (!prized) {
+      this.halo?.setEnabled(false);
+      return;
+    }
+    if (!this.halo) {
+      const m = new StandardMaterial("prizedHalo", this.scene);
+      m.diffuseColor = Color3.Black();
+      m.emissiveColor = new Color3(1, 0.82, 0.3);
+      m.disableLighting = true;
+      this.halo = MeshBuilder.CreateTorus("prizedHalo", { diameter: 0.7, thickness: 0.07, tessellation: 32 }, this.scene);
+      this.halo.material = m;
+      this.halo.isPickable = false;
+    }
+    const x = prized.prevX + (prized.x - prized.prevX) * alpha;
+    const z = prized.prevZ + (prized.z - prized.prevZ) * alpha;
+    this.halo.setEnabled(true);
+    this.halo.position.set(x, 1.85 + Math.sin(this.time * 4) * 0.08, z);
+    this.halo.rotation.y += 0.05;
+  }
+
   private template(type: TargetTypeId): Template {
     let t = this.templates.get(type);
     if (!t) {
@@ -245,12 +432,13 @@ export class CrowdView {
       inst.position.copyFrom(l.pivot);
       return { inst, role: l.role };
     });
-    const isBoss = type === "boss";
-    const range = isBoss ? WARDEN.slamRadius : TARGETS[type].combat?.attackRange;
+    const isBoss = TARGETS[type].behavior === "boss";
+    const tuning = TARGETS[type].bossTuning ?? WARDEN;
+    const range = isBoss ? tuning.slamRadius : TARGETS[type].combat?.attackRange;
     return {
       type, node, parts, limbs, phase: Math.random() * 10,
       telegraph: range ? this.makeTelegraph(range) : undefined,
-      lane: isBoss ? this.makeLane() : undefined,
+      lane: isBoss ? this.makeLane(tuning) : undefined,
     };
   }
 
@@ -310,12 +498,13 @@ export class CrowdView {
       }
       if (t.boss && v.telegraph && v.lane) {
         const bs = t.boss;
+        const T = t.def.bossTuning ?? WARDEN;
         const slam = bs.state === "slamWindup";
         const charge = bs.state === "chargeWindup";
         v.telegraph.ring.setEnabled(slam);
         v.telegraph.fill.setEnabled(slam);
         if (slam) {
-          const k = 1 - Math.max(0, bs.timer) / WARDEN.slamWindup;
+          const k = 1 - Math.max(0, bs.timer) / T.slamWindup;
           v.telegraph.ring.position.set(x, 0.04, z);
           v.telegraph.fill.position.set(x, 0.035, z);
           v.telegraph.fill.scaling.set(Math.max(0.05, k), Math.max(0.05, k), 1);
@@ -324,9 +513,9 @@ export class CrowdView {
         v.lane.outline.setEnabled(charge);
         v.lane.fill.setEnabled(charge);
         if (charge) {
-          const k = 1 - Math.max(0, bs.timer) / WARDEN.chargeWindup;
+          const k = 1 - Math.max(0, bs.timer) / T.chargeWindup;
           const yaw = Math.atan2(bs.dirX, bs.dirZ);
-          const half = WARDEN.chargeDistance / 2;
+          const half = T.chargeDistance / 2;
           for (const m of [v.lane.outline, v.lane.fill]) {
             m.rotation.y = yaw;
             m.position.set(x + bs.dirX * half, m === v.lane.fill ? 0.035 : 0.03, z + bs.dirZ * half);
@@ -367,6 +556,7 @@ export class CrowdView {
       v.node.position.set(x, y, z);
       v.node.rotation.set(rotX, facing, rotZ);
     }
+    this.updateHalo(targets, alpha);
     for (const [id, v] of this.live) {
       if (this.seen.has(id)) continue;
       this.live.delete(id);

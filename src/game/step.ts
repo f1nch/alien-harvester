@@ -1,6 +1,9 @@
 import { updateCapture } from "./systems/capture";
+import { updateCatcher } from "./systems/catcher";
 import { updatePlayerHealth } from "./systems/combat";
+import { updateCold } from "./systems/cold";
 import { updateDeposit } from "./systems/deposit";
+import { updateFeeding } from "./systems/feeding";
 import { updatePlayer } from "./systems/movement";
 import { updateStructures } from "./systems/structures";
 import { updateSpawns, updateTargets } from "./systems/targets";
@@ -11,11 +14,14 @@ export function stepWorld(w: World, dt = SIM_DT): void {
   w.tick++;
   w.progress.playSeconds += dt;
   updatePlayer(w, dt);
+  updateCold(w, dt);
   updateTargets(w, dt);
   updateSpawns(w, dt);
   updateCapture(w, dt);
+  updateFeeding(w, dt);
   updateDeposit(w, dt);
   updateStructures(w, dt);
+  updateCatcher(w, dt);
   // Last, so a lethal hit this tick resolves before anything else sees the state.
   updatePlayerHealth(w, dt);
 }

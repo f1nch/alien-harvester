@@ -1,21 +1,25 @@
 import "./ui/styles.css";
-import { FACILITY } from "./content/map";
+import type { MapDef } from "./content/map";
+import { biomeAt } from "./domain/biome";
+import { BOOSTS, PRIZED, SUMMON } from "./content/feeding";
+import { TARGETS } from "./content/targets";
+import { describeCraving } from "./domain/cravings";
 import type { UpgradeId } from "./content/upgrades";
 import { newProgress } from "./domain/progress";
 import { CURRENCIES, CURRENCY_LABEL, emptyWallet } from "./content/currencies";
 import { FORM_NAMES } from "./content/evolution";
 import { pointInRect } from "./game/geometry";
-import { QUESTS } from "./content/quests";
 import { levelForXp } from "./domain/levels";
 import type { CargoDrop } from "./domain/progress";
 import { UPGRADE_IDS } from "./content/upgrades";
-import { capAtTier, tableCostForLevels } from "./domain/economy";
+import { capAt, extraCostForLevels, tableCostForLevels } from "./domain/economy";
 import { devCompleteActive } from "./domain/quests";
-import { buildStructure, nearReactor, repair, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
+import { buildStructure, buyMutagenMutation, leaveBiome, nearExit, nearReactor, repair, summonWave, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
-import { inBase } from "./game/systems/deposit";
-import { createWorld, gainXp, pushQuestOutcome, refreshStats, SIM_HZ, type TargetEntity, type World } from "./game/world";
+import { atPad } from "./game/systems/deposit";
+import { structureName } from "./ui/hud";
+import { createWorld, gainXp, pushQuestOutcome, refreshObstacles, refreshStats, SIM_HZ, type TargetEntity, type World } from "./game/world";
 import { defaultSettings, toSaveFile, type SaveFile, type Settings } from "./persistence/schema";
 import { exportFileName, exportText, IMPORT_ERRORS, parseImport } from "./persistence/transfer";
 import { acquireActiveTabLock, SaveStore } from "./persistence/store";
@@ -44,11 +48,15 @@ function deathMessage(forgiven: boolean, lost: readonly CargoDrop[]): string {
   return `You were overwhelmed and returned to base. Lost unbanked cargo: ${parts.join(", ")}.`;
 }
 
+/** Set just before the reload into a new biome, so its arrival line shows once. */
+const ARRIVED_KEY = "alien-harvester-arrived";
+
 async function boot(): Promise<void> {
   const canvas = document.getElementById("scene") as HTMLCanvasElement;
   const uiRoot = document.getElementById("ui")!;
   const zone = document.getElementById("joystick-zone")!;
-  const room = FACILITY;
+  /** The current biome's map; set once the save has loaded. */
+  let room: MapDef = biomeAt(0).def.map;
 
   let world: World;
   let settings: Settings = defaultSettings();
@@ -61,7 +69,7 @@ async function boot(): Promise<void> {
   let loadFailed = false;
   /** A validated import waiting for the player's confirmation. */
   let pendingImport: SaveFile | null = null;
-  const store = new SaveStore(room);
+  const store = new SaveStore();
 
   const hud = new Hud(uiRoot, {
     onOpenUpgrades: () => ready && setUpgradesOpen(true),
@@ -125,6 +133,39 @@ async function boot(): Promise<void> {
         void save();
       }
     },
+    onSummon: () => {
+      if (!ready) return;
+      if (summonWave(world).ok) {
+        refreshHud();
+        void save();
+      }
+    },
+    onBuyMutagen: (id) => {
+      if (!ready) return;
+      if (buyMutagenMutation(world, id).ok) {
+        refreshHud();
+        void save();
+      }
+    },
+    onLeaveBiome: () => {
+      if (!ready) return;
+      const r = leaveBiome(world);
+      if (!r.ok) return;
+      // The new biome has its own map: save, then rebuild everything by reloading.
+      loop.pause("travel");
+      input.reset();
+      const dest = biomeAt(world.progress.depth);
+      hud.block(`${world.biome.def.exit.name}…`, `Heading down to ${dest.name}.`);
+      void save().then((ok) => {
+        if (!ok) {
+          // Nothing was written, so a reload returns to just before the elevator.
+          hud.block("Couldn't save", "The trip down wasn't saved. Reload to return to the elevator and try again.");
+          return;
+        }
+        try { sessionStorage.setItem(ARRIVED_KEY, "1"); } catch { /* arrival line is optional */ }
+        location.reload();
+      });
+    },
     onCloseCompletion: () => {
       if (!ready) return;
       hud.showCompletion(null);
@@ -167,7 +208,7 @@ async function boot(): Promise<void> {
     onImportText: (text) => {
       // Ignore a file read that finishes after the panel was closed.
       if (!ready || !hud.upgradesOpen) return;
-      const r = parseImport(text, room);
+      const r = parseImport(text);
       pendingImport = r.ok ? r.save : null;
       hud.showImportPreview(r.ok ? { summary: r.summary } : { error: IMPORT_ERRORS[r.reason] });
     },
@@ -212,6 +253,7 @@ async function boot(): Promise<void> {
     }
     recovered = result.recovered;
     if (result.save) settings = result.save.settings;
+    if (result.save) room = biomeAt(result.save.progress.depth).def.map;
     world = createWorld(room, result.save?.progress ?? newProgress(room), seed);
   } catch (err) {
     console.error("Load failed", err);
@@ -226,7 +268,7 @@ async function boot(): Promise<void> {
   const renderer = new GameRenderer(canvas, room, { reducedEffects: settings.reducedEffects, creatureModels: !forceProcedural });
   const input = new InputController(zone);
   const floaters = new Floaters(uiRoot, !settings.reducedEffects);
-  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢" } as const;
+  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰" } as const;
   const loop = new FixedLoop((dt) => stepWorld(world, dt), { hz: SIM_HZ, maxStepsPerFrame: 5 });
   renderer.snapCamera(world);
   let recordDevFrame: ((now: number, cpuMs: number, inputStrength: number, speed: number, lastDrag: number) => void) | undefined;
@@ -250,12 +292,27 @@ async function boot(): Promise<void> {
           pushQuestOutcome(world, devCompleteActive(world.progress));
           after();
         },
+        clearBiome: () => {
+          const p = world.progress;
+          for (const d of world.map.doors) if (!p.unlockedDoors.includes(d.id)) p.unlockedDoors.push(d.id);
+          for (const q of world.biome.quests) p.quests[q.id] = { count: 1, done: true };
+          p.reactorRepaired = true;
+          refreshObstacles(world);
+          const exit = world.biome.def.exit;
+          world.player.x = world.player.prevX = p.player.x = exit.x;
+          world.player.z = world.player.prevZ = p.player.z = exit.z + 1.5;
+          renderer.snapCamera(world);
+          after();
+        },
         devolve: () => {
           const p = world.progress;
           p.evolution = Math.max(0, p.evolution - 1);
           for (const id of UPGRADE_IDS) {
-            const capped = Math.min(p.upgrades[id], capAtTier(id, p.evolution));
-            if (capped < p.upgrades[id]) p.upgradeSpent[id] = tableCostForLevels(id, capped);
+            const capped = Math.min(p.upgrades[id], capAt(id, p.evolution, p.depth));
+            if (capped < p.upgrades[id]) {
+              p.upgradeSpent[id] = tableCostForLevels(id, capped);
+              p.upgradeExtraSpent[id] = extraCostForLevels(id, capped);
+            }
             p.upgrades[id] = capped;
           }
           refreshStats(world);
@@ -287,11 +344,12 @@ async function boot(): Promise<void> {
 
   function refreshHud(): void {
     hud.update(world, {
-      inBase: inBase(world),
+      inBase: atPad(world),
       door: nearbyLockedDoor(world),
       respecBlocker: respecBlocker(world),
       boss: engagedBoss(world),
       atReactor: nearReactor(world),
+      atExit: nearExit(world),
     });
   }
 
@@ -300,11 +358,13 @@ async function boot(): Promise<void> {
     loop.pause("completion");
     input.reset();
     hud.showCompletion({
+      title: world.biome.objective.doneTitle,
+      body: world.biome.objective.doneBody,
       level: levelForXp(p.xp),
       form: FORM_NAMES[p.evolution] ?? "Unknown",
       playSeconds: p.playSeconds,
-      questsDone: QUESTS.filter((q) => p.quests[q.id]?.done).length,
-      questsTotal: QUESTS.length,
+      questsDone: world.biome.quests.filter((q) => p.quests[q.id]?.done).length,
+      questsTotal: world.biome.quests.length,
       perksTaken: Object.values(p.perks).reduce((a, n) => a + (n ?? 0), 0),
     });
   }
@@ -315,15 +375,18 @@ async function boot(): Promise<void> {
   }
   applySettings();
 
-  async function save(): Promise<void> {
-    if (readOnly) return;
+  /** Resolves true once written (false when saving is off or failed). */
+  async function save(): Promise<boolean> {
+    if (readOnly) return false;
     try {
       await store.write(toSaveFile(world.progress, settings));
       saveFailedShown = false;
+      return true;
     } catch (err) {
       console.error("Save failed", err);
       if (!saveFailedShown) hud.toast("Saving failed — progress since the last save may be lost.", 5);
       saveFailedShown = true;
+      return false;
     }
   }
 
@@ -379,6 +442,16 @@ async function boot(): Promise<void> {
     void save();
   }
 
+  // One line of story on arriving somewhere new (or starting out).
+  let arrived = false;
+  try {
+    arrived = sessionStorage.getItem(ARRIVED_KEY) === "1";
+    sessionStorage.removeItem(ARRIVED_KEY);
+  } catch { /* storage blocked: skip the line */ }
+  if (arrived || world.progress.playSeconds === 0) {
+    hud.toast(`${world.biome.region} · ${world.biome.arrival}`, 7);
+  }
+
   let lastSaveTick = world.tick;
   let depositUnsaved = false;
   ready = true;
@@ -394,11 +467,13 @@ async function boot(): Promise<void> {
       // Total this frame's deposits into one floater per currency over the base.
       const deposited = emptyWallet();
       let leveled = 0;
+      let pad: { x: number; z: number } = room.base;
       for (const e of events) {
+        if (e.type === "deposited") pad = e.pad;
         if (e.type === "deposited") for (const c of CURRENCIES) deposited[c] += (e.drop.reward[c] ?? 0) * world.stats.yieldPercent / 100;
         if (e.type === "levelUp") leveled = e.level;
       }
-      const basePt = renderer.worldToScreen(room.base.x, 1.2, room.base.z);
+      const basePt = renderer.worldToScreen(pad.x, 1.2, pad.z);
       if (basePt) {
         CURRENCIES.filter((c) => deposited[c] > 0).forEach((c, i) => {
           floaters.spawn(`+${Math.round(deposited[c] * 10) / 10} ${ICON[c]}`, basePt.x + i * 46 - 23, basePt.y);
@@ -426,16 +501,39 @@ async function boot(): Promise<void> {
           hud.toast(`Evolved into ${FORM_NAMES[e.tier] ?? "a new form"}!`, 3.5);
           saveNow = true;
         } else if (e.type === "bossDefeated") {
-          hud.toast("The reactor warden is down! Bank its parts and repair the reactor.", 4);
+          hud.toast(`${e.name} is down! Bank its parts, then ${world.biome.objective.task.toLowerCase()}.`, 4);
           saveNow = true;
         } else if (e.type === "reactorRepaired") {
           showCompletion();
           saveNow = true;
+        } else if (e.type === "waveSummoned") {
+          hud.toast(`The machine hums: ${e.count} creatures answer. Each pays ${SUMMON.rewardMultiplier}× the usual.`, 3.5);
+        } else if (e.type === "waveCleared") {
+          hud.toast("Wave cleared. The machine can summon another.", 3);
+          saveNow = true;
+        } else if (e.type === "frenzyStart") {
+          hud.toast("Feeding frenzy! Capture power doubled", 2);
+        } else if (e.type === "prizedAppeared") {
+          hud.toast(`A prized ${e.target.def.name.toLowerCase()} is loose. Catch it before it slips away!`, 4);
+        } else if (e.type === "prizedCaught") {
+          hud.toast(`Prized ${e.target.def.name.toLowerCase()} caught! Bonus banked, +${PRIZED.mutagen} ✺`, 4);
+          saveNow = true;
+        } else if (e.type === "prizedEscaped") {
+          hud.toast("The prized specimen got away.", 3);
+        } else if (e.type === "boostStarted") {
+          const b = BOOSTS[e.boost];
+          hud.toast(`${b.name}! +${b.percent}% ${b.stat === "captureRadius" ? "reach" : b.stat === "moveSpeed" ? "speed" : "capture power"}`, 3);
+        } else if (e.type === "cravingDone") {
+          hud.toast(`Craving satisfied: ${describeCraving(e.craving)} · +${e.craving.reward} ✺`, 3);
+          saveNow = true;
+        } else if (e.type === "bestiaryMilestone") {
+          hud.toast(`Bestiary: ${e.count} ${TARGETS[e.target].name.toLowerCase()}s · +${e.mutagen} ✺, +1% capture power`, 4);
+          saveNow = true;
         } else if (e.type === "structureBuilt") {
-          const name = e.kind === "vat" ? "Biomass vat" : "Delivery drone";
+          const name = structureName(e.kind);
           hud.toast(e.level === 1 ? `${name} built` : `${name} upgraded to level ${e.level}`);
           saveNow = true;
-        } else if (e.type === "droneDeposited") {
+        } else if (e.type === "droneDeposited" || e.type === "catcherDeposited") {
           // The drone banked cargo: persist it like a player deposit.
           saveNow = true;
         } else if (e.type === "doorUnlocked" || e.type === "purchased") saveNow = true;
@@ -448,7 +546,7 @@ async function boot(): Promise<void> {
       }
     }
     // Also save if the player walks off the base part-way through a deposit.
-    if (depositUnsaved && !inBase(world)) {
+    if (depositUnsaved && !atPad(world)) {
       depositUnsaved = false;
       lastSaveTick = world.tick;
       void save();
