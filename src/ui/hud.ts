@@ -182,6 +182,9 @@ export class Hud {
   private cargoBox: HTMLElement;
   private hint: HTMLElement;
   private quests: HTMLElement;
+  private questDetails: HTMLDetailsElement;
+  private questSummary: HTMLElement;
+  private questExtras: HTMLElement;
   private doorCard: HTMLElement;
   private doorTitle: HTMLElement;
   private doorList: HTMLElement;
@@ -320,6 +323,15 @@ export class Hud {
     const sub = el("div", "hud-sub");
     this.quests = el("div", "quests");
     this.quests.setAttribute("aria-live", "polite");
+    this.questDetails = el("details", "quest-details");
+    this.questSummary = el("summary", "quest-summary", "More objectives");
+    this.questExtras = el("div", "quest-extras");
+    this.questDetails.append(this.questSummary, this.questExtras);
+    const compactObjectives = window.matchMedia("(max-width: 759px)");
+    this.questDetails.open = !compactObjectives.matches;
+    compactObjectives.addEventListener("change", (event) => {
+      this.questDetails.open = !event.matches;
+    });
     this.hint = el("div", "hint");
     this.droneStatus = el("div", "drone-status hidden");
     this.catcherStatus = el("div", "drone-status hidden");
@@ -794,16 +806,17 @@ export class Hud {
     const next = active.length > 0 ? null
       : !p.reactorRepaired ? w.biome.objective.task
       : w.biome.def.exit.action;
-    this.quests.replaceChildren(
-      el("div", "quests-title", w.biome.name),
-      ...(next ? [el("div", "quest", next)] : []),
-      ...active.map((q) => {
+    const objectives = active.map((q) => {
         const row = el("div", "quest");
         const target = goalTarget(q.goal);
         row.append(el("span", "quest-name", q.title));
         if (target > 1) row.append(el("span", "quest-count", `${fmt(Math.floor(questCount(w.progress, q.id)))} / ${target}`));
         return row;
-      }),
+      });
+    this.questSummary.textContent = `More objectives · ${Math.max(0, active.length - 1) + p.cravings.length}`;
+    this.questDetails.classList.toggle("hidden", active.length <= 1 && p.cravings.length === 0);
+    this.questExtras.replaceChildren(
+      ...objectives.slice(1),
       ...(p.cravings.length ? [el("div", "quests-title cravings-title", "Cravings")] : []),
       ...p.cravings.map((c) => {
         const row = el("div", "quest craving");
@@ -812,6 +825,11 @@ export class Hud {
         row.append(el("span", "quest-count", `${count}✺${c.reward}`));
         return row;
       }),
+    );
+    this.quests.replaceChildren(
+      el("div", "quests-title", w.biome.name),
+      ...(next ? [el("div", "quest", next)] : objectives.slice(0, 1)),
+      this.questDetails,
     );
   }
 
