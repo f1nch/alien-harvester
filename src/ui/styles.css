@@ -516,6 +516,9 @@ html, body {
 .cargo-bar { height: 5px; }
 .quest { gap: 12px; line-height: 1.5; }
 .quests-title { letter-spacing: 0.1em; font-size: 10px; }
+.quest-summary { cursor: pointer; color: var(--muted); font-size: 11px; }
+.quest-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.quest-extras { padding-top: 4px; }
 .hint { border-radius: 10px; font-size: 12px; line-height: 1.5; }
 .hud-sub { flex-wrap: wrap; }
 .drone-status { max-width: 100%; line-height: 1.5; }
@@ -581,6 +584,7 @@ html, body {
 }
 
 @media (min-width: 760px) {
+  .quest-summary { display: none; }
   .hud-top { top: 20px; left: 20px; right: auto; width: 360px; gap: 6px; }
   .chip { min-height: 32px; padding: 5px 8px; font-size: 12px; gap: 5px; }
   .chip-label { font-size: 11px; }
@@ -601,6 +605,18 @@ html, body {
   .boss-bar { top: 20px; left: auto; right: 20px; transform: none; width: 300px; }
   .panel { align-items: center; padding: 24px; }
   .panel-card { width: min(520px, 100%); max-height: min(760px, 100%); }
+}
+
+@media (max-width: 759px) {
+  .hud-sub { flex-direction: column; align-items: stretch; gap: 5px; }
+  .quests { max-width: 100%; padding: 6px 10px; font-size: 12px; }
+  .quest { line-height: 1.35; padding: 1px 0; }
+  .quest-summary { min-height: 44px; display: flex; align-items: center; gap: 6px; }
+  .quest-summary::before { content: "+"; color: var(--accent); font-size: 15px; }
+  .quest-details[open] .quest-summary::before { content: "−"; }
+  .quest-extras { max-height: 18vh; overflow-y: auto; overscroll-behavior: contain; }
+  .quests { pointer-events: auto !important; }
+  .hint { max-width: 100%; align-self: flex-start; padding: 4px 10px; text-align: left; }
 }
 
 @media (min-width: 760px) and (hover: hover) and (pointer: fine) {
