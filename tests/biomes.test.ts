@@ -396,6 +396,10 @@ describe("review regressions", () => {
   it("the import preview says where the save is", () => {
     const p = newProgress(FACILITY);
     p.depth = 1;
-    expect(summarize(toSaveFile(p, defaultSettings())).place).toBe(biomeAt(1).name);
+    p.floor = "cryo";
+    expect(summarize(toSaveFile(p, defaultSettings())).place).toBe("Cryo labs");
+    p.floor = "facility";
+    p.visits = { facility: 2 };
+    expect(summarize(toSaveFile(p, defaultSettings())).place).toBe("Research wing II");
   });
 });

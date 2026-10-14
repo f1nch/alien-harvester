@@ -300,6 +300,73 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     }
     // Heavy upper arms that swing as it stomps.
     pair("arm", 1.5, 0.28, hide, 1.05, 2.0);
+  } else if (type === "dockhand") {
+    // Dockhand: hi-vis orange overalls with reflective stripes, ear defenders, a toolbelt.
+    const suit = mat(scene, "dockSuit", 1, 0.45, 0.08);
+    const stripe = mat(scene, "dockStripe", 0.85, 0.95, 0.4, 0.6);
+    add(MeshBuilder.CreateCapsule("dockBody", { height: 0.68, radius: 0.23, tessellation: 10 }, scene), suit, 0.74);
+    add(MeshBuilder.CreateTorus("dockStripeChest", { diameter: 0.46, thickness: 0.05, tessellation: 14 }, scene), stripe, 0.92);
+    add(MeshBuilder.CreateTorus("dockStripeWaist", { diameter: 0.48, thickness: 0.05, tessellation: 14 }, scene), stripe, 0.62);
+    add(MeshBuilder.CreateSphere("dockHead", { diameter: 0.33, segments: 10 }, scene), skin, 1.14);
+    for (const side of [-1, 1]) add(MeshBuilder.CreateSphere("dockEarMuff", { diameter: 0.13, segments: 8 }, scene), mat(scene, "dockMuff", 0.15, 0.15, 0.18), 1.14, side * 0.17);
+    pair("leg", 0.45, 0.09, suit, 0.11, 0.45);
+    pair("arm", 0.42, 0.075, suit, 0.29, 0.97);
+  } else if (type === "mechanic") {
+    // Mechanic: grease-stained blue coveralls, a welding visor flipped up, a wrench.
+    const suit = mat(scene, "mechSuit", 0.2, 0.32, 0.55);
+    add(MeshBuilder.CreateCapsule("mechBody", { height: 0.62, radius: 0.16, tessellation: 10 }, scene), suit, 0.84);
+    add(MeshBuilder.CreateSphere("mechHead", { diameter: 0.29, segments: 10 }, scene), skin, 1.2);
+    const visor = MeshBuilder.CreateBox("mechVisor", { width: 0.3, height: 0.16, depth: 0.04 }, scene);
+    visor.rotation.x = -1.1;
+    add(visor, mat(scene, "mechVisorMat", 0.1, 0.12, 0.1, 0.8), 1.36, 0, 0.06);
+    const wrench = MeshBuilder.CreateBox("mechWrench", { width: 0.05, height: 0.36, depth: 0.05 }, scene);
+    wrench.rotation.x = 0.5;
+    add(wrench, mat(scene, "mechWrenchMat", 0.7, 0.72, 0.75, 0.8), 0.7, 0.24, 0.12);
+    pair("leg", 0.54, 0.07, suit, 0.08, 0.55);
+    pair("arm", 0.45, 0.055, suit, 0.2, 1.03);
+  } else if (type === "loaderMech") {
+    // Loader mech: a yellow exoskeleton frame around a driver, with lifting forks in front.
+    const frame = mat(scene, "loaderFrame", 0.95, 0.75, 0.1, 0.5);
+    const dark = mat(scene, "loaderDark", 0.15, 0.15, 0.17, 0.4);
+    const light = mat(scene, "loaderLight", 0, 0, 0);
+    light.emissiveColor = new Color3(1, 0.55, 0.1);
+    add(MeshBuilder.CreateBox("loaderCage", { width: 0.75, height: 0.7, depth: 0.55 }, scene), frame, 1.0);
+    add(MeshBuilder.CreateSphere("loaderDriver", { diameter: 0.3, segments: 10 }, scene), skin, 1.22, 0, 0.05);
+    add(MeshBuilder.CreateBox("loaderLamp", { width: 0.3, height: 0.06, depth: 0.06 }, scene), light, 1.4, 0, 0.26);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateBox("loaderFork", { width: 0.08, height: 0.06, depth: 0.7 }, scene), dark, 0.55, side * 0.22, 0.55);
+      add(MeshBuilder.CreateBox("loaderMast", { width: 0.08, height: 0.8, depth: 0.08 }, scene), dark, 0.9, side * 0.3, 0.25);
+    }
+    pair("leg", 0.55, 0.13, frame, 0.25, 0.6);
+    pair("arm", 0.5, 0.11, dark, 0.45, 1.15);
+  } else if (type === "fuelCell") {
+    // Fuel cell: a squat banded canister with a hazard stripe and a glowing gauge.
+    const shell = mat(scene, "fuelShell", 0.75, 0.78, 0.8, 0.6);
+    const hazard = mat(scene, "fuelHazard", 0.95, 0.75, 0.1, 0.3);
+    const gauge = mat(scene, "fuelGauge", 0, 0, 0);
+    gauge.emissiveColor = new Color3(0.3, 0.8, 1);
+    add(MeshBuilder.CreateCylinder("fuelBody", { height: 0.9, diameter: 0.6, tessellation: 16 }, scene), shell, 0.45);
+    add(MeshBuilder.CreateCylinder("fuelBand", { height: 0.12, diameter: 0.63, tessellation: 16 }, scene), hazard, 0.6);
+    add(MeshBuilder.CreateCylinder("fuelValve", { height: 0.16, diameter: 0.18, tessellation: 10 }, scene), mat(scene, "fuelValveMat", 0.3, 0.3, 0.33, 0.6), 0.98);
+    add(MeshBuilder.CreateBox("fuelGauge", { width: 0.16, height: 0.1, depth: 0.04 }, scene), gauge, 0.4, 0, 0.3);
+  } else if (type === "overseerMech") {
+    // The overseer mech: a hulking walker with a cockpit dome, shoulder lamps and a red eye.
+    const plate = mat(scene, "overseerPlate", 0.55, 0.55, 0.5, 0.7);
+    const dark = mat(scene, "overseerDark", 0.18, 0.18, 0.2, 0.4);
+    const eye = mat(scene, "overseerEye", 0, 0, 0);
+    eye.emissiveColor = new Color3(1, 0.2, 0.1);
+    const lamp = mat(scene, "overseerLamp", 0, 0, 0);
+    lamp.emissiveColor = new Color3(1, 0.8, 0.3);
+    add(MeshBuilder.CreateCapsule("overseerBody", { height: 2.2, radius: 0.75, tessellation: 14 }, scene), dark, 1.15);
+    add(MeshBuilder.CreateBox("overseerHull", { width: 1.8, height: 1.2, depth: 1.3 }, scene), plate, 1.6);
+    add(MeshBuilder.CreateSphere("overseerDome", { diameter: 0.9, segments: 12, slice: 0.5 }, scene), mat(scene, "overseerGlass", 0.3, 0.45, 0.55, 0.9), 2.2);
+    add(MeshBuilder.CreateBox("overseerEye", { width: 0.6, height: 0.1, depth: 0.12 }, scene), eye, 1.85, 0, 0.66);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateBox("overseerShoulder", { width: 0.6, height: 0.5, depth: 0.8 }, scene), plate, 2.05, side * 1.1);
+      add(MeshBuilder.CreateSphere("overseerLamp", { diameter: 0.2, segments: 8 }, scene), lamp, 2.35, side * 1.1, 0.35);
+    }
+    // Hydraulic arms that swing as it stomps.
+    pair("arm", 1.5, 0.28, dark, 1.05, 2.0);
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     const coat = mat(scene, "techCoat", 0.92, 0.95, 0.97);

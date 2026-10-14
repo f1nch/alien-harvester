@@ -7,7 +7,7 @@ import type { CatcherMode } from "./systems/catcher";
 import { newBossRuntime, type BossRuntime } from "./systems/boss";
 import type { QuestDef } from "../content/quests";
 import type { TargetDef, TargetTypeId } from "../content/targets";
-import { biomeAt, scaleReward, type ActiveBiome } from "../domain/biome";
+import { currentBiome, scaleReward, type ActiveBiome } from "../domain/biome";
 import { computeStats, type PlayerStats, type StatBoost } from "../domain/economy";
 import { BOOSTS, FRENZY, SUMMON, type BoostId } from "../content/feeding";
 import { COLD } from "../content/cold";
@@ -185,7 +185,7 @@ export { mulberry32 } from "../domain/rng";
 export function createWorld(map: MapDef, progress: ProgressState, seed = 1): World {
   const w: World = {
     map,
-    biome: biomeAt(progress.depth),
+    biome: currentBiome(progress),
     progress,
     stats: computeStats(progress),
     obstacles: [],

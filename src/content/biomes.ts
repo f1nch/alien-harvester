@@ -5,6 +5,7 @@ import { QUESTS, type QuestDef } from "./quests";
 import type { TargetTypeId } from "./targets";
 import { CRYO_LABS } from "./cryo";
 import { SPECIMEN_VAULTS } from "./vaults";
+import { HANGAR } from "./hangar";
 import { REACTOR } from "./reactor";
 
 /** The machine a biome's quest chain ends at (the reactor console in the facility). */
@@ -42,7 +43,7 @@ export interface BiomeExit {
 
 /** One place in the chain: everything that resets when the player moves on. */
 export interface BiomeDef {
-  /** Persistent: never rename (saves record depth, which indexes this list). */
+  /** Persistent: never rename (saves record the floor they're on by it). New floors go at the end. */
   id: string;
   name: string;
   /** Where it is in the story, e.g. "Facility floor B1". */
@@ -68,9 +69,9 @@ export interface BiomeDef {
 }
 
 /**
- * Hand-made biomes in story order (docs/EXPANSION_DESIGN.md). Depth d plays
- * BIOMES[d % length]; after the last one they repeat at higher depth and scaling.
- * Only append: depth indexes this list.
+ * Hand-made biomes in story order (docs/EXPANSION_DESIGN.md). Saves record the floor
+ * being played by id; moving on goes to the next one here, wrapping round at greater
+ * depth and scaling. Only append (a fresh run reaches floor i at depth i).
  */
 export const BIOMES: readonly BiomeDef[] = [
   {
@@ -96,4 +97,5 @@ export const BIOMES: readonly BiomeDef[] = [
   },
   CRYO_LABS,
   SPECIMEN_VAULTS,
+  HANGAR,
 ];

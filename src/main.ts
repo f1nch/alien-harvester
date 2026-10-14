@@ -1,6 +1,6 @@
 import "./ui/styles.css";
 import type { MapDef } from "./content/map";
-import { biomeAt } from "./domain/biome";
+import { biomeAt, currentBiome } from "./domain/biome";
 import { BOOSTS, PRIZED, SUMMON } from "./content/feeding";
 import { TARGETS } from "./content/targets";
 import { describeCraving } from "./domain/cravings";
@@ -154,8 +154,8 @@ async function boot(): Promise<void> {
       // The new biome has its own map: save, then rebuild everything by reloading.
       loop.pause("travel");
       input.reset();
-      const dest = biomeAt(world.progress.depth);
-      hud.block(`${world.biome.def.exit.name}…`, `Heading down to ${dest.name}.`);
+      const dest = currentBiome(world.progress);
+      hud.block(`${world.biome.def.exit.name}…`, `On to ${dest.name}.`);
       void save().then((ok) => {
         if (!ok) {
           // Nothing was written, so a reload returns to just before the elevator.
@@ -253,13 +253,14 @@ async function boot(): Promise<void> {
     }
     recovered = result.recovered;
     if (result.save) settings = result.save.settings;
-    if (result.save) room = biomeAt(result.save.progress.depth).def.map;
+    if (result.save) room = currentBiome(result.save.progress).def.map;
     world = createWorld(room, result.save?.progress ?? newProgress(room), seed);
   } catch (err) {
     console.error("Load failed", err);
     readOnly = true;
     loadFailed = true;
     hud.toast("Couldn't read saved progress. Saving is off this session — reload to try again.", 8);
+    room = biomeAt(0).def.map;
     world = createWorld(room, newProgress(room), seed);
   }
 

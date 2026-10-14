@@ -1,3 +1,4 @@
+import { BIOMES } from "../content/biomes";
 import { emptyWallet, type Reward, type Wallet } from "../content/currencies";
 import type { Craving } from "./cravings";
 import type { MutagenId } from "../content/mutagen";
@@ -66,6 +67,10 @@ export interface ProgressState {
    * quests, spawn timers and reactorRepaired belong to the current biome.
    */
   depth: number;
+  /** The hand-made floor being played (a BiomeDef id). Moving on goes to the next in story order. */
+  floor: string;
+  /** Times each floor has been played, counting the current one: first visits get the story, repeats a numeral. */
+  visits: Record<string, number>;
   /** Current cravings (short goals paying mutagen). Reset when moving on. */
   cravings: Craving[];
   /** Cravings rolled so far: seeds the next roll, so reloading never rerolls. */
@@ -112,6 +117,9 @@ export function newProgress(map: MapDef): ProgressState {
     reactorRepaired: false,
     playSeconds: 0,
     depth: 0,
+    // The floor whose map this is (the first floor for anything else).
+    floor: (BIOMES.find((b) => b.map === map) ?? BIOMES[0]!).id,
+    visits: { [(BIOMES.find((b) => b.map === map) ?? BIOMES[0]!).id]: 1 },
     cravings: [],
     cravingRolls: 0,
     mutagenLevels: {},

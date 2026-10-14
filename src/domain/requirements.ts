@@ -1,5 +1,5 @@
 import { CURRENCIES, CURRENCY_LABEL, roundCents, type Reward } from "../content/currencies";
-import { biomeAt, currentBiome } from "./biome";
+import { currentBiome } from "./biome";
 import { levelForXp } from "./levels";
 import type { ProgressState } from "./progress";
 import { isDone } from "./quests";
@@ -41,7 +41,7 @@ export function evaluate(p: ProgressState, r: Requirements): Requirement[] {
     out.push({ label: `Reach level ${r.level}`, met: level >= r.level, progress: `Lv ${level} / ${r.level}` });
   }
   if (r.depth !== undefined) {
-    out.push({ label: `Reach ${biomeAt(r.depth).name}`, met: p.depth >= r.depth, progress: `Depth ${p.depth} / ${r.depth}` });
+    out.push({ label: `Reach depth ${r.depth}`, met: p.depth >= r.depth, progress: `Depth ${p.depth} / ${r.depth}` });
   }
   for (const id of r.quests ?? []) {
     const q = currentBiome(p).questById.get(id);

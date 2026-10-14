@@ -1,5 +1,5 @@
 import { FORM_NAMES } from "../content/evolution";
-import { biomeAt } from "../domain/biome";
+import { currentBiome } from "../domain/biome";
 import { levelForXp } from "../domain/levels";
 import { parseSave, SCHEMA_VERSION, type SaveFile } from "./schema";
 
@@ -43,7 +43,7 @@ export interface SaveSummary {
 export function summarize(save: SaveFile): SaveSummary {
   const p = save.progress;
   return {
-    place: biomeAt(p.depth).name,
+    place: currentBiome(p).name,
     level: levelForXp(p.xp),
     form: FORM_NAMES[p.evolution] ?? "Unknown",
     biomass: Math.floor(p.banked.biomass),
