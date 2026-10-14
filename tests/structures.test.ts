@@ -20,7 +20,7 @@ function ready(): ProgressState {
   const p = newProgress(FACILITY);
   for (const id of ["q-first-catch", "q-first-bank", "q-first-upgrade", "q-open-service"]) p.quests[id] = { count: 999, done: true };
   p.unlockedDoors.push("door-service");
-  p.banked = { biomass: 5000, genetic: 500, parts: 0, mutagen: 0, crystals: 0, alloy: 0 };
+  p.banked = { biomass: 5000, genetic: 500, parts: 0, mutagen: 0, crystals: 0, alloy: 0, amber: 0 };
   return p;
 }
 
@@ -39,7 +39,7 @@ function totalValue(p: ProgressState): number {
 describe("biomass vat", () => {
   it("needs the service wing quest, and building is one transaction", () => {
     const p = newProgress(FACILITY);
-    p.banked = { biomass: 5000, genetic: 500, parts: 0, mutagen: 0, crystals: 0, alloy: 0 };
+    p.banked = { biomass: 5000, genetic: 500, parts: 0, mutagen: 0, crystals: 0, alloy: 0, amber: 0 };
     expect(advanceStructure(p, "vat")).toEqual({ ok: false, reason: "requirements" });
     expect(p.banked.biomass).toBe(5000);
     const q = ready();
@@ -157,7 +157,7 @@ describe("delivery drone", () => {
 
   it("never passes a locked door", () => {
     const p = newProgress(FACILITY);
-    p.banked = { biomass: 5000, genetic: 500, parts: 0, mutagen: 0, crystals: 0, alloy: 0 };
+    p.banked = { biomass: 5000, genetic: 500, parts: 0, mutagen: 0, crystals: 0, alloy: 0, amber: 0 };
     p.quests["q-open-service"] = { count: 1, done: true };
     advanceStructure(p, "drone");
     const w = createWorld(FACILITY, p);

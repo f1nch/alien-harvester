@@ -6,7 +6,7 @@ import { exportFileName, exportText, MAX_IMPORT_BYTES, parseImport } from "../sr
 
 const sample = () => {
   const p = newProgress(FACILITY);
-  p.banked = { biomass: 321.5, genetic: 12, parts: 3, mutagen: 0, crystals: 0, alloy: 0 };
+  p.banked = { biomass: 321.5, genetic: 12, parts: 3, mutagen: 0, crystals: 0, alloy: 0, amber: 0 };
   p.xp = 400;
   p.evolution = 1;
   p.unlockedDoors.push("door-service");

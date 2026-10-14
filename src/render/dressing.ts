@@ -1,7 +1,7 @@
 import {
   Color3, Constants, DynamicTexture, MeshBuilder, Scene, StandardMaterial,
 } from "@babylonjs/core";
-import type { MapDef, Rect, ZoneDef, ZoneTheme } from "../content/map";
+import type { MapDef, MapLook, Rect, ZoneDef, ZoneTheme } from "../content/map";
 
 /**
  * Purely visual set dressing: nothing here collides or affects gameplay. Repeated
@@ -45,6 +45,8 @@ const POOL_TINT: Record<ZoneTheme, Color3> = {
   vault: new Color3(0.35, 0.6, 0.95),
   lab: new Color3(0.55, 0.45, 0.85),
   core: new Color3(0.3, 0.85, 1),
+  jungle: new Color3(0.35, 0.85, 0.4),
+  hive: new Color3(0.95, 0.6, 0.2),
 };
 
 /** Additive light pools in a loose grid over each zone. */
@@ -379,6 +381,78 @@ function heatVents(scene: Scene, map: MapDef): ((time: number) => void) | null {
   };
 }
 
+/** Sticky resin: glossy amber discs, a little raised, so they read as ground you'd sink in. */
+function resinPools(scene: Scene, map: MapDef): void {
+  const pools = map.resin;
+  if (!pools || pools.length === 0) return;
+  const mat = new StandardMaterial("resinMat", scene);
+  mat.diffuseColor = new Color3(0.55, 0.3, 0.05);
+  mat.emissiveColor = new Color3(0.35, 0.16, 0.02);
+  mat.specularColor = new Color3(0.9, 0.7, 0.4);
+  mat.specularPower = 96;
+  mat.alpha = 0.85;
+  pools.forEach((p, i) => {
+    const disc = MeshBuilder.CreateCylinder(`resin${i}`, { diameter: p.radius * 2, height: 0.05, tessellation: 28 }, scene);
+    disc.position.set(p.x, 0.03, p.z);
+    disc.material = mat;
+    disc.isPickable = false;
+    disc.freezeWorldMatrix();
+  });
+}
+
+/** Glowing fungus caps and fern fronds along every wall top, instanced from two templates. */
+function flora(scene: Scene, map: MapDef, look: MapLook): void {
+  const capMat = emissive(scene, "floraCap", new Color3(...look.flora));
+  const stalkMat = new StandardMaterial("floraStalk", scene);
+  stalkMat.diffuseColor = new Color3(...look.prop).scale(1.3);
+  const frondMat = new StandardMaterial("floraFrond", scene);
+  frondMat.diffuseColor = new Color3(...look.wall).scale(1.8);
+  frondMat.emissiveColor = new Color3(...look.glow).scale(0.12);
+  const cap = MeshBuilder.CreateSphere("floraCapT", { diameter: 0.6, segments: 8, slice: 0.5 }, scene);
+  cap.material = capMat;
+  const stalk = MeshBuilder.CreateCylinder("floraStalkT", { diameter: 0.12, height: 0.6, tessellation: 6 }, scene);
+  stalk.material = stalkMat;
+  const frond = MeshBuilder.CreateCylinder("floraFrondT", { diameterTop: 0, diameterBottom: 0.35, height: 1.1, tessellation: 4 }, scene);
+  frond.material = frondMat;
+  for (const m of [cap, stalk, frond]) m.isVisible = false;
+  const b = map.bounds;
+  const walls: Rect[] = [
+    ...map.walls,
+    { minX: b.minX - 0.6, maxX: b.minX, minZ: b.minZ, maxZ: b.maxZ },
+    { minX: b.maxX, maxX: b.maxX + 0.6, minZ: b.minZ, maxZ: b.maxZ },
+  ];
+  let n = 0;
+  for (const w of walls) {
+    const alongZ = w.maxZ - w.minZ >= w.maxX - w.minX;
+    const len = alongZ ? w.maxZ - w.minZ : w.maxX - w.minX;
+    for (let t = 0.8; t < len - 0.4; t += 1.9) {
+      n++;
+      const x = alongZ ? (w.minX + w.maxX) / 2 : w.minX + t;
+      const z = alongZ ? w.minZ + t : (w.minZ + w.maxZ) / 2;
+      const k = (n * 7919) % 13;
+      if (k % 3 === 0) {
+        const h = 0.5 + (k % 4) * 0.15;
+        const sI = stalk.createInstance("floraStalkI");
+        sI.scaling.y = h / 0.6;
+        sI.position.set(x, WALL_HEIGHT + h / 2, z);
+        sI.freezeWorldMatrix();
+        const cI = cap.createInstance("floraCapI");
+        cI.scaling.setAll(0.7 + (k % 5) * 0.15);
+        cI.position.set(x, WALL_HEIGHT + h, z);
+        cI.freezeWorldMatrix();
+      } else {
+        for (let f = 0; f < 3; f++) {
+          const fI = frond.createInstance("floraFrondI");
+          fI.position.set(x + (f - 1) * 0.2, WALL_HEIGHT + 0.45, z + ((k + f) % 3 - 1) * 0.2);
+          fI.rotation.z = (f - 1) * 0.45;
+          fI.rotation.x = ((k + f) % 3 - 1) * 0.3;
+          fI.freezeWorldMatrix();
+        }
+      }
+    }
+  }
+}
+
 /** The theme of the zone a wall section borders (by depth along the map). */
 function zoneFor(map: MapDef, w: Rect): ZoneTheme | null {
   const cz = (w.minZ + w.maxZ) / 2;
@@ -393,24 +467,31 @@ export interface Dressing {
 
 export function buildDressing(scene: Scene, map: MapDef, reducedEffects: boolean): Dressing {
   lightPools(scene, map);
-  doorStripes(scene, map);
   zoneLabels(scene, map);
-  wallDetail(scene, map);
-  pipes(scene, map);
-  zoneMachinery(scene, map);
+  resinPools(scene, map);
+  if (map.look) {
+    // Alien worlds: flora instead of facility lamps, pipes and machinery.
+    flora(scene, map, map.look);
+  } else {
+    doorStripes(scene, map);
+    wallDetail(scene, map);
+    pipes(scene, map);
+    zoneMachinery(scene, map);
+  }
   frostClusters(scene, map);
   const pulseVents = heatVents(scene, map);
-  const rackLights = scene.getMaterialByName("rackLights") as StandardMaterial;
-  const conduitGlow = scene.getMaterialByName("conduitGlow") as StandardMaterial;
+  // Facility machinery only: alien worlds have none of these lights.
+  const rackLights = scene.getMaterialByName("rackLights") as StandardMaterial | null;
+  const conduitGlow = scene.getMaterialByName("conduitGlow") as StandardMaterial | null;
   let time = 0;
   return {
     update(dt: number) {
       if (reducedEffects) return;
       time += dt;
       const blink = Math.sin(time * 5) > 0.2 ? 1 : 0.35;
-      rackLights.emissiveColor.set(0.9 * blink, 0.25 * blink, 0.2 * blink);
+      rackLights?.emissiveColor.set(0.9 * blink, 0.25 * blink, 0.2 * blink);
       const pulse = 0.75 + 0.25 * Math.sin(time * 2.2);
-      conduitGlow.emissiveColor.set(1 * pulse, 0.45 * pulse, 0.12 * pulse);
+      conduitGlow?.emissiveColor.set(1 * pulse, 0.45 * pulse, 0.12 * pulse);
       pulseVents?.(time);
     },
   };

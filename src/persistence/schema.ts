@@ -21,7 +21,7 @@ import { CATCHER, DRONE, REFINERY, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 export const CONTENT_VERSION = 1;
 
 /** The level cap before endless levels (v9). */
@@ -216,6 +216,12 @@ function migrate(raw: Obj): Obj | null {
       progress = { ...progress, floor: BIOMES[d % 3]!.id, visits };
     }
     m = { ...m, schemaVersion: 15, progress };
+  }
+  if (m.schemaVersion === 15) {
+    // v16 adds Vesh, the first portal world: the hive amber currency and the Chitin
+    // plating track, both parsing as 0 when absent. Nothing else changes; the bump stops
+    // older builds dropping amber they don't know about.
+    m = { ...m, schemaVersion: 16 };
   }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }

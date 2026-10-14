@@ -8,7 +8,9 @@ export type TargetTypeId =
   // Specimen vaults
   | "handler" | "lurker" | "chimera" | "specimenTank" | "alphaSpecimen"
   // Hangar
-  | "dockhand" | "mechanic" | "loaderMech" | "fuelCell" | "overseerMech";
+  | "dockhand" | "mechanic" | "loaderMech" | "fuelCell" | "overseerMech"
+  // Vesh (portal world 1)
+  | "hiveForager" | "skitter" | "hiveWarrior" | "broodSac" | "hiveQueen";
 
 /** "static": never moves (supply pods). */
 export type TargetBehavior = "wander" | "flee" | "guard" | "boss" | "static";
@@ -397,6 +399,91 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       chargeDistance: 14,
       chargeDamage: 38,
       walkSpeed: 0.95,
+    },
+  },
+  // --- Vesh, the hive jungle (portal world 1). Depth-0 equivalents. Hive amber is its currency.
+  // Hive forager: a six-legged worker carrying amber back to the hive.
+  hiveForager: {
+    id: "hiveForager",
+    name: "Hive forager",
+    behavior: "wander",
+    resistance: 34,
+    weight: 2,
+    reward: { biomass: 5, amber: 1 },
+    xp: 13,
+    speed: 0.9,
+    respawnSeconds: 10,
+  },
+  // Skitter: a small, quick swarmer. Light to carry and quick to catch, if you can corner it.
+  skitter: {
+    id: "skitter",
+    name: "Skitter",
+    behavior: "flee",
+    resistance: 18,
+    weight: 1,
+    reward: { biomass: 3, amber: 0.5 },
+    xp: 8,
+    speed: 1.6,
+    fleeSpeed: 3.4,
+    fleeRadius: 5,
+    respawnSeconds: 7,
+  },
+  // Hive warrior: armoured, with scything forelimbs. Fights back.
+  hiveWarrior: {
+    id: "hiveWarrior",
+    name: "Hive warrior",
+    behavior: "guard",
+    resistance: 70,
+    weight: 4,
+    reward: { biomass: 10, amber: 2, parts: 1 },
+    xp: 27,
+    speed: 1.1,
+    combat: {
+      detectRadius: 7.5,
+      leashRadius: 10,
+      chaseSpeed: 2.7,
+      attackRange: 1.8,
+      damage: 20,
+      windupSeconds: 0.55,
+      cooldownSeconds: 1.6,
+      heldCreepSpeed: 0.7,
+    },
+    respawnSeconds: 18,
+  },
+  // Brood sac: a pulsing egg sac stuck to the nursery floor. Never moves; rich in amber.
+  broodSac: {
+    id: "broodSac",
+    name: "Brood sac",
+    behavior: "static",
+    resistance: 75,
+    weight: 3,
+    reward: { genetic: 4, amber: 3 },
+    xp: 18,
+    speed: 0,
+    respawnSeconds: 45,
+  },
+  // The hive queen: vast and slow to turn, with a crushing slam and a long charge.
+  hiveQueen: {
+    id: "hiveQueen",
+    name: "Hive queen",
+    behavior: "boss",
+    resistance: 1450,
+    weight: 0,
+    reward: { amber: 25, biomass: 200, genetic: 18, parts: 6 },
+    xp: 600,
+    speed: 0.9,
+    multiGrab: true,
+    captureDecaySeconds: 20,
+    respawnSeconds: 180,
+    bossTuning: {
+      ...WARDEN,
+      slamRadius: 4,
+      slamDamage: 32,
+      slamWindup: 1.25,
+      chargeWindup: 1.4,
+      chargeSpeed: 9,
+      chargeDamage: 36,
+      walkSpeed: 0.9,
     },
   },
   // Supply pod: a crate of stolen stock. Quick to crack open, light, and it may hold a

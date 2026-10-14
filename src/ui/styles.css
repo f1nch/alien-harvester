@@ -315,6 +315,8 @@ html, body {
 .dev-panel { left: auto; right: calc(env(safe-area-inset-right) + 12px); bottom: auto; top: calc(55% + 52px); }
 @media (max-width: 420px) {
   .chip .chip-label { display: none; }
+  /* Room for every currency on a phone: tighter wallet chips. */
+  .hud-top > .chip:not(.level-chip) { padding: 5px 7px; gap: 4px; }
 }
 
 /* Evolution section */
@@ -438,6 +440,7 @@ html, body {
 .exit-card { border-color: #5ce1ff; }
 .chip-icon.mutagen { color: #ff7ad9; }
 .chip-icon.crystals { color: #8fe3ff; }
+.chip-icon.amber { color: #ffb347; }
 .chill-meter { border-color: rgba(143, 227, 255, 0.5); }
 .chill-fill { height: 100%; width: 0; background: #8fe3ff; border-radius: inherit; transition: width 0.2s; }
 .cravings-title { margin-top: 6px; }

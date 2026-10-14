@@ -21,7 +21,7 @@ interface Visual {
   accessories: Array<{ inst: InstancedMesh; rotor: boolean }>;
 }
 
-type LimbRole = "legL" | "legR" | "armL" | "armR";
+type LimbRole = "legL" | "legR" | "armL" | "armR" | "insectL0" | "insectL1" | "insectL2" | "insectR0" | "insectR1" | "insectR2";
 
 /** A template: rigid parts baked in place, plus limbs baked with their pivot at the origin. */
 interface Template {
@@ -387,6 +387,87 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     }
     // Hydraulic arms that swing as it stomps.
     pair("arm", 1.5, 0.28, dark, 1.05, 2.0);
+  } else if (type === "hiveForager" || type === "skitter" || type === "hiveWarrior") {
+    // Hive insects: segmented bodies on six thin legs. Foragers carry an amber blob,
+    // skitters are small and pale, warriors are plated with scything forelimbs.
+    const warrior = type === "hiveWarrior";
+    const skit = type === "skitter";
+    const shell = mat(scene, `${type}Shell`, warrior ? 0.25 : skit ? 0.65 : 0.45, warrior ? 0.3 : skit ? 0.7 : 0.42, warrior ? 0.12 : skit ? 0.45 : 0.16, 0.6);
+    const s = skit ? 0.6 : warrior ? 1.25 : 1;
+    const seg = (n: string, d: number, y: number, z: number) => {
+      const m = MeshBuilder.CreateSphere(n, { diameter: d * s, segments: 16 }, scene);
+      m.scaling.y = 0.75;
+      m.bakeCurrentTransformIntoVertices();
+      add(m, shell, y * s, 0, z * s);
+    };
+    seg(`${type}Abdomen`, 0.55, 0.55, -0.32);
+    seg(`${type}Thorax`, 0.38, 0.6, 0.05);
+    seg(`${type}Head`, 0.3, 0.66, 0.34);
+    const eye = mat(scene, `${type}Eye`, 0, 0, 0);
+    eye.emissiveColor = warrior ? new Color3(1, 0.3, 0.1) : new Color3(0.4, 1, 0.5);
+    for (const side of [-1, 1]) add(MeshBuilder.CreateSphere(`${type}EyeBall`, { diameter: 0.08 * s, segments: 12 }, scene), eye, 0.72 * s, side * 0.1 * s, 0.45 * s);
+    for (const side of [-1, 1]) {
+      for (const [index, z] of [-0.12, 0.05, 0.22].entries()) {
+        const leg = MeshBuilder.CreateCylinder(`${type}Leg`, { diameter: 0.045 * s, height: 0.6 * s, tessellation: 10 }, scene);
+        leg.rotation.z = side * 0.9;
+        leg.position.set(side * 0.1 * s, -0.15 * s, 0);
+        leg.material = shell;
+        leg.scaling.setAll(SCALE);
+        leg.position.scaleInPlace(SCALE);
+        leg.bakeCurrentTransformIntoVertices();
+        leg.isVisible = false;
+        limbs.push({ index: meshes.length, role: `insect${side < 0 ? "L" : "R"}${index}` as LimbRole, pivot: new Vector3(side * 0.16 * s, 0.53 * s, z * s).scaleInPlace(SCALE) });
+        meshes.push(leg);
+      }
+    }
+    if (type === "hiveForager") {
+      const amber = mat(scene, "foragerAmber", 0.8, 0.45, 0.05, 0.9);
+      amber.emissiveColor = new Color3(0.5, 0.25, 0.02);
+      add(MeshBuilder.CreateSphere("foragerLoad", { diameter: 0.32, segments: 16 }, scene), amber, 0.95, 0, -0.3);
+    }
+    if (warrior) {
+      const bladeMat = mat(scene, "warriorBlade", 0.85, 0.85, 0.7, 0.8);
+      for (const side of [-1, 1]) {
+        const blade = MeshBuilder.CreateCylinder("warriorScythe", { diameterTop: 0, diameterBottom: 0.1, height: 0.7, tessellation: 4 }, scene);
+        blade.rotation.x = 1.1;
+        add(blade, bladeMat, 0.95, side * 0.22, 0.6);
+      }
+    }
+  } else if (type === "broodSac") {
+    // Brood sac: a translucent, glowing egg cluster stuck to the floor.
+    const sac = mat(scene, "broodSacMat", 0.95, 0.6, 0.3, 0.6);
+    sac.alpha = 0.8;
+    sac.emissiveColor = new Color3(0.4, 0.2, 0.05);
+    for (const [x, z, d] of [[0, 0, 0.7], [0.32, 0.2, 0.45], [-0.3, 0.18, 0.4], [0.05, -0.32, 0.42]] as const) {
+      add(MeshBuilder.CreateSphere("broodEgg", { diameter: d, segments: 16 }, scene), sac, d * 0.45, x, z);
+    }
+  } else if (type === "hiveQueen") {
+    // The hive queen: a vast bloated abdomen behind a crowned, mandibled head.
+    const shell = mat(scene, "queenShell", 0.35, 0.22, 0.12, 0.6);
+    const belly = mat(scene, "queenBelly", 0.9, 0.55, 0.2, 0.4);
+    belly.emissiveColor = new Color3(0.35, 0.18, 0.04);
+    const glow = mat(scene, "queenGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.5, 1, 0.3);
+    const abdomen = MeshBuilder.CreateSphere("queenAbdomen", { diameter: 2.2, segments: 20 }, scene);
+    abdomen.scaling.set(1, 0.8, 1.4);
+    abdomen.bakeCurrentTransformIntoVertices();
+    add(abdomen, belly, 1.2, 0, -1.0);
+    add(MeshBuilder.CreateCapsule("queenBody", { height: 2.2, radius: 0.7, tessellation: 14 }, scene), shell, 1.15);
+    add(MeshBuilder.CreateSphere("queenHead", { diameter: 0.9, segments: 12 }, scene), shell, 2.3, 0, 0.35);
+    add(MeshBuilder.CreateBox("queenEyes", { width: 0.55, height: 0.1, depth: 0.12 }, scene), glow, 2.38, 0, 0.75);
+    for (let i = 0; i < 5; i++) {
+      const crown = MeshBuilder.CreateCylinder("queenCrown", { diameterTop: 0, diameterBottom: 0.18, height: 0.6, tessellation: 6 }, scene);
+      crown.rotation.z = (i - 2) * 0.35;
+      add(crown, glow, 2.85, (i - 2) * 0.18, 0.3);
+    }
+    for (const side of [-1, 1]) {
+      const mandible = MeshBuilder.CreateCylinder("queenMandible", { diameterTop: 0, diameterBottom: 0.16, height: 0.6, tessellation: 5 }, scene);
+      mandible.rotation.x = Math.PI / 2;
+      mandible.rotation.y = side * 0.4;
+      add(mandible, shell, 2.05, side * 0.2, 0.95);
+    }
+    // Heavy forelimbs that swing as it stomps.
+    pair("arm", 1.5, 0.26, shell, 1.0, 2.0);
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     const coat = mat(scene, "techCoat", 0.92, 0.95, 0.97);
@@ -796,10 +877,20 @@ function animateLimbs(v: Visual, t: TargetEntity, stride: number, time: number, 
   const windup = t.ai === "windup" && t.def.combat ? 1 - Math.max(0, t.aiTimer) / t.def.combat.windupSeconds : 0;
   const lunge = t.ai === "recover" && t.def.combat && t.aiTimer > t.def.combat.cooldownSeconds - 0.25;
   for (const { inst, role, joint } of v.limbs) {
-    const left = role.endsWith("L");
+    const left = role.startsWith("insect") ? role.includes("L") : role.endsWith("L");
     const isArm = role.startsWith("arm");
     let rx = 0;
     let rz = 0;
+    if (role.startsWith("insect")) {
+      const offset = Number(role.slice(-1)) * Math.PI + (left ? 0 : Math.PI);
+      rx = Math.sin(v.phase + offset) * stride * 0.65;
+      rz = Math.max(0, Math.cos(v.phase + offset)) * stride * (left ? -0.22 : 0.22);
+      if (t.held) rx = Math.sin(time * 16 + offset) * 0.5;
+      const blend = 1 - Math.exp(-dt * 16);
+      inst.rotation.x += (rx - inst.rotation.x) * blend;
+      inst.rotation.z += (rz - inst.rotation.z) * blend;
+      continue;
+    }
     if (t.held) {
       // Flail: arms up and thrashing, legs kicking.
       rx = isArm ? -2.6 + Math.sin(time * 18 + (left ? 0 : 1.7) + t.id) * 0.45 : Math.sin(time * 14 + (left ? 0 : Math.PI)) * 0.5;
