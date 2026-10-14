@@ -407,6 +407,12 @@ async function boot(): Promise<void> {
     else loop.resume("menu");
   }
 
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !ready || !hud.upgradesOpen) return;
+    event.preventDefault();
+    setUpgradesOpen(false);
+  });
+
   // Foreground-only: hidden pages freeze the simulation and earn nothing.
   const onHidden = () => {
     loop.pause("hidden");
