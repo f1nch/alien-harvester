@@ -272,6 +272,7 @@ async function boot(): Promise<void> {
   const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰" } as const;
   const loop = new FixedLoop((dt) => stepWorld(world, dt), { hz: SIM_HZ, maxStepsPerFrame: 5 });
   renderer.snapCamera(world);
+  let recordDevFrame: ((now: number, cpuMs: number, inputStrength: number, speed: number, lastDrag: number) => void) | undefined;
   if (import.meta.env.DEV) {
     // Dynamic import keeps the testing panel out of production bundles entirely.
     void import("./ui/devTools").then(({ mountDevTools }) => {
@@ -323,6 +324,7 @@ async function boot(): Promise<void> {
         },
       });
       dev.setCreatureStatus(renderer.creatureStatus());
+      recordDevFrame = dev.recordFrame;
       renderer.onCreatureSourcesChanged = () => dev.setCreatureStatus(renderer.creatureStatus());
     });
     // Debug hook for automated checks: advance the simulation deterministically.
@@ -406,6 +408,12 @@ async function boot(): Promise<void> {
     else loop.resume("menu");
   }
 
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !ready || !hud.upgradesOpen) return;
+    event.preventDefault();
+    setUpgradesOpen(false);
+  });
+
   // Foreground-only: hidden pages freeze the simulation and earn nothing.
   const onHidden = () => {
     loop.pause("hidden");
@@ -455,8 +463,9 @@ async function boot(): Promise<void> {
   let depositUnsaved = false;
   ready = true;
   renderer.engine.runRenderLoop(() => {
+    const frameStart = performance.now();
     input.read(world.input);
-    const alpha = loop.frame(performance.now());
+    const alpha = loop.frame(frameStart);
 
     const events = world.events;
     if (events.length) {
@@ -554,8 +563,10 @@ async function boot(): Promise<void> {
       void save();
     }
 
-    renderer.render(world, loop.paused ? 1 : alpha);
+    renderer.render(world, loop.paused ? 1 : alpha, loop.paused);
     refreshHud();
+    if (import.meta.env.DEV) recordDevFrame?.(frameStart, performance.now() - frameStart,
+      Math.hypot(world.input.x, world.input.z), Math.hypot(world.player.vx, world.player.vz), input.lastPointerStrength);
   });
 }
 

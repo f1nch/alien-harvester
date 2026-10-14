@@ -16,6 +16,7 @@ export interface DevActions {
 export interface DevTools {
   /** Shows where the creature's look comes from (GLB or procedural, per form). */
   setCreatureStatus(text: string): void;
+  recordFrame(now: number, cpuMs: number, inputStrength: number, speed: number, lastDrag: number): void;
 }
 
 export function mountDevTools(root: HTMLElement, actions: DevActions): DevTools {
@@ -67,6 +68,27 @@ export function mountDevTools(root: HTMLElement, actions: DevActions): DevTools 
   creature.setAttribute("aria-live", "polite");
   panel.append(creature);
 
+  const performanceStatus = document.createElement("div");
+  performanceStatus.className = "dev-row dev-status";
+  performanceStatus.setAttribute("aria-label", "Frame performance");
+  panel.append(performanceStatus);
+  const movementStatus = document.createElement("div");
+  movementStatus.className = "dev-row dev-status";
+  movementStatus.setAttribute("aria-label", "Movement diagnostics");
+  panel.append(movementStatus);
+  let lastFrame = 0;
+  let lastDisplay = 0;
+  const intervals: number[] = [];
+  const costs: number[] = [];
+  let lastMovingSpeed = 0;
+  let lastMovingInput = 0;
+  row("Performance", button("Reset sample", "Reset frame performance sample", () => {
+    intervals.length = costs.length = 0;
+    lastFrame = lastDisplay = 0;
+    performanceStatus.textContent = "Collecting frame sample…";
+  }));
+  performanceStatus.textContent = "Collecting frame sample…";
+
   toggle.addEventListener("click", () => {
     const open = panel.classList.toggle("hidden") === false;
     toggle.setAttribute("aria-expanded", String(open));
@@ -75,6 +97,29 @@ export function mountDevTools(root: HTMLElement, actions: DevActions): DevTools 
   return {
     setCreatureStatus(text) {
       creature.textContent = `Creature: ${text}`;
+    },
+    recordFrame(now, cpuMs, inputStrength, speed, lastDrag) {
+      if (inputStrength > 0 && speed > 0) {
+        lastMovingSpeed = speed;
+        lastMovingInput = inputStrength;
+      }
+      if (document.hidden) { lastFrame = 0; return; }
+      if (lastFrame) {
+        intervals.push(now - lastFrame);
+        costs.push(cpuMs);
+        if (intervals.length > 600) { intervals.shift(); costs.shift(); }
+      }
+      lastFrame = now;
+      if (now - lastDisplay < 500 || intervals.length < 2) return;
+      lastDisplay = now;
+      const sorted = [...intervals].sort((a, b) => a - b);
+      const duration = intervals.reduce((sum, ms) => sum + ms, 0);
+      const fps = 1000 * intervals.length / duration;
+      const p95 = sorted[Math.ceil(sorted.length * 0.95) - 1]!;
+      const slow = intervals.filter((ms) => ms > 33.34).length;
+      const cpu = costs.reduce((sum, ms) => sum + ms, 0) / costs.length;
+      performanceStatus.textContent = `${fps.toFixed(1)} FPS · p95 ${p95.toFixed(1)} ms · CPU ${cpu.toFixed(1)} ms · ${slow}/${intervals.length} frames >33 ms · ${(duration / 1000).toFixed(1)} s sample`;
+      movementStatus.textContent = `Input ${inputStrength.toFixed(2)} / 1 · speed ${speed.toFixed(2)} m/s · last drag ${lastDrag.toFixed(2)} / 1 · last moving ${lastMovingInput.toFixed(2)} / 1 at ${lastMovingSpeed.toFixed(2)} m/s`;
     },
   };
 }

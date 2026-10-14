@@ -13,7 +13,7 @@ Stage A is done; Stage B's systems are feature-complete:
 - Reactor repair completion screen, then free play
 - Versioned saves with migrations, backups, single-tab lock; export/import (in progress)
 
-What Stage B still lacks before it meets the spec's MVP acceptance (section 11): offline caching, pacing simulations and tuning, real-device validation, and audio. Visuals are procedural placeholders.
+What Stage B still lacks before it meets the spec's MVP acceptance (section 11): offline caching, pacing simulations and tuning, real-device validation, and audio. The Tendon Stalker hatchling and juvenile now have rigged GLBs in game; the adult asset is ready for a future third progression stage. Other environment visuals remain procedural placeholders.
 
 ## Milestone 1 — Stage B complete and polished
 
@@ -45,6 +45,8 @@ Goal: the spec's visual bar (section 10): original rigged 3D assets that meet or
 
 - Blender pipeline: GLB export, shared materials, compressed textures (KTX2), validated room manifests (spawn, door, collision markers)
 - Rigged creature with idle, move and capture animations, and distinct evolution silhouettes; tentacles that extend, attach, bend and retract. Brief, GLB contract and loading plan: [CREATURE_ASSET_BRIEF.md](CREATURE_ASSET_BRIEF.md)
+- Juvenile (4,399 triangles) and adult (5,039 triangles) completed with editable Blender scenes, skins, six clips and review renders. Juvenile fills the existing evolved slot; adult is exported for a future gameplay tier.
+- First Stalker hatchling integrated: one mesh, four materials, 3,203 triangles, 27 bones, six clips and eight capture sockets. Tested at the mobile browser size with movement and worker capture. [Asset workflow and remaining work](../art/alien/tendon-stalker/README.md). The selected concept has four life stages; gameplay currently supports two forms. Burrower/Weaver concepts are reserved for possible future skins or alternate playthroughs.
 - Skinned crowd characters (profiled separately; instancing doesn't cover independently animated characters)
 - Modular floor, wall and door kit; baked ambient shading; limited dynamic shadows
 - Camera projection decided by side-by-side review; recorded reference comparison

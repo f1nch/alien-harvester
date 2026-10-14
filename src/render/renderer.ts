@@ -7,6 +7,7 @@ import type { GameEvent, World } from "../game/world";
 import type { LoadedCreatureSource } from "./creatureAssets";
 import { CREATURE_FORMS, creatureModelPath, describeSource, isGlb, logSource, type CreatureForm } from "./creatureContract";
 import type { CreatureLook } from "./creatureLook";
+import type { GltfCreature } from "./gltfCreature";
 import { ProceduralCreature } from "./proceduralCreature";
 import { CrowdView } from "./crowd";
 import { Effects } from "./effects";
@@ -35,6 +36,8 @@ export class GameRenderer {
   private look = new Vector3();
   private cameraZone: Rect;
   private creature: CreatureLook;
+  private modelCreature: GltfCreature | null = null;
+  private shadows: ShadowGenerator | null = null;
   private crowd: CrowdView;
   private structures: StructuresView;
   private dressing: Dressing;
@@ -55,8 +58,7 @@ export class GameRenderer {
   private shownForm = 0;
   private snapNext = false;
   /**
-   * Where each creature form's look comes from. Ready containers are held for the GLB
-   * creature (next step of the asset plan); until then the procedural creature shows.
+   * Each form loads independently, retaining a procedural fallback when unavailable.
    */
   private creatureSources: Record<CreatureForm, LoadedCreatureSource>;
   /** Called whenever a creature source changes (dev panel status). */
@@ -97,6 +99,7 @@ export class GameRenderer {
     }
 
     this.env = buildEnvironment(scene, map, shadows);
+    this.shadows = shadows;
     this.glow?.addExcludedMesh(this.env.basePad);
     this.creature = new ProceduralCreature(scene, shadows);
     this.crowd = new CrowdView(scene, shadows);
@@ -134,6 +137,8 @@ export class GameRenderer {
     arrowMat.disableLighting = true;
     this.arrow = MeshBuilder.CreateDisc("arrow", { radius: 0.45, tessellation: 3 }, scene);
     this.arrow.rotation.x = Math.PI / 2;
+    // Disc triangles start with their tip along +X; headings use local +Z.
+    this.arrow.rotation.y = -Math.PI / 2;
     this.arrow.bakeCurrentTransformIntoVertices();
     this.arrow.scaling.set(0.7, 1, 1.2);
     this.arrow.material = arrowMat;
@@ -173,8 +178,22 @@ export class GameRenderer {
   private async loadCreatureModel(form: CreatureForm): Promise<void> {
     const url = `${import.meta.env.BASE_URL}${creatureModelPath(form)}`;
     const source = await this.fetchCreatureModel(form, url);
+    if (this.scene.isDisposed) {
+      if (source.kind === "ready") source.container.dispose();
+      return;
+    }
     logSource(form, url, source);
     this.creatureSources[form] = source;
+    if (source.kind === "ready") {
+      const { GltfCreature } = await import("./gltfCreature");
+      if (this.scene.isDisposed) { source.container.dispose(); return; }
+      if (!this.modelCreature) {
+        this.modelCreature = new GltfCreature(this.scene, this.creature as ProceduralCreature, this.shadows);
+        this.creature = this.modelCreature;
+      }
+      this.modelCreature.addForm(form, source);
+      this.modelCreature.setForm(this.shownForm, false);
+    }
     this.onCreatureSourcesChanged?.();
   }
 
@@ -241,7 +260,7 @@ export class GameRenderer {
     }
   }
 
-  render(w: World, alpha: number): void {
+  render(w: World, alpha: number, paused = false): void {
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.1);
     this.time += dt;
     const p = w.player;
@@ -277,7 +296,7 @@ export class GameRenderer {
       this.shownForm = w.progress.evolution;
       this.creature.setForm(this.shownForm, false);
     }
-    this.creature.update(dt, x, z, p.vx, p.vz, this.goals);
+    this.creature.update(dt, x, z, paused ? 0 : p.vx, paused ? 0 : p.vz, this.goals);
 
     const r = w.stats.captureRadius;
     this.radiusRing.position.set(x, 0.04, z);

@@ -77,6 +77,8 @@ interface ArmState {
 
 export class ProceduralCreature implements CreatureLook {
   readonly root: TransformNode;
+  /** Loaded bodies can reuse the existing capture tubes at their authored sockets. */
+  captureRoot: ((goal: Vector3, out: Vector3) => void) | null = null;
   private materials: StandardMaterial[];
   private body: Mesh;
   private mantle: Mesh;
@@ -194,6 +196,13 @@ export class ProceduralCreature implements CreatureLook {
 
   hurt(): void {
     this.gulp();
+  }
+
+  /** Keep capture tubes visible while a loaded model supplies the body. */
+  setBodyVisible(visible: boolean): void {
+    this.root.setEnabled(visible);
+    const count = FORMS[Math.min(this.form, FORMS.length - 1)]!.legs;
+    this.legs.forEach((leg, i) => leg.mesh.setEnabled(visible && i < count));
   }
 
   dispose(): void {
@@ -320,6 +329,7 @@ export class ProceduralCreature implements CreatureLook {
       const len = Math.hypot(dx, dz) || 1;
       const nx = dx / len, nz = dz / len;
       this.armRoot.set(x + nx * 0.45 * s, bodyY + bob - 0.05 * s, z + nz * 0.45 * s);
+      this.captureRoot?.(arm.goal, this.armRoot);
       armControls(k, this.armRoot, nx, nz, arm.goal, arm.ext, i, this.time);
       arm.tube.set(k);
       arm.tip.position.copyFrom(d);

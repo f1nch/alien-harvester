@@ -1,5 +1,7 @@
 # Creature asset brief
 
+> **Selected art direction (October 13, 2026):** Tendon Stalker replaces the original blob concept below: dry charcoal-plum tissue, swept chitin, mint crest/core, two resting capture arms, four walking legs and one tail. The older silhouette and wet material descriptions are historical starting points, not requirements for this approved design. Technical names, sockets, budgets, in-place animation and export rules still apply. The first rigged hatchling is integrated; see [its workflow](../art/alien/tendon-stalker/README.md). Its materials retain the authored dry look, and procedural capture tubes are rooted at its sockets. The juvenile is integrated as the evolved form, and a rigged adult export is ready for a future third gameplay stage.
+
 What to build in Blender so the game can load the creature as a GLB in place of the procedural placeholder (`src/render/creature.ts`). This is a brief to model against: the measurements, names and limits below are what the game will check for. Part 1 is for modelling, Part 2 is the code plan, Part 3 is a first-pass Blender workflow.
 
 Spec references: section 10 (visual bar), section 6 (tentacle capture), section 9 (15 MB initial download).

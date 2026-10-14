@@ -17,6 +17,9 @@ export function updatePlayer(w: World, dt: number): void {
   p.x += p.vx * dt;
   p.z += p.vz * dt;
   resolveCircle(p, PLAYER_RADIUS, w.map.bounds, w.obstacles);
+  // Animation follows actual travel, including blocked and sliding movement.
+  p.vx = dt > 0 ? (p.x - p.prevX) / dt : 0;
+  p.vz = dt > 0 ? (p.z - p.prevZ) / dt : 0;
   w.progress.player.x = p.x;
   w.progress.player.z = p.z;
 }

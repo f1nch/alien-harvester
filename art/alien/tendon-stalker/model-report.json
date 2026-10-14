@@ -1,0 +1,21 @@
+{
+  "triangles": 2433,
+  "mesh_objects": 81,
+  "capture_limbs": [
+    "Capture_L",
+    "Capture_R"
+  ],
+  "walking_legs": [
+    "Leg_L_0",
+    "Leg_L_1",
+    "Leg_R_0",
+    "Leg_R_1"
+  ],
+  "tails": [
+    "Tail | single curved appendage"
+  ],
+  "rigged": false,
+  "animated": false,
+  "forward": "-Y in Blender / +Z after glTF export",
+  "procedural_texture_note": "No procedural shader textures used; GLB retains material colors and roughness."
+}
