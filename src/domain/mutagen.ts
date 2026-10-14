@@ -1,6 +1,7 @@
 import { FRENZY, POD, PRIZED } from "../content/feeding";
 import { MUTAGEN, type MutagenId } from "../content/mutagen";
 import { roundCents } from "../content/currencies";
+import { perkBonuses } from "./perks";
 import type { ProgressState } from "./progress";
 
 export function mutagenLevel(p: ProgressState, id: MutagenId): number {
@@ -23,7 +24,7 @@ export function buyMutagen(p: ProgressState, id: MutagenId): MutagenResult {
   return { ok: true };
 }
 
-/** The loop tuning after mutagen mutations. */
+/** The loop tuning after mutagen mutations and loop perks. */
 export interface FeedingTuning {
   frenzySeconds: number;
   comboWindow: number;
@@ -35,11 +36,12 @@ export interface FeedingTuning {
 
 export function feedingTuning(p: ProgressState): FeedingTuning {
   const lvl = (id: MutagenId) => mutagenLevel(p, id);
+  const perk = perkBonuses(p).loop;
   return {
-    frenzySeconds: FRENZY.seconds + lvl("frenzyTime"),
-    comboWindow: FRENZY.comboWindow + 0.75 * lvl("comboWindow"),
+    frenzySeconds: FRENZY.seconds + lvl("frenzyTime") + perk.frenzySeconds,
+    comboWindow: FRENZY.comboWindow + 0.75 * lvl("comboWindow") + perk.comboWindow,
     prizedInterval: PRIZED.interval - 12 * lvl("prizedRate"),
-    boostChance: Math.min(1, POD.boostChance + 0.1 * lvl("podLuck")),
+    boostChance: Math.min(1, POD.boostChance + 0.1 * lvl("podLuck") + perk.boostChance / 100),
     boostSeconds: POD.boostSeconds + 3 * lvl("podLuck"),
     cravingSlots: 3 + lvl("extraCraving"),
   };

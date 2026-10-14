@@ -2,6 +2,7 @@ import { reachableZones, zoneAt } from "../content/map";
 import { TARGETS, type TargetTypeId } from "../content/targets";
 import { currentBiome, tidy } from "./biome";
 import { feedingTuning } from "./mutagen";
+import { perkBonuses } from "./perks";
 import type { ProgressState } from "./progress";
 import { mulberry32 } from "./rng";
 import { roundCents } from "../content/currencies";
@@ -104,6 +105,8 @@ export function fillCravings(p: ProgressState): void {
     // Nothing left that isn't already craved: leave the slot empty.
     if (!next) return;
     p.cravingRolls += 1;
+    // Bounty hunter: fixed into the craving when it's rolled, so what's shown is what's paid.
+    next.reward += perkBonuses(p).loop.cravingMutagen;
     p.cravings.push(next);
   }
 }

@@ -60,7 +60,9 @@ describe("evolution", () => {
     const p = ready();
     expect(evolve(p)).toEqual({ ok: true, tier: 1 });
     expect(p.banked).toMatchObject({ genetic: 0, biomass: 0 });
-    expect(evolve(p)).toEqual({ ok: false, reason: "final" });
+    // The next (endless) tier needs the next floor reached first.
+    expect(evolve(p)).toEqual({ ok: false, reason: "requirements" });
+    expect(p.evolution).toBe(1);
   });
 
   it("adds a tentacle and raises every cap", () => {
@@ -113,12 +115,14 @@ describe("evolution saves", () => {
     expect(parsed.progress.upgrades.capturePower).toBe(8);
   });
 
-  it("rejects malformed tiers and clamps tiers beyond the last form", () => {
+  it("rejects malformed tiers and clamps tiers beyond what the depth allows", () => {
     const bad = toSaveFile(ready(), defaultSettings()) as any;
     bad.progress.evolution = 1.5;
     expect(parseSave(bad)).toBeNull();
     bad.progress.evolution = 99;
     expect(parseSave(bad)!.progress.evolution).toBe(EVOLUTIONS.length);
+    bad.progress.depth = 5;
+    expect(parseSave(bad)!.progress.evolution).toBe(6);
   });
 
   it("migrates a v2 save to tier 0", () => {

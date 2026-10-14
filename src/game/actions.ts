@@ -11,12 +11,12 @@ import type { MutagenId } from "../content/mutagen";
 import { fillCravings } from "../domain/cravings";
 import { buyMutagen, type MutagenResult } from "../domain/mutagen";
 import { VAT } from "../content/structures";
-import { repairReactor, type RepairResult } from "../domain/reactor";
+import { repairReactor, startSummon, type RepairResult, type SummonResult } from "../domain/reactor";
 import { advanceStructure, refineryBatchDrop, vatBatchDrop, type StructureKind, type StructureResult } from "../domain/structures";
 import { releaseCatcher } from "./systems/catcher";
 import { dist2, resolveCircle } from "./geometry";
 import { bankDrop, inBase } from "./systems/deposit";
-import { PLAYER_RADIUS, TARGET_RADIUS, questEvent, refreshObstacles, refreshStats, type World } from "./world";
+import { PLAYER_RADIUS, TARGET_RADIUS, questEvent, refreshObstacles, refreshStats, spawnSummoned, type World } from "./world";
 
 /** Player-initiated actions. Each applies its domain transaction, then quest and event bookkeeping. */
 
@@ -170,6 +170,17 @@ export function repair(w: World): RepairResult | { ok: false; reason: "notAtCons
   if (!nearReactor(w)) return { ok: false, reason: "notAtConsole" };
   const r = repairReactor(w.progress);
   if (r.ok) w.events.push({ type: "reactorRepaired" });
+  return r;
+}
+
+/** Feeds the finished objective machine to summon a reward wave around it. */
+export function summonWave(w: World): SummonResult | { ok: false; reason: "notAtConsole" } {
+  if (!nearReactor(w)) return { ok: false, reason: "notAtConsole" };
+  const r = startSummon(w.progress);
+  if (r.ok) {
+    spawnSummoned(w);
+    w.events.push({ type: "waveSummoned", count: r.count });
+  }
   return r;
 }
 

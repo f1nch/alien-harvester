@@ -1,6 +1,6 @@
 import { cargoWeight, type CargoDrop } from "../../domain/progress";
 import { dist2, hasLineOfSight } from "../geometry";
-import { gainXp, questEvent, type TargetEntity, type World } from "../world";
+import { gainXp, questEvent, retireTarget, type TargetEntity, type World } from "../world";
 import { bossStunned, bossTuning } from "./boss";
 import { onCaptured, onHelperCaptured } from "./feeding";
 
@@ -144,8 +144,8 @@ function assignTentacles(w: World): void {
 export function catcherComplete(w: World, t: TargetEntity, into: CargoDrop[]): void {
   for (let i = 0; i < w.tentacles.length; i++) if (w.tentacles[i] === t) w.tentacles[i] = null;
   w.targets.splice(w.targets.indexOf(t), 1);
-  into.push({ type: t.def.id, weight: t.def.weight, reward: { ...t.def.reward } });
-  w.progress.spawnCooldowns[t.spawnId] = t.def.respawnSeconds;
+  into.push(dropOf(t));
+  retireTarget(w, t);
   w.events.push({ type: "catcherCaught", target: t });
   onHelperCaptured(w, t);
   gainXp(w, t.def.xp);
@@ -156,8 +156,8 @@ function complete(w: World, t: TargetEntity): void {
   const slot = w.tentacles.indexOf(t);
   for (let i = 0; i < w.tentacles.length; i++) if (w.tentacles[i] === t) w.tentacles[i] = null;
   w.targets.splice(w.targets.indexOf(t), 1);
-  w.progress.cargo.push({ type: t.def.id, weight: t.def.weight, reward: { ...t.def.reward } });
-  w.progress.spawnCooldowns[t.spawnId] = t.def.respawnSeconds;
+  w.progress.cargo.push(dropOf(t));
+  retireTarget(w, t);
   w.events.push({ type: "captured", target: t, slot });
   onCaptured(w, t);
   gainXp(w, t.def.xp);
@@ -166,4 +166,10 @@ function complete(w: World, t: TargetEntity): void {
     w.events.push({ type: "bossDefeated", name: t.def.name });
     questEvent(w, { kind: "defeatBoss" });
   }
+}
+
+function dropOf(t: TargetEntity): CargoDrop {
+  const drop: CargoDrop = { type: t.def.id, weight: t.def.weight, reward: { ...t.def.reward } };
+  if (t.summoned) drop.summoned = true;
+  return drop;
 }

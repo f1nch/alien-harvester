@@ -42,3 +42,18 @@ export const POD = {
   boostChance: 0.4,
   boostSeconds: 15,
 } as const;
+
+/**
+ * Reward waves: once a floor's objective is done, the machine can be fed that floor's
+ * currency to summon a wave of creatures around it (Phase C). One wave at a time.
+ */
+export const SUMMON = {
+  count: 8,
+  /** Each summoned creature pays this many times its usual payout (not its XP). */
+  rewardMultiplier: 4,
+  /** How far from the machine they appear. */
+  radius: 3.2,
+  wanderRadius: 3,
+  /** Each wave already summoned on this floor makes the next cost this much more. */
+  costGrowth: 1.2,
+} as const;

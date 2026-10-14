@@ -231,4 +231,5 @@ export const CRYO_LABS: BiomeDef = {
   // In the vaults, where the east vent would be: built, it warms that side of the room.
   outpost: { gate: "cryo-open-vaults", cost: { crystals: 30, biomass: 200 } },
   structureGate: "cryo-open-cold",
+  summon: { cost: { crystals: 15, biomass: 50 }, types: ["cryoScientist", "frostRunner"] },
 };

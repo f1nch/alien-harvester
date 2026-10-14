@@ -22,6 +22,8 @@ export function enterNextBiome(p: ProgressState): void {
   p.reactorRepaired = false;
   // Cravings name this floor's creatures and rooms: new ones are rolled on arrival.
   p.cravings = [];
+  // A wave still roaming stays behind (the exit card warns about it).
+  p.summon = { waves: 0, left: 0 };
   p.spawnCooldowns = {};
   for (const s of map.spawns) p.spawnCooldowns[s.id] = 0;
   p.player = { x: map.playerSpawn.x, z: map.playerSpawn.z, health: computeStats(p).maxHealth };

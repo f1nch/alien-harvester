@@ -6,9 +6,10 @@ import { isMutagenId, MUTAGEN } from "../content/mutagen";
 import { inBestiary } from "../domain/bestiary";
 import { CRAVING_KINDS, type Craving, type CravingKind } from "../domain/cravings";
 import { feedingTuning } from "../domain/mutagen";
-import { biomeAt, MAX_DEPTH, type ActiveBiome } from "../domain/biome";
+import { biomeAt, MAX_DEPTH, scaleReward, type ActiveBiome } from "../domain/biome";
+import { SUMMON } from "../content/feeding";
 import { UPGRADE_IDS, UPGRADES } from "../content/upgrades";
-import { MAX_TIER } from "../content/evolution";
+import { EVOLUTIONS, MAX_TIER } from "../content/evolution";
 import { MAX_LEVEL } from "../content/levels";
 import { CHOICES_PER_LEVEL, isPerkId, PERKS } from "../content/perks";
 import { capAt, computeStats, tableCostForLevels } from "../domain/economy";
@@ -19,7 +20,7 @@ import { CATCHER, DRONE, REFINERY, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 export const CONTENT_VERSION = 1;
 
 /** The level cap before endless levels (v9). */
@@ -154,6 +155,15 @@ function migrate(raw: Obj): Obj | null {
     const progress = isObj(m.progress) ? { ...m.progress, structures } : m.progress;
     m = { ...m, schemaVersion: 12, progress };
   }
+  if (m.schemaVersion === 12) {
+    // v13 adds endless evolution tiers (the tier is still a number; only its cap rose),
+    // alloy paid into deep capture-power levels (none yet) and the objective machine's
+    // reward waves (none summoned). The bump stops older builds clamping the tier.
+    const progress = isObj(m.progress)
+      ? { ...m.progress, upgradeExtraSpent: {}, summon: { waves: 0, left: 0 } }
+      : m.progress;
+    m = { ...m, schemaVersion: 13, progress };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
@@ -169,6 +179,10 @@ function parseDrop(d: unknown, biome: ActiveBiome): CargoDrop | null {
   if (d.type === "refinery") return refineryBatchDrop(biome.depth);
   if (!isTargetType(d.type)) return null;
   const def = biome.targets[d.type];
+  // A reward-wave catch keeps its multiplier, but only for creatures this floor summons.
+  if (d.summoned === true && biome.def.summon.types.includes(def.id)) {
+    return { type: def.id, weight: def.weight, reward: scaleReward(def.reward, SUMMON.rewardMultiplier), summoned: true };
+  }
   return { type: def.id, weight: def.weight, reward: { ...def.reward } };
 }
 
@@ -224,7 +238,8 @@ export function parseSave(raw: unknown): SaveFile | null {
 
   // Parsed before upgrades: the tier decides each track's level cap.
   if (!Number.isInteger(p.evolution) || (p.evolution as number) < 0) return null;
-  progress.evolution = Math.min(p.evolution as number, MAX_TIER);
+  // Endless tier t needs depth t − 1 and depth never goes down, so nothing reachable is higher.
+  progress.evolution = Math.min(p.evolution as number, MAX_TIER, Math.max(EVOLUTIONS.length, progress.depth + 1));
 
   if (!isObj(p.upgrades)) return null;
   for (const id of UPGRADE_IDS) {
@@ -248,6 +263,13 @@ export function parseSave(raw: unknown): SaveFile | null {
     // Tracks added after this save was written start with nothing spent.
     if (spent !== undefined && !isNonNeg(spent)) return null;
     progress.upgradeSpent[id] = (spent as number | undefined) ?? tableCostForLevels(id, progress.upgrades[id]);
+  }
+  if (!isObj(p.upgradeExtraSpent)) return null;
+  for (const id of UPGRADE_IDS) {
+    const spent = p.upgradeExtraSpent[id] ?? 0;
+    if (!isNonNeg(spent)) return null;
+    // Only tracks with a second price can have paid one.
+    progress.upgradeExtraSpent[id] = UPGRADES[id].extraCost ? spent : 0;
   }
   if (!Number.isInteger(p.mutationsBought) || (p.mutationsBought as number) < 0) return null;
   let levels = 0;
@@ -400,6 +422,11 @@ export function parseSave(raw: unknown): SaveFile | null {
   if (typeof p.reactorRepaired !== "boolean" || !isNonNeg(p.playSeconds)) return null;
   progress.reactorRepaired = p.reactorRepaired;
   progress.playSeconds = p.playSeconds;
+
+  // A paid wave's uncaught creatures come back on load (game/world#spawnSummoned).
+  if (!isObj(p.summon) || !Number.isInteger(p.summon.waves) || !isNonNeg(p.summon.waves)) return null;
+  if (!Number.isInteger(p.summon.left) || (p.summon.left as number) < 0) return null;
+  progress.summon = { waves: p.summon.waves as number, left: Math.min(p.summon.left as number, SUMMON.count) };
 
   // Mutagen mutations before cravings: they set how many cravings there can be.
   if (!isObj(p.mutagenLevels)) return null;

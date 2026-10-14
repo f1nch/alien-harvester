@@ -1,7 +1,7 @@
 import "./ui/styles.css";
 import type { MapDef } from "./content/map";
 import { biomeAt } from "./domain/biome";
-import { BOOSTS, PRIZED } from "./content/feeding";
+import { BOOSTS, PRIZED, SUMMON } from "./content/feeding";
 import { TARGETS } from "./content/targets";
 import { describeCraving } from "./domain/cravings";
 import type { UpgradeId } from "./content/upgrades";
@@ -12,9 +12,9 @@ import { pointInRect } from "./game/geometry";
 import { levelForXp } from "./domain/levels";
 import type { CargoDrop } from "./domain/progress";
 import { UPGRADE_IDS } from "./content/upgrades";
-import { capAt, tableCostForLevels } from "./domain/economy";
+import { capAt, extraCostForLevels, tableCostForLevels } from "./domain/economy";
 import { devCompleteActive } from "./domain/quests";
-import { buildStructure, buyMutagenMutation, leaveBiome, nearExit, nearReactor, repair, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
+import { buildStructure, buyMutagenMutation, leaveBiome, nearExit, nearReactor, repair, summonWave, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
 import { atPad } from "./game/systems/deposit";
@@ -129,6 +129,13 @@ async function boot(): Promise<void> {
     onRepair: () => {
       if (!ready) return;
       if (repair(world).ok) {
+        refreshHud();
+        void save();
+      }
+    },
+    onSummon: () => {
+      if (!ready) return;
+      if (summonWave(world).ok) {
         refreshHud();
         void save();
       }
@@ -301,7 +308,10 @@ async function boot(): Promise<void> {
           p.evolution = Math.max(0, p.evolution - 1);
           for (const id of UPGRADE_IDS) {
             const capped = Math.min(p.upgrades[id], capAt(id, p.evolution, p.depth));
-            if (capped < p.upgrades[id]) p.upgradeSpent[id] = tableCostForLevels(id, capped);
+            if (capped < p.upgrades[id]) {
+              p.upgradeSpent[id] = tableCostForLevels(id, capped);
+              p.upgradeExtraSpent[id] = extraCostForLevels(id, capped);
+            }
             p.upgrades[id] = capped;
           }
           refreshStats(world);
@@ -492,6 +502,11 @@ async function boot(): Promise<void> {
           saveNow = true;
         } else if (e.type === "reactorRepaired") {
           showCompletion();
+          saveNow = true;
+        } else if (e.type === "waveSummoned") {
+          hud.toast(`The machine hums: ${e.count} creatures answer. Each pays ${SUMMON.rewardMultiplier}× the usual.`, 3.5);
+        } else if (e.type === "waveCleared") {
+          hud.toast("Wave cleared. The machine can summon another.", 3);
           saveNow = true;
         } else if (e.type === "frenzyStart") {
           hud.toast("Feeding frenzy! Capture power doubled", 2);

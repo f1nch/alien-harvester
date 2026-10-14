@@ -1,5 +1,5 @@
 import { CURRENCIES, CURRENCY_LABEL, roundCents, type Reward } from "../content/currencies";
-import { currentBiome } from "./biome";
+import { biomeAt, currentBiome } from "./biome";
 import { levelForXp } from "./levels";
 import type { ProgressState } from "./progress";
 import { isDone } from "./quests";
@@ -7,6 +7,8 @@ import { isDone } from "./quests";
 /** Shared gate used by doors and evolution. */
 export interface Requirements {
   level?: number;
+  /** Floors cleared (endless evolution tiers need the floor before them reached). */
+  depth?: number;
   /** Quest IDs that must be complete. */
   quests?: string[];
   /** Lifetime mutation (upgrade) levels bought; a respec does not reduce it. */
@@ -22,6 +24,11 @@ export interface Requirement {
   progress: string;
 }
 
+/** Amounts past a million read as e.g. "1.1e+63" rather than float noise. */
+export function amountText(n: number): string {
+  return n < 1e6 ? String(Math.round(n * 100) / 100) : String(Number(n.toPrecision(3)));
+}
+
 export function totalMutationLevels(p: ProgressState): number {
   return p.mutationsBought;
 }
@@ -32,6 +39,9 @@ export function evaluate(p: ProgressState, r: Requirements): Requirement[] {
   if (r.level !== undefined) {
     const level = levelForXp(p.xp);
     out.push({ label: `Reach level ${r.level}`, met: level >= r.level, progress: `Lv ${level} / ${r.level}` });
+  }
+  if (r.depth !== undefined) {
+    out.push({ label: `Reach ${biomeAt(r.depth).name}`, met: p.depth >= r.depth, progress: `Depth ${p.depth} / ${r.depth}` });
   }
   for (const id of r.quests ?? []) {
     const q = currentBiome(p).questById.get(id);
@@ -51,9 +61,9 @@ export function evaluate(p: ProgressState, r: Requirements): Requirement[] {
     if (!cost) continue;
     const have = p.banked[c];
     out.push({
-      label: `Pay ${cost} ${CURRENCY_LABEL[c].toLowerCase()}`,
+      label: `Pay ${amountText(cost)} ${CURRENCY_LABEL[c].toLowerCase()}`,
       met: have >= cost,
-      progress: `${Math.floor(Math.min(have, cost))} / ${cost}`,
+      progress: `${amountText(Math.floor(Math.min(have, cost)))} / ${amountText(cost)}`,
     });
   }
   return out;

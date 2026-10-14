@@ -10,7 +10,15 @@ export type PerkId =
   | "yield"
   | "biomassCache"
   | "geneSample"
-  | "farm";
+  | "farm"
+  | "frenzy"
+  | "combo"
+  | "bounty"
+  | "pods"
+  | "warmBlood";
+
+/** Loop-feature tuning a perk can add to (summed with mutagen mutations in domain/mutagen#feedingTuning). */
+export type LoopStat = "frenzySeconds" | "comboWindow" | "cravingMutagen" | "boostChance" | "chillResist";
 
 export type PerkEffect =
   /** Percent bonus to a stat, added to other perks on the same stat (never compounded). */
@@ -18,7 +26,9 @@ export type PerkEffect =
   /** Flat bonus to a stat. */
   | { kind: "flat"; stat: "regeneration" | "yieldPercent" | "farmPercent"; amount: number }
   /** One-time grant, scaled by the level the choice was earned at. */
-  | { kind: "grant"; currency: Currency; base: number; perLevel: number };
+  | { kind: "grant"; currency: Currency; base: number; perLevel: number }
+  /** Adds to a loop feature: seconds, mutagen per craving, or percent. */
+  | { kind: "loop"; stat: LoopStat; amount: number };
 
 export interface PerkDef {
   id: PerkId;
@@ -27,11 +37,12 @@ export interface PerkDef {
   effect: PerkEffect;
   /** Maximum times this perk can be taken; null for repeatable one-time grants. */
   maxStacks: number | null;
-  /** Door that must be open before this perk can be offered. */
   /** Only offered once the current floor has an open door (genetic material matters by then). */
   requiresDoor?: boolean;
   /** Only offered once the biomass vat is built. */
   requiresVat?: boolean;
+  /** Only offered from this depth on (e.g. cold resistance once cold floors exist). */
+  requiresDepth?: number;
 }
 
 /** Persistent IDs: saves reference them. */
@@ -51,6 +62,16 @@ export const PERKS: Record<PerkId, PerkDef> = {
     requiresDoor: true,
   },
   farm: { id: "farm", name: "Fertile vats", icon: "⚗", effect: { kind: "flat", stat: "farmPercent", amount: 10 }, maxStacks: 3, requiresVat: true },
+  // Phase C: perks for the loop features. They stack with the mutagen mutations.
+  frenzy: { id: "frenzy", name: "Ravenous", icon: "✺", effect: { kind: "loop", stat: "frenzySeconds", amount: 1.5 }, maxStacks: 3 },
+  combo: { id: "combo", name: "Quick jaws", icon: "⟳", effect: { kind: "loop", stat: "comboWindow", amount: 0.5 }, maxStacks: 3 },
+  bounty: { id: "bounty", name: "Bounty hunter", icon: "☍", effect: { kind: "loop", stat: "cravingMutagen", amount: 1 }, maxStacks: 2 },
+  pods: { id: "pods", name: "Lucky find", icon: "✧", effect: { kind: "loop", stat: "boostChance", amount: 10 }, maxStacks: 2 },
+  warmBlood: {
+    id: "warmBlood", name: "Warm blood", icon: "♨",
+    effect: { kind: "loop", stat: "chillResist", amount: 10 }, maxStacks: 3,
+    requiresDepth: 1,
+  },
 };
 
 export const PERK_IDS = Object.keys(PERKS) as PerkId[];

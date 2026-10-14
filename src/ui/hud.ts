@@ -9,16 +9,16 @@ import { CATCHER, DRONE, OUTPOST, REFINERY, VAT } from "../content/structures";
 import { catcherLevel, droneCapacity, nextStep, refineryIdle, refineryInput, refineryLevel, stepRequirements, STRUCTURE_KINDS, vatLevel, type StructureKind } from "../domain/structures";
 import { describePerk, isLegal, perkStacks } from "../domain/perks";
 import { CURRENCY_LABEL, type Currency } from "../content/currencies";
-import { capRaise, maxLevel, nextCost, upgradeValue } from "../domain/economy";
+import { canAfford, capRaise, maxLevel, nextCost, nextExtraCost, upgradePrice, upgradeValue } from "../domain/economy";
 import { evolutionRequirements, nextEvolution } from "../domain/evolution";
 import type { Requirement } from "../domain/requirements";
 import { levelProgress } from "../domain/levels";
 import { cargoWeight } from "../domain/progress";
 import { activeQuests, questCount } from "../domain/quests";
 import type { TargetEntity, World } from "../game/world";
-import { reactorRequirements } from "../domain/reactor";
+import { reactorRequirements, summonRequirements } from "../domain/reactor";
 import { biomeAt, clearRequirements } from "../domain/biome";
-import { BOOSTS, FRENZY, type BoostId } from "../content/feeding";
+import { BOOSTS, FRENZY, SUMMON, type BoostId } from "../content/feeding";
 import { COLD } from "../content/cold";
 import { MUTAGEN, MUTAGEN_IDS, type MutagenId } from "../content/mutagen";
 import { TARGETS, type TargetTypeId } from "../content/targets";
@@ -80,6 +80,8 @@ export interface HudCallbacks {
   onRespec(): void;
   onBuildStructure(kind: StructureKind): void;
   onRepair(): void;
+  /** Feed the finished objective machine for a reward wave. */
+  onSummon(): void;
   onBuyMutagen(id: MutagenId): void;
   /** Take the way on (elevator or portal) to the next biome. */
   onLeaveBiome(): void;
@@ -195,11 +197,16 @@ export class Hud {
   private reactorCard: HTMLElement;
   private reactorList: HTMLElement;
   private reactorBtn: HTMLButtonElement;
+  private reactorNote: HTMLElement;
+  /** Once the objective is done, the card's button summons reward waves. */
+  private reactorSummons = false;
   private exitCard: HTMLElement;
   private exitTitle: HTMLElement;
   private exitNote: HTMLElement;
   private exitList: HTMLElement;
   private exitBtn: HTMLButtonElement;
+  private exitNeedsConfirm = false;
+  private exitArmedAt = 0;
   private completionTitle: HTMLElement;
   private completionBody: HTMLElement;
   private reactorTitle: HTMLElement;
@@ -326,8 +333,9 @@ export class Hud {
     this.reactorTitle = el("h3", undefined, "Reactor console");
     this.reactorList = el("ul", "door-reqs");
     this.reactorBtn = el("button", "btn btn-buy", "Repair the reactor");
-    this.reactorBtn.addEventListener("click", () => cb.onRepair());
-    this.reactorCard.append(this.reactorTitle, this.reactorList, this.reactorBtn);
+    this.reactorBtn.addEventListener("click", () => (this.reactorSummons ? cb.onSummon() : cb.onRepair()));
+    this.reactorNote = el("p", "exit-note hidden");
+    this.reactorCard.append(this.reactorTitle, this.reactorNote, this.reactorList, this.reactorBtn);
 
     // The way on (elevator or portal): what's still needed, or where it leads.
     this.exitCard = el("div", "door-card exit-card hidden");
@@ -336,7 +344,17 @@ export class Hud {
     this.exitNote = el("p", "exit-note");
     this.exitList = el("ul", "door-reqs");
     this.exitBtn = el("button", "btn btn-buy");
-    this.exitBtn.addEventListener("click", () => cb.onLeaveBiome());
+    this.exitBtn.addEventListener("click", () => {
+      // Leaving with a summoned wave still roaming forfeits it: two deliberate taps.
+      const now = performance.now();
+      if (!this.exitNeedsConfirm || (this.exitArmedAt && now - this.exitArmedAt >= 400 && now - this.exitArmedAt < 4000)) {
+        this.exitArmedAt = 0;
+        cb.onLeaveBiome();
+      } else {
+        this.exitArmedAt = now;
+        this.exitBtn.textContent = "Tap again to leave the wave behind";
+      }
+    });
     this.exitCard.append(this.exitTitle, this.exitNote, this.exitList, this.exitBtn);
 
     // Objective-complete screen (the reactor in the facility).
@@ -619,7 +637,7 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, w.chillApplied, feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired,
+      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, w.chillApplied, feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired, p.summon.left,
       s.boss ? `${Math.round(s.boss.progress * 100)}:${s.boss.boss?.state}` : "", s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
@@ -697,11 +715,15 @@ export class Hud {
         row.buy.textContent = raise === "evolve" ? "Evolve to raise cap" : raise === "nextBiome" ? "Go deeper to raise cap" : "Maxed";
         row.buy.disabled = true;
       } else {
-        const can = p.banked[def.currency] >= cost;
+        // Deep capture-power levels also cost alloy (UpgradeDef.extraCost).
+        const extra = nextExtraCost(p, id);
+        const can = canAfford(p, upgradePrice(p, id)!);
         affordable ||= can && !hidden;
-        row.buy.textContent = `Buy · ${cost} ${CURRENCY_ICON[def.currency]}`;
+        const extraText = extra ? ` + ${fmt(extra.amount)} ${CURRENCY_ICON[extra.currency]}` : "";
+        row.buy.textContent = `Buy · ${fmt(cost)} ${CURRENCY_ICON[def.currency]}${extraText}`;
         row.buy.disabled = !can;
-        row.buy.setAttribute("aria-label", `Buy ${def.name} for ${cost} ${CURRENCY_LABEL[def.currency].toLowerCase()}`);
+        const extraLabel = extra ? ` and ${extra.amount} ${CURRENCY_LABEL[extra.currency].toLowerCase()}` : "";
+        row.buy.setAttribute("aria-label", `Buy ${def.name} for ${cost} ${CURRENCY_LABEL[def.currency].toLowerCase()}${extraLabel}`);
       }
     }
     this.respecBlocker = s.respecBlocker;
@@ -821,21 +843,36 @@ export class Hud {
     this.exitTitle.textContent = open ? `${exit.name} — powered` : `${exit.name} — no power`;
     this.exitNote.textContent = open
       ? `Leads to ${next.name}. You keep everything you've harvested, your mutations, perks and form. Unbanked cargo is banked on the way.`
+        + (p.summon.left > 0 ? ` The ${p.summon.left} summoned creatures still roaming stay behind.` : "")
       : "Clear this floor to use it:";
     if (open) this.exitList.replaceChildren();
     else requirementList(this.exitList, reqs);
     this.exitBtn.disabled = !open;
-    this.exitBtn.textContent = open ? exit.action : "Not powered yet";
+    this.exitNeedsConfirm = open && p.summon.left > 0;
+    if (!this.exitNeedsConfirm) this.exitArmedAt = 0;
+    const armed = this.exitArmedAt > 0 && performance.now() - this.exitArmedAt < 4000;
+    this.exitBtn.textContent = !open ? "Not powered yet" : armed ? "Tap again to leave the wave behind" : exit.action;
   }
 
   private renderReactor(w: World, near: boolean): void {
     this.reactorCard.classList.toggle("hidden", !near);
     if (!near) return;
     const p = w.progress;
+    this.reactorSummons = p.reactorRepaired;
+    this.reactorNote.classList.toggle("hidden", !p.reactorRepaired);
     if (p.reactorRepaired) {
+      // A finished machine takes this floor's currency for a reward wave: a goal before leaving.
       this.reactorTitle.textContent = w.biome.objective.doneTitle;
-      this.reactorList.replaceChildren();
-      this.reactorBtn.classList.add("hidden");
+      const left = p.summon.left;
+      this.reactorNote.textContent = left > 0
+        ? `Wave roaming: ${left} summoned ${left === 1 ? "creature" : "creatures"} left to catch.`
+        : `Feed it to summon a wave of ${SUMMON.count} creatures, each worth ${SUMMON.rewardMultiplier}× the usual payout.`;
+      const reqs = left > 0 ? [] : summonRequirements(p);
+      requirementList(this.reactorList, reqs);
+      const ok = left === 0 && reqs.every((r) => r.met);
+      this.reactorBtn.classList.remove("hidden");
+      this.reactorBtn.disabled = !ok;
+      this.reactorBtn.textContent = left > 0 ? "Wave in progress" : ok ? "Summon a wave" : "Can't afford a wave";
       return;
     }
     this.reactorTitle.textContent = `${w.biome.objective.name} — damaged`;

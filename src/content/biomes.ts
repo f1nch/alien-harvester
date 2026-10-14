@@ -2,6 +2,7 @@ import type { Requirements } from "../domain/requirements";
 import type { Reward } from "./currencies";
 import { FACILITY, type MapDef } from "./map";
 import { QUESTS, type QuestDef } from "./quests";
+import type { TargetTypeId } from "./targets";
 import { CRYO_LABS } from "./cryo";
 import { REACTOR } from "./reactor";
 
@@ -58,6 +59,11 @@ export interface BiomeDef {
   outpost: { gate: string; cost: Reward };
   /** Quest that unlocks building structures here (they're carried over once built). */
   structureGate: string;
+  /**
+   * The objective machine's reward wave: its (unscaled) price once the objective is done,
+   * and the free-roaming creatures it summons, cycled in order.
+   */
+  summon: { cost: Reward; types: readonly TargetTypeId[] };
 }
 
 /**
@@ -85,6 +91,7 @@ export const BIOMES: readonly BiomeDef[] = [
     // Halfway: in the security sector, so a trip from the reactor hall is short.
     outpost: { gate: "q-open-security", cost: { biomass: 200, parts: 10 } },
     structureGate: "q-open-service",
+    summon: { cost: { biomass: 60 }, types: ["worker", "runner", "technician"] },
   },
   CRYO_LABS,
 ];

@@ -137,9 +137,11 @@ Saves: v11 adds the crystals and alloy currencies and Thermal fat (chill is tran
 
 - **Biome 3** (hand-made, theme to be decided: e.g. an orbital shipyard with mech guards).
 - **Cycling:** after biome 3, biomes repeat at higher depth with a numeral and a new tint.
-- **Endless evolution:** tier `t` (t ≥ 2) requires reaching depth `t − 1`, genetic material and alloy (scaled), and mutation levels. Each tier gives capture power ×1.25, max health ×1.2, +1 tentacle (until 8), +2 cargo levels and a visibly bigger, spikier form. Silhouettes cycle with size growth capped so the camera still works.
-- **New perks:** frenzy length, combo window, contract payouts, pod luck, chill resistance.
-- **Objective machines:** once a biome's objective is done, it can be fed that biome's currency to **summon a reward wave** (the reference game's reactor summons). It gives a repeatable goal before leaving.
+- **Endless evolution (C1, done):** tier `t` (t ≥ 2) requires reaching depth `t − 1`, genetic material and alloy (×1.6 per tier from 80 genetic and 10 alloy), and mutation levels (22, then +12 per tier). Each tier adds +25% capture power and +20% max health (summed, not compounded, so tiers never run away from the per-depth scaling), +2 cargo levels, and a slightly bigger body (capped). The first two endless tiers add a tentacle: that's all that fits under the cap of 8 with every tentacle upgrade, so a tentacle level bought later is never wasted.
+- **Alloy sink (C1, done):** capture-power levels past 24 also cost alloy (4, ×1.06 per level), refunded by a respec.
+- **New perks (C1, done):** Ravenous (frenzy length), Quick jaws (combo window), Bounty hunter (+1 mutagen per new craving), Lucky find (pod power-up chance), Warm blood (chill resistance, from depth 1). They stack with the mutagen mutations.
+- **Objective machines (C1, done):** once a biome's objective is done, it can be fed that biome's currency to **summon a reward wave**: 8 of the floor's free-roaming creatures around the machine, each paying 4× (not their XP). One wave at a time; each further wave on the same floor costs 1.2× more, so it's a goal before leaving rather than an endless farm. A paid wave survives reloads; leaving mid-wave needs a second tap.
+- **Saves:** v13 adds `upgradeExtraSpent` and `summon {waves, left}`, and a `summoned` flag on cargo drops.
 
 ---
 

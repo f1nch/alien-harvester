@@ -28,6 +28,16 @@ export interface UpgradeDef {
    * cleared adds capPerDepth levels to the cap. Tracks without it cap for good.
    */
   growth?: { valueFactor: number; costFactor: number; capPerDepth: number };
+  /**
+   * Levels added to the cap by each endless evolution tier (past the hand-made ones),
+   * priced past the table by compounding costFactor. Values stay linear.
+   */
+  perTier?: { levels: number; costFactor: number };
+  /**
+   * A second price from level fromLevel + 1 on: base, then ×costFactor per level.
+   * Tracked separately (upgradeExtraSpent) so a respec refunds it exactly.
+   */
+  extraCost?: { currency: Currency; fromLevel: number; base: number; costFactor: number };
 }
 
 // Costs are provisional, aimed at an upgrade every 1–4 minutes early on
@@ -46,6 +56,9 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     // 8 levels per biome: 1.083^8 ≈ 1.89x power for 1.06^8 ≈ 1.6x price, matching
     // 1.9x resistance and 1.6x payouts per depth.
     growth: { valueFactor: 1.083, costFactor: 1.06, capPerDepth: 8 },
+    // Alloy sink: from level 25 (reachable from the third floor on), each level also
+    // costs refined alloy, growing at the same 1.06 per level.
+    extraCost: { currency: "alloy", fromLevel: 24, base: 4, costFactor: 1.06 },
   },
   cargoCapacity: {
     id: "cargoCapacity",
@@ -56,6 +69,7 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "biomass",
     costs: [20, 45, 80, 130, 195, 280, 390, 520, 700, 900, 1150, 1450],
     capByTier: [8, 12],
+    perTier: { levels: 2, costFactor: 1.06 },
   },
   captureRadius: {
     id: "captureRadius",

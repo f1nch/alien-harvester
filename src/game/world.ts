@@ -7,9 +7,9 @@ import type { CatcherMode } from "./systems/catcher";
 import { newBossRuntime, type BossRuntime } from "./systems/boss";
 import type { QuestDef } from "../content/quests";
 import type { TargetDef, TargetTypeId } from "../content/targets";
-import { biomeAt, type ActiveBiome } from "../domain/biome";
+import { biomeAt, scaleReward, type ActiveBiome } from "../domain/biome";
 import { computeStats, type PlayerStats, type StatBoost } from "../domain/economy";
-import { BOOSTS, FRENZY, type BoostId } from "../content/feeding";
+import { BOOSTS, FRENZY, SUMMON, type BoostId } from "../content/feeding";
 import { COLD } from "../content/cold";
 import type { Craving } from "../domain/cravings";
 import { feedingTuning } from "../domain/mutagen";
@@ -59,6 +59,8 @@ export interface TargetEntity {
   boss?: BossRuntime;
   /** A prized specimen: glows, bolts, and pays a big bonus. Transient. */
   prized?: boolean;
+  /** From the objective machine's reward wave: no spawn point, pays the wave multiplier. */
+  summoned?: boolean;
 }
 
 /**
@@ -116,6 +118,8 @@ export type GameEvent =
   | { type: "bossStunned" }
   | { type: "bossDefeated"; name: string }
   | { type: "reactorRepaired" }
+  | { type: "waveSummoned"; count: number }
+  | { type: "waveCleared" }
   /** Moved on; the world must be rebuilt for the new biome's map. */
   | { type: "biomeLeft"; depth: number }
   | { type: "frenzyStart" }
@@ -221,6 +225,8 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
   for (const s of map.spawns) {
     if ((progress.spawnCooldowns[s.id] ?? 0) <= 0) spawnTarget(w, s.id);
   }
+  // A paid wave survives a reload: its uncaught creatures come back around the machine.
+  spawnSummoned(w);
   // Quests whose state goal already holds (e.g. migrated saves) complete now. Any perk
   // choices this earns are rolled from the save itself, so reloading can't reroll them.
   const sessionRng = w.rng;
@@ -251,28 +257,89 @@ export function refreshObstacles(w: World): void {
 export function spawnTarget(w: World, spawnId: string): TargetEntity | null {
   const s = w.map.spawns.find((sp) => sp.id === spawnId);
   if (!s) return null;
-  const t: TargetEntity = {
+  const t = makeTarget(w, w.biome.targets[s.type], spawnId, s.x, s.z, s.wanderRadius);
+  w.targets.push(t);
+  w.progress.spawnCooldowns[spawnId] = 0;
+  return t;
+}
+
+/** Spawn point ID shared by every summoned creature (never a key in spawnCooldowns). */
+export const SUMMON_SPAWN = "summon";
+
+/**
+ * Brings the current wave's uncaught creatures into the world, in a ring around the
+ * objective machine. Tops up to progress.summon.left, so calling it twice is harmless.
+ */
+export function spawnSummoned(w: World): void {
+  const types = w.biome.def.summon.types;
+  const have = w.targets.filter((t) => t.summoned).length;
+  const want = Math.min(w.progress.summon.left, SUMMON.count);
+  if (want <= have) return;
+  const spots = summonSpots(w);
+  for (let i = have; i < want; i++) {
+    // Spread over the open spots; with none (never on today's maps), at the player.
+    const { x, z } = spots[Math.floor((i * spots.length) / SUMMON.count)] ?? { x: w.player.x, z: w.player.z };
+    const base = w.biome.targets[types[i % types.length]!];
+    const def: TargetDef = { ...base, reward: scaleReward(base.reward, SUMMON.rewardMultiplier) };
+    const t = makeTarget(w, def, SUMMON_SPAWN, x, z, SUMMON.wanderRadius);
+    t.summoned = true;
+    w.targets.push(t);
+  }
+}
+
+/**
+ * Open floor around the objective machine, inside its room: rings of candidate points,
+ * dropping any where a creature would overlap a wall, prop, structure or locked door.
+ */
+function summonSpots(w: World): Array<{ x: number; z: number }> {
+  const o = w.biome.objective;
+  const room = zoneAt(w.map, o.x, o.z)?.rect ?? w.map.bounds;
+  const r = TARGET_RADIUS + 0.1;
+  const out: Array<{ x: number; z: number }> = [];
+  for (const radius of [SUMMON.radius, SUMMON.radius + 1.4, SUMMON.radius - 1, SUMMON.radius + 2.8]) {
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      const x = o.x + Math.cos(a) * radius;
+      const z = o.z + Math.sin(a) * radius;
+      if (x - r < room.minX || x + r > room.maxX || z - r < room.minZ || z + r > room.maxZ) continue;
+      if (w.obstacles.some((b) => x + r > b.minX && x - r < b.maxX && z + r > b.minZ && z - r < b.maxZ)) continue;
+      out.push({ x, z });
+    }
+  }
+  return out;
+}
+
+/**
+ * A target left the world by being caught: its spawn point starts its respawn timer,
+ * or, for a summoned creature, the wave has one fewer left.
+ */
+export function retireTarget(w: World, t: TargetEntity): void {
+  if (t.summoned) {
+    w.progress.summon.left = Math.max(0, w.progress.summon.left - 1);
+    if (w.progress.summon.left === 0) w.events.push({ type: "waveCleared" });
+  } else w.progress.spawnCooldowns[t.spawnId] = t.def.respawnSeconds;
+}
+
+function makeTarget(w: World, def: TargetDef, spawnId: string, x: number, z: number, wanderRadius: number): TargetEntity {
+  return {
     id: w.nextId++,
-    def: w.biome.targets[s.type],
+    def,
     spawnId,
-    x: s.x, z: s.z, prevX: s.x, prevZ: s.z,
+    x, z, prevX: x, prevZ: z,
     heading: w.rng() * Math.PI * 2,
-    homeX: s.x, homeZ: s.z,
-    wanderRadius: s.wanderRadius,
-    goalX: s.x, goalZ: s.z,
+    homeX: x, homeZ: z,
+    wanderRadius,
+    goalX: x, goalZ: z,
     idle: w.rng() * 2,
     progress: 0,
     outOfReach: 0,
     held: false,
     fleeing: false,
-    zoneRect: zoneAt(w.map, s.x, s.z)?.rect ?? w.map.bounds,
+    zoneRect: zoneAt(w.map, x, z)?.rect ?? w.map.bounds,
     ai: "patrol",
     aiTimer: 0,
-    boss: w.biome.targets[s.type].behavior === "boss" ? newBossRuntime() : undefined,
+    boss: def.behavior === "boss" ? newBossRuntime() : undefined,
   };
-  w.targets.push(t);
-  w.progress.spawnCooldowns[spawnId] = 0;
-  return t;
 }
 
 /** Call after anything that changes upgrades, perks, the bestiary, or a frenzy or boost. */

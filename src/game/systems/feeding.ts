@@ -81,7 +81,7 @@ export function updateFeeding(w: World, dt: number): void {
 function pickPrized(w: World): TargetEntity | null {
   const zones = reachableZones(w.map, w.progress.unlockedDoors);
   const options = w.targets.filter((t) => {
-    if (t.held || t === w.catcher.target || (t.def.behavior !== "wander" && t.def.behavior !== "flee")) return false;
+    if (t.held || t.summoned || t === w.catcher.target || (t.def.behavior !== "wander" && t.def.behavior !== "flee")) return false;
     const zone = zoneAt(w.map, t.x, t.z);
     return zone !== null && zones.has(zone.id);
   });

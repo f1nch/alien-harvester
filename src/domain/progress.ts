@@ -16,6 +16,8 @@ export interface CargoDrop {
   type: DropType;
   weight: number;
   reward: Reward;
+  /** From an objective machine's reward wave: the reward includes its multiplier. */
+  summoned?: true;
 }
 
 export interface QuestState {
@@ -36,6 +38,8 @@ export interface ProgressState {
   upgrades: Record<UpgradeId, number>;
   /** What was actually paid into each track (in that track's currency); respec refunds exactly this. */
   upgradeSpent: Record<UpgradeId, number>;
+  /** What was paid in each track's second currency (UpgradeDef.extraCost); 0 for tracks without one. */
+  upgradeExtraSpent: Record<UpgradeId, number>;
   /** Lifetime mutation levels bought. Respec doesn't reduce it, so gates on it can't be refunded. */
   mutationsBought: number;
   player: { x: number; z: number; health: number };
@@ -70,14 +74,21 @@ export interface ProgressState {
   mutagenLevels: Partial<Record<MutagenId, number>>;
   /** Lifetime captures per creature type. */
   bestiary: Partial<Record<TargetTypeId, number>>;
+  /**
+   * The objective machine's reward waves on this floor: waves summoned so far, and
+   * summoned creatures not yet caught (a paid wave survives a reload). Reset on moving on.
+   */
+  summon: { waves: number; left: number };
 }
 
 export function newProgress(map: MapDef): ProgressState {
   const upgrades = {} as Record<UpgradeId, number>;
   const upgradeSpent = {} as Record<UpgradeId, number>;
+  const upgradeExtraSpent = {} as Record<UpgradeId, number>;
   for (const id of UPGRADE_IDS) {
     upgrades[id] = 0;
     upgradeSpent[id] = 0;
+    upgradeExtraSpent[id] = 0;
   }
   const spawnCooldowns: Record<string, number> = {};
   for (const s of map.spawns) spawnCooldowns[s.id] = 0;
@@ -87,6 +98,7 @@ export function newProgress(map: MapDef): ProgressState {
     xp: 0,
     upgrades,
     upgradeSpent,
+    upgradeExtraSpent,
     mutationsBought: 0,
     player: { x: map.playerSpawn.x, z: map.playerSpawn.z, health: 100 },
     spawnCooldowns,
@@ -104,6 +116,7 @@ export function newProgress(map: MapDef): ProgressState {
     cravingRolls: 0,
     mutagenLevels: {},
     bestiary: {},
+    summon: { waves: 0, left: 0 },
   };
 }
 

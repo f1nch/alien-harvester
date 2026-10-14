@@ -1,8 +1,8 @@
-import { EVOLUTIONS } from "../content/evolution";
+import { ENDLESS, EVOLUTIONS, endlessTiers, MAX_TIER } from "../content/evolution";
 import { tidy } from "./biome";
 import { bestiaryPowerPercent } from "./bestiary";
 import { perkBonuses } from "./perks";
-import { CURRENCIES, emptyWallet, roundCents, type Wallet } from "../content/currencies";
+import { CURRENCIES, emptyWallet, roundCents, type Currency, type Wallet } from "../content/currencies";
 import { UPGRADE_IDS, UPGRADES, type UpgradeId } from "../content/upgrades";
 import type { ProgressState } from "./progress";
 
@@ -25,7 +25,8 @@ export interface PlayerStats {
 
 /**
  * The value an upgrade track currently provides, as shown to the player.
- * Tentacles include evolution bonuses so the panel shows the real count.
+ * Includes evolution bonuses (tentacles, and the endless tiers' capture power and
+ * health multipliers) so the panel shows the real value.
  */
 export function upgradeValue(p: ProgressState, id: UpgradeId, level = p.upgrades[id]): number {
   const def = UPGRADES[id];
@@ -34,7 +35,11 @@ export function upgradeValue(p: ProgressState, id: UpgradeId, level = p.upgrades
   const v = def.growth && level > table
     ? (def.base + def.perLevel * table) * def.growth.valueFactor ** (level - table)
     : def.base + def.perLevel * level;
-  return id === "tentacles" ? v + tentacleBonus(p.evolution) : v;
+  const tiers = endlessTiers(p.evolution);
+  if (id === "capturePower") return (v * (100 + ENDLESS.powerPercent * tiers)) / 100;
+  if (id === "maxHealth") return (v * (100 + ENDLESS.healthPercent * tiers)) / 100;
+  if (id === "tentacles") return Math.min(ENDLESS.maxTentacles, v + tentacleBonus(p.evolution));
+  return v;
 }
 
 /** Short-lived percentage boosts (feeding frenzy, supply-pod power-ups). Never saved. */
@@ -69,24 +74,33 @@ export function computeStats(p: ProgressState, boost: StatBoost = NO_BOOST): Pla
     // Applied only in the deposit system.
     yieldPercent: v("resourceYield") + perk.yieldPercent,
     farmRate: (100 + perk.farmPercent) / 100,
-    chillResist: Math.min(90, v("thermalFat")),
+    chillResist: Math.min(90, v("thermalFat") + perk.loop.chillResist),
   };
 }
+
+/**
+ * How many endless tiers add a tentacle: as many as fit under the cap with every
+ * hand-made bonus and every tentacle upgrade, so a tentacle level bought later is never wasted.
+ */
+export const ENDLESS_TENTACLE_TIERS = ENDLESS.maxTentacles - UPGRADES.tentacles.base
+  - EVOLUTIONS.reduce((n, e) => n + e.tentacleBonus, 0) - UPGRADES.tentacles.costs.length * UPGRADES.tentacles.perLevel;
 
 function tentacleBonus(tier: number): number {
   let n = 0;
   for (const e of EVOLUTIONS) if (e.tier <= tier) n += e.tentacleBonus;
-  return n;
+  return n + Math.min(endlessTiers(tier), ENDLESS_TENTACLE_TIERS);
 }
 
 /**
  * Level cap for a track at an evolution tier and depth: the tier's table cap (highest
- * defined cap past the last tier), plus capPerDepth per biome cleared for scaling tracks.
+ * defined cap past the last tier), plus perTier levels per endless tier, plus
+ * capPerDepth per biome cleared for scaling tracks.
  */
 export function capAt(id: UpgradeId, tier: number, depth: number): number {
   const def = UPGRADES[id];
   const caps = def.capByTier;
-  const tierCap = Math.min(caps[Math.min(tier, caps.length - 1)]!, def.costs.length);
+  const tierCap = Math.min(caps[Math.min(tier, caps.length - 1)]!, def.costs.length)
+    + (def.perTier ? def.perTier.levels * endlessTiers(tier) : 0);
   return def.growth ? tierCap + def.growth.capPerDepth * depth : tierCap;
 }
 
@@ -102,17 +116,35 @@ export function maxLevel(p: ProgressState, id: UpgradeId): number {
 export function capRaise(p: ProgressState, id: UpgradeId): "evolve" | "nextBiome" | null {
   const lvl = p.upgrades[id];
   if (lvl < maxLevel(p, id)) return null;
-  if (capAt(id, p.evolution + 1, p.depth) > lvl) return "evolve";
+  if (p.evolution < MAX_TIER && capAt(id, p.evolution + 1, p.depth) > lvl) {
+    // An endless tier t needs depth t − 1: until then, going deeper is the way.
+    const endless = p.evolution + 1 > EVOLUTIONS.length;
+    return !endless || p.depth >= p.evolution ? "evolve" : "nextBiome";
+  }
   return UPGRADES[id].growth ? "nextBiome" : null;
 }
 
-/** Price of buying level i+1: the table, then compounding for scaling tracks. */
+/** Price of buying level i+1: the table, then compounding for tracks that go past it. */
 export function levelCost(id: UpgradeId, i: number): number | null {
   const def = UPGRADES[id];
   const table = def.costs.length;
   if (i < table) return def.costs[i]!;
-  if (!def.growth) return null;
-  return tidy(def.costs[table - 1]! * def.growth.costFactor ** (i - table + 1));
+  const factor = def.growth?.costFactor ?? def.perTier?.costFactor;
+  if (factor === undefined) return null;
+  return tidy(def.costs[table - 1]! * factor ** (i - table + 1));
+}
+
+/** The second price for buying level i+1 (alloy on deep capture power), if any. */
+export function levelExtraCost(id: UpgradeId, i: number): { currency: Currency; amount: number } | null {
+  const x = UPGRADES[id].extraCost;
+  if (!x || i < x.fromLevel) return null;
+  return { currency: x.currency, amount: tidy(x.base * x.costFactor ** (i - x.fromLevel)) };
+}
+
+/** Second price of the next level, or null when there is none (or at the cap). */
+export function nextExtraCost(p: ProgressState, id: UpgradeId): { currency: Currency; amount: number } | null {
+  if (p.upgrades[id] >= maxLevel(p, id)) return null;
+  return levelExtraCost(id, p.upgrades[id]);
 }
 
 /** Cost of the next level, or null at the current cap. */
@@ -121,17 +153,34 @@ export function nextCost(p: ProgressState, id: UpgradeId): number | null {
   return levelCost(id, p.upgrades[id]);
 }
 
+/** Everything the next level costs across currencies (its price plus any second price), or null at the cap. */
+export function upgradePrice(p: ProgressState, id: UpgradeId): Wallet | null {
+  const cost = nextCost(p, id);
+  if (cost === null) return null;
+  const need = emptyWallet();
+  need[UPGRADES[id].currency] += cost;
+  const extra = levelExtraCost(id, p.upgrades[id]);
+  if (extra) need[extra.currency] += extra.amount;
+  return need;
+}
+
+export function canAfford(p: ProgressState, need: Wallet): boolean {
+  return CURRENCIES.every((c) => p.banked[c] >= need[c]);
+}
+
 export type PurchaseResult = { ok: true } | { ok: false; reason: "maxed" | "unaffordable" };
 
 /** Atomic: either the level increments and the cost is deducted, or nothing changes. */
 export function purchaseUpgrade(p: ProgressState, id: UpgradeId): PurchaseResult {
   const cost = nextCost(p, id);
-  if (cost === null) return { ok: false, reason: "maxed" };
-  const currency = UPGRADES[id].currency;
-  if (p.banked[currency] < cost) return { ok: false, reason: "unaffordable" };
-  p.banked[currency] = roundCents(p.banked[currency] - cost);
+  const need = upgradePrice(p, id);
+  if (cost === null || !need) return { ok: false, reason: "maxed" };
+  if (!canAfford(p, need)) return { ok: false, reason: "unaffordable" };
+  const extra = levelExtraCost(id, p.upgrades[id]);
+  for (const c of CURRENCIES) if (need[c]) p.banked[c] = roundCents(p.banked[c] - need[c]);
   p.upgrades[id] += 1;
   p.upgradeSpent[id] += cost;
+  if (extra) p.upgradeExtraSpent[id] += extra.amount;
   p.mutationsBought += 1;
   return { ok: true };
 }
@@ -139,8 +188,19 @@ export function purchaseUpgrade(p: ProgressState, id: UpgradeId): PurchaseResult
 /** What was actually paid into the current mutations, per currency. */
 export function spentOnUpgrades(p: ProgressState): Wallet {
   const spent = emptyWallet();
-  for (const id of UPGRADE_IDS) spent[UPGRADES[id].currency] += p.upgradeSpent[id];
+  for (const id of UPGRADE_IDS) {
+    spent[UPGRADES[id].currency] += p.upgradeSpent[id];
+    const x = UPGRADES[id].extraCost;
+    if (x) spent[x.currency] += p.upgradeExtraSpent[id];
+  }
   return spent;
+}
+
+/** Second-price total for a level count (dev tools re-seed upgradeExtraSpent with it). */
+export function extraCostForLevels(id: UpgradeId, levels: number): number {
+  let n = 0;
+  for (let i = 0; i < levels && Number.isFinite(n); i++) n += levelExtraCost(id, i)?.amount ?? 0;
+  return n;
 }
 
 /** Price total for a level count; used to seed upgradeSpent for saves that predate tracking it. */
@@ -163,6 +223,7 @@ export function respecUpgrades(p: ProgressState): RespecResult {
   for (const id of UPGRADE_IDS) {
     p.upgrades[id] = 0;
     p.upgradeSpent[id] = 0;
+    p.upgradeExtraSpent[id] = 0;
   }
   return { ok: true, refund };
 }
