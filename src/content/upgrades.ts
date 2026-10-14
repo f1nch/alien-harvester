@@ -11,7 +11,8 @@ export type UpgradeId =
   | "resourceYield"
   | "thermalFat"
   | "chitin"
-  | "dustLids";
+  | "dustLids"
+  | "webbedLimbs";
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -170,6 +171,18 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     base: 0,
     perLevel: 20,
     currency: "shards",
+    costs: [15, 40, 75, 120],
+    capByTier: [4, 4],
+  },
+  // Current resistance: webbing between the claws. Paid in tide pearls (content/maren.ts),
+  // hidden until pearls matter. Applied in game/systems/movement.ts.
+  webbedLimbs: {
+    id: "webbedLimbs",
+    name: "Webbed limbs",
+    unit: "% current resist",
+    base: 0,
+    perLevel: 20,
+    currency: "pearls",
     costs: [15, 40, 75, 120],
     capByTier: [4, 4],
   },

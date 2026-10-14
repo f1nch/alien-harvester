@@ -23,6 +23,8 @@ export interface PlayerStats {
   chillResist: number;
   /** Percent less damage taken from every hit (Chitin plating). */
   damageResist: number;
+  /** Percent less push from ocean currents (Webbed limbs). */
+  currentResist: number;
 }
 
 /**
@@ -79,6 +81,8 @@ export function computeStats(p: ProgressState, boost: StatBoost = NO_BOOST): Pla
     chillResist: Math.min(90, v("thermalFat") + perk.loop.chillResist),
     // Applied only in game/systems/combat#damagePlayer.
     damageResist: Math.min(60, v("chitin")),
+    // Applied only in game/systems/movement.ts.
+    currentResist: Math.min(90, v("webbedLimbs")),
   };
 }
 

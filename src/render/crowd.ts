@@ -548,6 +548,95 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     }
     // Whipping feelers that swing as it moves.
     pair("arm", 1.4, 0.16, plate, 0.8, 2.4);
+  } else if (type === "reefCrab") {
+    // Reef crab: a wide, flat shell on splayed legs, two raised claws, a pearl glinting beneath.
+    const shell = mat(scene, "crabShell", 0.85, 0.32, 0.22, 0.6);
+    const pearl = mat(scene, "crabPearl", 0.95, 0.95, 1, 0.9);
+    pearl.emissiveColor = new Color3(0.3, 0.35, 0.4);
+    const eyeMat = mat(scene, "crabEyeMat", 0.05, 0.05, 0.05, 0.9);
+    const body = MeshBuilder.CreateSphere("crabBody", { diameter: 0.8, segments: 12 }, scene);
+    body.scaling.set(1, 0.45, 0.8);
+    body.bakeCurrentTransformIntoVertices();
+    add(body, shell, 0.35);
+    add(MeshBuilder.CreateSphere("crabPearl", { diameter: 0.16, segments: 8 }, scene), pearl, 0.2, 0, -0.18);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateSphere("crabClaw", { diameter: 0.24, segments: 8 }, scene), shell, 0.48, side * 0.42, 0.34);
+      add(MeshBuilder.CreateSphere("crabEye", { diameter: 0.07, segments: 6 }, scene), eyeMat, 0.55, side * 0.1, 0.32);
+      for (const z of [-0.2, 0, 0.2]) {
+        const leg = MeshBuilder.CreateCylinder("crabLeg", { diameter: 0.06, height: 0.45, tessellation: 5 }, scene);
+        leg.rotation.z = side * 1.05;
+        add(leg, shell, 0.22, side * 0.42, z);
+      }
+    }
+  } else if (type === "skimmer") {
+    // Skimmer: a small, sleek fish-thing on fin-legs, iridescent along its back.
+    const scale = mat(scene, "skimmerScale", 0.4, 0.75, 0.9, 0.9);
+    scale.emissiveColor = new Color3(0.05, 0.2, 0.28);
+    const body = MeshBuilder.CreateSphere("skimmerBody", { diameter: 0.4, segments: 10 }, scene);
+    body.scaling.set(0.6, 0.6, 1.4);
+    body.bakeCurrentTransformIntoVertices();
+    add(body, scale, 0.4);
+    const tail = MeshBuilder.CreateCylinder("skimmerTail", { diameterTop: 0, diameterBottom: 0.2, height: 0.3, tessellation: 4 }, scene);
+    tail.rotation.x = -Math.PI / 2;
+    add(tail, scale, 0.42, 0, -0.38);
+    for (const side of [-1, 1]) {
+      const fin = MeshBuilder.CreateBox("skimmerFin", { width: 0.3, height: 0.02, depth: 0.16 }, scene);
+      fin.rotation.z = side * 0.5;
+      add(fin, scale, 0.32, side * 0.18, 0.05);
+    }
+  } else if (type === "lancerEel") {
+    // Lancer eel: a coiled, banded body rearing up, with a long spiked jaw.
+    const hide = mat(scene, "eelHide", 0.2, 0.32, 0.3, 0.6);
+    const band = mat(scene, "eelBand", 0, 0, 0);
+    band.emissiveColor = new Color3(0.2, 0.9, 0.8);
+    for (const [y, z, d] of [[0.2, -0.3, 0.42], [0.22, 0.05, 0.4], [0.45, 0.25, 0.36], [0.78, 0.35, 0.32]] as const) {
+      add(MeshBuilder.CreateSphere("eelCoil", { diameter: d, segments: 10 }, scene), hide, y, 0, z);
+    }
+    add(MeshBuilder.CreateTorus("eelBand", { diameter: 0.38, thickness: 0.04, tessellation: 16 }, scene), band, 0.45, 0, 0.25);
+    const head = MeshBuilder.CreateSphere("eelHead", { diameter: 0.3, segments: 10 }, scene);
+    head.scaling.z = 1.4;
+    head.bakeCurrentTransformIntoVertices();
+    add(head, hide, 1.02, 0, 0.45);
+    const jaw = MeshBuilder.CreateCylinder("eelJaw", { diameterTop: 0, diameterBottom: 0.1, height: 0.45, tessellation: 5 }, scene);
+    jaw.rotation.x = Math.PI / 2;
+    add(jaw, mat(scene, "eelJawMat", 0.9, 0.9, 0.8, 0.8), 1.0, 0, 0.78);
+    for (const side of [-1, 1]) add(MeshBuilder.CreateSphere("eelEye", { diameter: 0.07, segments: 6 }, scene), band, 1.08, side * 0.1, 0.55);
+  } else if (type === "pearlClam") {
+    // Pearl clam: a ridged shell propped open on a glowing pearl.
+    const shell = mat(scene, "clamShell", 0.7, 0.62, 0.78, 0.4);
+    const pearl = mat(scene, "clamPearl", 0.95, 0.95, 1, 0.9);
+    pearl.emissiveColor = new Color3(0.5, 0.55, 0.65);
+    const lower = MeshBuilder.CreateSphere("clamLower", { diameter: 0.9, segments: 12, slice: 0.5 }, scene);
+    lower.scaling.y = 0.4;
+    lower.rotation.x = Math.PI;
+    lower.bakeCurrentTransformIntoVertices();
+    add(lower, shell, 0.2);
+    const upper = MeshBuilder.CreateSphere("clamUpper", { diameter: 0.9, segments: 12, slice: 0.5 }, scene);
+    upper.scaling.y = 0.4;
+    upper.rotation.x = -0.5;
+    upper.bakeCurrentTransformIntoVertices();
+    add(upper, shell, 0.28, 0, -0.08);
+    add(MeshBuilder.CreateSphere("clamPearl", { diameter: 0.26, segments: 10 }, scene), pearl, 0.3, 0, 0.1);
+  } else if (type === "tideKraken") {
+    // The tide kraken: a vast domed mantle on a ring of thick arms, with great glowing eyes.
+    const skin = mat(scene, "krakenSkin", 0.45, 0.22, 0.4, 0.5);
+    const glow = mat(scene, "krakenGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.4, 0.9, 1);
+    const mantle = MeshBuilder.CreateSphere("krakenMantle", { diameter: 2.2, segments: 14 }, scene);
+    mantle.scaling.set(1, 1.3, 1);
+    mantle.bakeCurrentTransformIntoVertices();
+    add(mantle, skin, 2.0, 0, -0.2);
+    add(MeshBuilder.CreateCapsule("krakenBody", { height: 1.6, radius: 0.8, tessellation: 14 }, scene), skin, 0.9);
+    for (const side of [-1, 1]) add(MeshBuilder.CreateSphere("krakenEye", { diameter: 0.38, segments: 10 }, scene), glow, 1.5, side * 0.55, 0.65);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const arm = MeshBuilder.CreateCylinder("krakenArm", { diameterTop: 0.08, diameterBottom: 0.4, height: 1.6, tessellation: 8 }, scene);
+      arm.rotation.z = Math.cos(a) * 1.1;
+      arm.rotation.x = Math.sin(a) * 1.1;
+      add(arm, skin, 0.4, Math.cos(a) * 0.9, Math.sin(a) * 0.9);
+    }
+    // Two great arms that swing as it moves.
+    pair("arm", 1.6, 0.26, skin, 1.0, 1.9);
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     const coat = mat(scene, "techCoat", 0.92, 0.95, 0.97);

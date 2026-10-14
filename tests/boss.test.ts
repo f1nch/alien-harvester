@@ -173,7 +173,7 @@ describe("capturing the warden", () => {
 describe("reactor repair", () => {
   it("needs the warden defeated plus parts and biomass; one transaction, once", () => {
     const p = lateGame();
-    p.banked = { biomass: 1000, genetic: 0, parts: 50, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0 };
+    p.banked = { biomass: 1000, genetic: 0, parts: 50, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0, pearls: 0 };
     expect(repairReactor(p)).toEqual({ ok: false, reason: "requirements" });
     expect(p.banked.parts).toBe(50);
     p.quests["q-boss"] = { count: 1, done: true };
@@ -188,7 +188,7 @@ describe("reactor repair", () => {
   it("the game action emits the completion event; the console is reachable", () => {
     const p = lateGame();
     p.quests["q-boss"] = { count: 1, done: true };
-    p.banked = { biomass: 300, genetic: 0, parts: 15, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0 };
+    p.banked = { biomass: 300, genetic: 0, parts: 15, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0, pearls: 0 };
     const w = createWorld(FACILITY, p);
     w.player.x = REACTOR.x;
     w.player.z = REACTOR.z - 2;
@@ -288,7 +288,7 @@ describe("warden review regressions", () => {
   it("repair needs the player at the console", () => {
     const p = lateGame();
     p.quests["q-boss"] = { count: 1, done: true };
-    p.banked = { biomass: 300, genetic: 0, parts: 15, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0 };
+    p.banked = { biomass: 300, genetic: 0, parts: 15, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0, pearls: 0 };
     const w = createWorld(FACILITY, p);
     expect(repair(w)).toEqual({ ok: false, reason: "notAtConsole" });
     expect(p.reactorRepaired).toBe(false);

@@ -1,5 +1,5 @@
 import {
-  Color3, Constants, DynamicTexture, MeshBuilder, Scene, StandardMaterial,
+  Color3, Constants, DynamicTexture, MeshBuilder, Scene, StandardMaterial, Texture,
 } from "@babylonjs/core";
 import type { MapDef, MapLook, Rect, ZoneDef, ZoneTheme } from "../content/map";
 
@@ -49,6 +49,8 @@ const POOL_TINT: Record<ZoneTheme, Color3> = {
   hive: new Color3(0.95, 0.6, 0.2),
   dunes: new Color3(1, 0.75, 0.4),
   ruins: new Color3(0.95, 0.55, 0.3),
+  reef: new Color3(0.3, 0.85, 0.95),
+  deep: new Color3(0.3, 0.45, 1),
 };
 
 /** Additive light pools in a loose grid over each zone. */
@@ -412,6 +414,68 @@ function resinPools(scene: Scene, map: MapDef): void {
   });
 }
 
+/**
+ * Ocean currents: a translucent water channel per current, with chevrons scrolling the way
+ * it flows so the push reads before you step in. Returns the scroller.
+ */
+function currentChannels(scene: Scene, map: MapDef): ((dt: number) => void) | null {
+  const currents = map.currents;
+  if (!currents || currents.length === 0) return null;
+  // Each channel draws its own texture: DynamicTexture.clone() copies settings, not pixels,
+  // so a cloned chevron texture comes out blank (and fully transparent).
+  const chevrons = (name: string): DynamicTexture => {
+    const tex = new DynamicTexture(name, { width: 128, height: 128 }, scene, true);
+    const ctx = tex.getContext() as CanvasRenderingContext2D;
+    ctx.fillStyle = "rgba(40, 140, 190, 0.55)";
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.strokeStyle = "rgba(190, 245, 255, 0.9)";
+    ctx.lineWidth = 10;
+    ctx.lineCap = "round";
+    // One chevron per tile, apex at the canvas top: on the ground that points along the plane's
+    // +z, which is turned to face the flow.
+    ctx.beginPath();
+    ctx.moveTo(28, 80);
+    ctx.lineTo(64, 46);
+    ctx.lineTo(100, 80);
+    ctx.stroke();
+    tex.update();
+    tex.hasAlpha = true;
+    tex.wrapU = Texture.WRAP_ADDRESSMODE;
+    tex.wrapV = Texture.WRAP_ADDRESSMODE;
+    return tex;
+  };
+  const scrollers: Array<{ tex: Texture; speed: number }> = [];
+  currents.forEach((c, i) => {
+    const r = c.rect;
+    const w = r.maxX - r.minX;
+    const d = r.maxZ - r.minZ;
+    const speed = Math.hypot(c.dx, c.dz);
+    const alongX = Math.abs(c.dx) > Math.abs(c.dz);
+    const length = alongX ? w : d;
+    const across = alongX ? d : w;
+    const t = chevrons(`currentTex${i}`);
+    t.uScale = across / 1.6;
+    t.vScale = length / 1.6;
+    const mat = new StandardMaterial(`currentMat${i}`, scene);
+    mat.diffuseTexture = t;
+    mat.useAlphaFromDiffuseTexture = true;
+    mat.emissiveColor = new Color3(0.1, 0.35, 0.45);
+    mat.specularColor = new Color3(0.5, 0.7, 0.8);
+    mat.disableDepthWrite = true;
+    const plane = MeshBuilder.CreateGround(`current${i}`, { width: across, height: length }, scene);
+    plane.position.set((r.minX + r.maxX) / 2, 0.02, (r.minZ + r.maxZ) / 2);
+    // Ground +z is texture +v: turn it so the chevrons point along the flow.
+    plane.rotation.y = Math.atan2(c.dx, c.dz);
+    plane.material = mat;
+    plane.isPickable = false;
+    plane.freezeWorldMatrix();
+    scrollers.push({ tex: t, speed: speed / 1.6 });
+  });
+  return (dt: number) => {
+    for (const s of scrollers) s.tex.vOffset = (s.tex.vOffset - s.speed * dt) % 1;
+  };
+}
+
 /** Shelter from sandstorms: a cracked stone slab on four posts, with a cool floor ring under it. */
 function shadeCanopies(scene: Scene, map: MapDef): void {
   const spots = map.shade;
@@ -516,6 +580,7 @@ export function buildDressing(scene: Scene, map: MapDef, reducedEffects: boolean
   zoneLabels(scene, map);
   resinPools(scene, map);
   shadeCanopies(scene, map);
+  const flowCurrents = currentChannels(scene, map);
   if (map.look) {
     // Alien worlds: flora instead of facility lamps, pipes and machinery.
     flora(scene, map, map.look);
@@ -540,6 +605,7 @@ export function buildDressing(scene: Scene, map: MapDef, reducedEffects: boolean
       const pulse = 0.75 + 0.25 * Math.sin(time * 2.2);
       conduitGlow?.emissiveColor.set(1 * pulse, 0.45 * pulse, 0.12 * pulse);
       pulseVents?.(time);
+      flowCurrents?.(dt);
     },
   };
 }

@@ -442,6 +442,7 @@ html, body {
 .chip-icon.crystals { color: #8fe3ff; }
 .chip-icon.amber { color: #ffb347; }
 .chip-icon.shards { color: #f0d08a; }
+.chip-icon.pearls { color: #b8f0ff; }
 .chill-meter { border-color: rgba(143, 227, 255, 0.5); }
 .chill-fill { height: 100%; width: 0; background: #8fe3ff; border-radius: inherit; transition: width 0.2s; }
 .storm-fill { height: 100%; width: 0; background: #e8b25a; border-radius: inherit; transition: width 0.2s; }

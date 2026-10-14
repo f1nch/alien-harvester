@@ -33,7 +33,7 @@ export function structureName(kind: StructureKind): string {
 }
 
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
-export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈", shards: "◬" };
+export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈", shards: "◬", pearls: "◉" };
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
@@ -173,6 +173,8 @@ export class Hud {
   private amberChip: HTMLElement;
   private shards: HTMLElement;
   private shardsChip: HTMLElement;
+  private pearls: HTMLElement;
+  private pearlsChip: HTMLElement;
   private stormBox: HTMLElement;
   private stormText: HTMLElement;
   private stormFill: HTMLElement;
@@ -281,6 +283,9 @@ export class Hud {
     const sha = chip("◬", "shards", "Relic shards");
     this.shards = sha.value;
     this.shardsChip = sha.root;
+    const prl = chip("◉", "pearls", "Tide pearls");
+    this.pearls = prl.value;
+    this.pearlsChip = prl.root;
 
     const lvl = el("div", "chip level-chip");
     this.level = el("span", "chip-value", "Lv 1");
@@ -338,7 +343,7 @@ export class Hud {
     this.stormFill = el("div", "storm-fill");
     stormBar.append(this.stormFill);
     this.stormBox.append(this.stormText, stormBar);
-    top.append(bio.root, gen.root, cry.root, amb.root, sha.root, mut.root, lvl, bars, this.feedBox, this.chillBox, this.stormBox);
+    top.append(bio.root, gen.root, cry.root, amb.root, sha.root, prl.root, mut.root, lvl, bars, this.feedBox, this.chillBox, this.stormBox);
 
     // Objectives and hints flow under the HUD so they never overlap it as it wraps.
     const sub = el("div", "hud-sub");
@@ -719,7 +724,7 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, p.banked.amber, p.banked.shards, w.chillApplied, w.storm.phase, w.stormApplied, Math.round(w.storm.intensity * 10), feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired, p.summon.left,
+      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, p.banked.amber, p.banked.shards, p.banked.pearls, w.chillApplied, w.storm.phase, w.stormApplied, Math.round(w.storm.intensity * 10), feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired, p.summon.left,
       s.boss ? `${Math.round(s.boss.progress * 100)}:${s.boss.boss?.state}` : "", s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
@@ -739,6 +744,8 @@ export class Hud {
     this.amberChip.classList.toggle("hidden", p.banked.amber === 0 && !worldHasAmber(w));
     this.shards.textContent = compact(p.banked.shards);
     this.shardsChip.classList.toggle("hidden", p.banked.shards === 0 && !worldPays(w, "shards"));
+    this.pearls.textContent = compact(p.banked.pearls);
+    this.pearlsChip.classList.toggle("hidden", p.banked.pearls === 0 && !worldPays(w, "pearls"));
     // Mutagen appears with the first one earned.
     this.mutagenChip.classList.toggle("hidden", p.banked.mutagen === 0 && Object.keys(p.mutagenLevels).length === 0);
     this.renderFeeding(w);
@@ -791,7 +798,8 @@ export class Hud {
       const lvl = p.upgrades[id];
       const hidden = lvl === 0 && ((id === "thermalFat" && !w.map.zones.some((z) => z.cold))
         || (id === "chitin" && p.banked.amber === 0 && !worldHasAmber(w))
-        || (id === "dustLids" && p.banked.shards === 0 && !worldPays(w, "shards")));
+        || (id === "dustLids" && p.banked.shards === 0 && !worldPays(w, "shards"))
+        || (id === "webbedLimbs" && p.banked.pearls === 0 && !worldPays(w, "pearls")));
       row.root.classList.toggle("hidden", hidden);
       const cost = nextCost(p, id);
       const cur = upgradeValue(p, id);
@@ -1022,6 +1030,7 @@ export class Hud {
       ["Alloy", String(s.alloy)],
       ["Hive amber", String(s.amber)],
       ["Relic shards", String(s.shards)],
+      ["Tide pearls", String(s.pearls)],
       ["Location", s.place],
       ["Doors open", String(s.doorsOpen)],
       ["Objectives done", String(s.questsDone)],

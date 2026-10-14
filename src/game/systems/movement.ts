@@ -1,4 +1,5 @@
-import { inResin } from "../../content/map";
+import { currentAt, inResin } from "../../content/map";
+import { tideStrength } from "../../content/tide";
 import { resolveCircle } from "../geometry";
 import { PLAYER_RADIUS, type World } from "../world";
 
@@ -20,6 +21,13 @@ export function updatePlayer(w: World, dt: number): void {
   const speed = w.stats.moveSpeed * (inResin(w.map, p.x, p.z) ? RESIN_SPEED : 1);
   p.vx = ix * speed;
   p.vz = iz * speed;
+  // Ocean currents carry you along, pulsing with the tide; Webbed limbs push back.
+  const flow = currentAt(w.map, p.x, p.z);
+  if (flow) {
+    const k = tideStrength(w.progress.playSeconds) * (1 - w.stats.currentResist / 100);
+    p.vx += flow.dx * k;
+    p.vz += flow.dz * k;
+  }
   p.x += p.vx * dt;
   p.z += p.vz * dt;
   resolveCircle(p, PLAYER_RADIUS, w.map.bounds, w.obstacles);

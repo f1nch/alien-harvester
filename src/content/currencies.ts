@@ -1,4 +1,4 @@
-export const CURRENCIES = ["biomass", "genetic", "parts", "mutagen", "crystals", "alloy", "amber", "shards"] as const;
+export const CURRENCIES = ["biomass", "genetic", "parts", "mutagen", "crystals", "alloy", "amber", "shards", "pearls"] as const;
 export type Currency = (typeof CURRENCIES)[number];
 export type Wallet = Record<Currency, number>;
 export type Reward = Partial<Wallet>;
@@ -12,6 +12,7 @@ export const CURRENCY_LABEL: Record<Currency, string> = {
   alloy: "Alloy",
   amber: "Hive amber",
   shards: "Relic shards",
+  pearls: "Tide pearls",
 };
 
 /**
@@ -23,5 +24,5 @@ export function roundCents(n: number): number {
 }
 
 export function emptyWallet(): Wallet {
-  return { biomass: 0, genetic: 0, parts: 0, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0 };
+  return { biomass: 0, genetic: 0, parts: 0, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0, pearls: 0 };
 }

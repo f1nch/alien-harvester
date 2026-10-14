@@ -270,7 +270,7 @@ async function boot(): Promise<void> {
   const renderer = new GameRenderer(canvas, room, { reducedEffects: settings.reducedEffects, creatureModels: !forceProcedural });
   const input = new InputController(zone);
   const floaters = new Floaters(uiRoot, !settings.reducedEffects);
-  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈", shards: "◬" } as const;
+  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈", shards: "◬", pearls: "◉" } as const;
   const loop = new FixedLoop((dt) => stepWorld(world, dt), { hz: SIM_HZ, maxStepsPerFrame: 5 });
   renderer.snapCamera(world);
   let recordDevFrame: ((now: number, cpuMs: number, inputStrength: number, speed: number, lastDrag: number) => void) | undefined;

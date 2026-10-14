@@ -12,7 +12,7 @@ export interface Rect {
 export type ZoneId = string;
 
 /** How a zone is dressed (light colour, machinery). Several maps can share a theme. */
-export type ZoneTheme = "containment" | "service" | "security" | "reactor" | "dock" | "cold" | "vault" | "lab" | "core" | "jungle" | "hive" | "dunes" | "ruins";
+export type ZoneTheme = "containment" | "service" | "security" | "reactor" | "dock" | "cold" | "vault" | "lab" | "core" | "jungle" | "hive" | "dunes" | "ruins" | "reef" | "deep";
 
 export interface ZoneDef {
   id: ZoneId;
@@ -91,6 +91,8 @@ export interface MapDef {
   storms?: boolean;
   /** Ruined canopies in exposed zones: shelter from storms. */
   shade?: Array<{ x: number; z: number; radius: number }>;
+  /** Ocean currents: inside one, the creature is pushed at (dx, dz) m/s, scaled by the tide. */
+  currents?: Array<{ rect: Rect; dx: number; dz: number }>;
   /** How the map is drawn: facility rooms (the default) or an alien world outdoors. */
   look?: MapLook;
 }
@@ -263,6 +265,15 @@ export function zoneAtOrDoorway(map: MapDef, x: number, z: number, unlockedDoors
 export function inResin(map: MapDef, x: number, z: number): boolean {
   for (const r of map.resin ?? []) if ((x - r.x) ** 2 + (z - r.z) ** 2 <= r.radius ** 2) return true;
   return false;
+}
+
+/** The current flowing here, if the creature is standing in one. */
+export function currentAt(map: MapDef, x: number, z: number): { dx: number; dz: number } | null {
+  for (const c of map.currents ?? []) {
+    const r = c.rect;
+    if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) return c;
+  }
+  return null;
 }
 
 export function zoneAt(map: MapDef, x: number, z: number): ZoneDef | null {

@@ -239,13 +239,13 @@ describe("moving on", () => {
     const p = w.progress;
     p.upgrades.capturePower = 10;
     p.perks.cargo = 1;
-    p.banked = { biomass: 100, genetic: 5, parts: 2, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0 };
+    p.banked = { biomass: 100, genetic: 5, parts: 2, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0, pearls: 0 };
     p.cargo = [{ type: "worker", weight: 2, reward: { biomass: 3 } }, { type: "technician", weight: 3, reward: { biomass: 2, genetic: 2 } }];
     p.structures.drone = { built: true, level: 1, x: 5, z: 50, cargo: [{ type: "guard", weight: 3, reward: { biomass: 9, genetic: 1 } }] };
     p.structures.vat = { built: true, level: 1, stock: 2, timer: 3 };
     const r = leaveBiome(w);
-    expect(r).toEqual({ ok: true, banked: { biomass: 24, genetic: 3, parts: 0, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0 } });
-    expect(p.banked).toEqual({ biomass: 124, genetic: 8, parts: 2, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0 });
+    expect(r).toEqual({ ok: true, banked: { biomass: 24, genetic: 3, parts: 0, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0, pearls: 0 } });
+    expect(p.banked).toEqual({ biomass: 124, genetic: 8, parts: 2, mutagen: 0, crystals: 0, alloy: 0, amber: 0, shards: 0, pearls: 0 });
     expect(p.depth).toBe(1);
     expect(p.cargo).toEqual([]);
     expect(p.structures.drone).toMatchObject({ built: true, level: 1, cargo: [], x: FACILITY.base.x, z: FACILITY.base.z });

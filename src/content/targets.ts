@@ -12,7 +12,9 @@ export type TargetTypeId =
   // Vesh (portal world 1)
   | "hiveForager" | "skitter" | "hiveWarrior" | "broodSac" | "hiveQueen"
   // Ashkar (portal world 2)
-  | "sandSkink" | "duneRunner" | "relicGolem" | "burialUrn" | "sandWyrm";
+  | "sandSkink" | "duneRunner" | "relicGolem" | "burialUrn" | "sandWyrm"
+  // Maren (portal world 3)
+  | "reefCrab" | "skimmer" | "lancerEel" | "pearlClam" | "tideKraken";
 
 /** "static": never moves (supply pods). */
 export type TargetBehavior = "wander" | "flee" | "guard" | "boss" | "static";
@@ -572,6 +574,92 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       chargeDistance: 15,
       chargeDamage: 40,
       walkSpeed: 1,
+    },
+  },
+  // --- Maren, the drowned platforms (portal world 3). Depth-0 equivalents. Tide pearls are its currency.
+  // Reef crab: a big, sideways-scuttling crab with a pearl tucked under its shell.
+  reefCrab: {
+    id: "reefCrab",
+    name: "Reef crab",
+    behavior: "wander",
+    resistance: 35,
+    weight: 2,
+    reward: { biomass: 5, pearls: 1 },
+    xp: 13,
+    speed: 0.9,
+    respawnSeconds: 10,
+  },
+  // Skimmer: a small, darting fish-thing that skips across the shallows.
+  skimmer: {
+    id: "skimmer",
+    name: "Skimmer",
+    behavior: "flee",
+    resistance: 22,
+    weight: 1,
+    reward: { biomass: 3, pearls: 0.5 },
+    xp: 9,
+    speed: 1.6,
+    fleeSpeed: 3.5,
+    fleeRadius: 5,
+    respawnSeconds: 7,
+  },
+  // Lancer eel: coils, then lunges a long way with its spiked jaw. Fights back.
+  lancerEel: {
+    id: "lancerEel",
+    name: "Lancer eel",
+    behavior: "guard",
+    resistance: 72,
+    weight: 3,
+    reward: { biomass: 9, pearls: 2, parts: 1 },
+    xp: 28,
+    speed: 1.2,
+    combat: {
+      detectRadius: 7.5,
+      leashRadius: 10,
+      chaseSpeed: 2.6,
+      attackRange: 2.2,
+      damage: 21,
+      windupSeconds: 0.6,
+      cooldownSeconds: 1.8,
+      heldCreepSpeed: 0.7,
+    },
+    respawnSeconds: 18,
+  },
+  // Pearl clam: a giant clam clamped to the bed. Never moves; prise it open for pearls.
+  pearlClam: {
+    id: "pearlClam",
+    name: "Pearl clam",
+    behavior: "static",
+    resistance: 72,
+    weight: 3,
+    reward: { genetic: 3, pearls: 3 },
+    xp: 18,
+    speed: 0,
+    respawnSeconds: 45,
+  },
+  // The tide kraken: a vast tentacled thing that slams the deck and lunges across it.
+  tideKraken: {
+    id: "tideKraken",
+    name: "Tide kraken",
+    behavior: "boss",
+    resistance: 1650,
+    weight: 0,
+    reward: { pearls: 25, biomass: 240, genetic: 22, parts: 8 },
+    xp: 700,
+    speed: 0.9,
+    multiGrab: true,
+    captureDecaySeconds: 20,
+    respawnSeconds: 180,
+    bossTuning: {
+      ...WARDEN,
+      slamRadius: 4.2,
+      slamDamage: 36,
+      slamWindup: 1.25,
+      chargeWindup: 1.35,
+      chargeSpeed: 9.5,
+      chargeDistance: 13,
+      chargeDamage: 42,
+      walkSpeed: 0.9,
     },
   },
   // Supply pod: a crate of stolen stock. Quick to crack open, light, and it may hold a
