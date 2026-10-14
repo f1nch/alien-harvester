@@ -161,7 +161,22 @@ export function buildEnvironment(scene: Scene, map: MapDef, shadows: ShadowGener
   podMat.specularColor = new Color3(0.35, 0.35, 0.4);
   podMat.specularPower = 48;
   const podTrim = emissive(scene, "podTrim", new Color3(0.1, 0.75, 0.65));
-  if (look) {
+  if (look?.props === "pillars") {
+    // Ruins: broken sandstone pillars, each snapped off at its own height.
+    podMat.diffuseColor = new Color3(...look.prop);
+    podMat.specularColor = new Color3(0.05, 0.05, 0.05);
+    map.props.forEach((r, i) => {
+      const h = 1.1 + ((i * 37) % 5) * 0.28;
+      const m = block(scene, `pillar${i}`, r, h, podMat, null);
+      shadows?.addShadowCaster(m);
+      const capRect = { minX: r.minX - 0.12, maxX: r.maxX + 0.12, minZ: r.minZ - 0.12, maxZ: r.maxZ + 0.12 };
+      const cap = MeshBuilder.CreateBox(`pillarCap${i}`, { width: capRect.maxX - capRect.minX, depth: capRect.maxZ - capRect.minZ, height: 0.16 }, scene);
+      cap.position.set((r.minX + r.maxX) / 2, h + 0.08, (r.minZ + r.maxZ) / 2);
+      cap.rotation.y = (((i * 13) % 7) - 3) * 0.03;
+      cap.material = podMat;
+      cap.freezeWorldMatrix();
+    });
+  } else if (look) {
     // Alien worlds: props are gnarled trunks (round, as wide as the prop) under glowing caps.
     podMat.diffuseColor = new Color3(...look.prop);
     podMat.specularColor = new Color3(0.05, 0.05, 0.05);

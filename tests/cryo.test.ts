@@ -278,7 +278,7 @@ describe("Cryo labs play", () => {
     delete s.progress.upgradeSpent.thermalFat;
     const parsed = parseSave(s)!;
     expect(parsed.schemaVersion).toBe(SCHEMA_VERSION);
-    expect(parsed.progress.banked).toMatchObject({ crystals: 0, alloy: 0, amber: 0 });
+    expect(parsed.progress.banked).toMatchObject({ crystals: 0, alloy: 0, amber: 0, shards: 0 });
     expect(parsed.progress.upgrades.thermalFat).toBe(0);
   });
 });

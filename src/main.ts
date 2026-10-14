@@ -14,6 +14,7 @@ import type { CargoDrop } from "./domain/progress";
 import { UPGRADE_IDS } from "./content/upgrades";
 import { capAt, extraCostForLevels, tableCostForLevels } from "./domain/economy";
 import { devCompleteActive } from "./domain/quests";
+import { sheltered } from "./game/systems/storm";
 import { buildStructure, buyMutagenMutation, leaveBiome, nearExit, nearReactor, repair, summonWave, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
@@ -269,7 +270,7 @@ async function boot(): Promise<void> {
   const renderer = new GameRenderer(canvas, room, { reducedEffects: settings.reducedEffects, creatureModels: !forceProcedural });
   const input = new InputController(zone);
   const floaters = new Floaters(uiRoot, !settings.reducedEffects);
-  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈" } as const;
+  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈", shards: "◬" } as const;
   const loop = new FixedLoop((dt) => stepWorld(world, dt), { hz: SIM_HZ, maxStepsPerFrame: 5 });
   renderer.snapCamera(world);
   let recordDevFrame: ((now: number, cpuMs: number, inputStrength: number, speed: number, lastDrag: number) => void) | undefined;
@@ -518,6 +519,11 @@ async function boot(): Promise<void> {
         } else if (e.type === "waveCleared") {
           hud.toast("Wave cleared. The machine can summon another.", 3);
           saveNow = true;
+        } else if (e.type === "stormWarning") {
+          // Only worth saying to someone out in the open.
+          if (!sheltered(world)) hud.toast("A sandstorm is coming. Get under a canopy or into the ruins!", 3);
+        } else if (e.type === "stormEnd") {
+          if (!sheltered(world)) hud.toast("The storm passes.", 2);
         } else if (e.type === "frenzyStart") {
           hud.toast("Feeding frenzy! Capture power doubled", 2);
         } else if (e.type === "prizedAppeared") {

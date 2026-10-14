@@ -40,6 +40,7 @@ const CAPTURE_GOAL: Partial<Record<TargetTypeId, number>> = {
   handler: 6, lurker: 6, chimera: 4, specimenTank: 3,
   dockhand: 8, mechanic: 6, loaderMech: 4, fuelCell: 3,
   hiveForager: 8, skitter: 10, hiveWarrior: 4, broodSac: 3,
+  sandSkink: 8, duneRunner: 6, relicGolem: 4, burialUrn: 3,
 };
 
 /** A full-enough hold for "bank a full hold": share of capacity. */

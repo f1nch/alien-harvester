@@ -441,6 +441,86 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     }
     // Heavy forelimbs that swing as it stomps.
     pair("arm", 1.5, 0.26, shell, 1.0, 2.0);
+  } else if (type === "sandSkink") {
+    // Sand skink: a long, low lizard with a tapering tail and shards glinting along its back.
+    const hide = mat(scene, "skinkHide", 0.72, 0.56, 0.32, 0.3);
+    const shard = mat(scene, "skinkShard", 0.95, 0.85, 0.55, 0.9);
+    shard.emissiveColor = new Color3(0.35, 0.28, 0.1);
+    const body = MeshBuilder.CreateCapsule("skinkBody", { height: 0.95, radius: 0.2, tessellation: 10 }, scene);
+    body.rotation.x = Math.PI / 2;
+    add(body, hide, 0.3);
+    add(MeshBuilder.CreateSphere("skinkHead", { diameter: 0.3, segments: 10 }, scene), hide, 0.34, 0, 0.55);
+    const tail = MeshBuilder.CreateCylinder("skinkTail", { diameterTop: 0.02, diameterBottom: 0.2, height: 0.75, tessellation: 8 }, scene);
+    tail.rotation.x = -Math.PI / 2;
+    add(tail, hide, 0.26, 0, -0.8);
+    for (const z of [-0.25, 0, 0.25]) {
+      add(MeshBuilder.CreateCylinder("skinkSpine", { diameterTop: 0, diameterBottom: 0.1, height: 0.18, tessellation: 4 }, scene), shard, 0.55, 0, z);
+    }
+    for (const side of [-1, 1]) {
+      for (const z of [-0.25, 0.25]) {
+        const leg = MeshBuilder.CreateCylinder("skinkLeg", { diameter: 0.07, height: 0.32, tessellation: 5 }, scene);
+        leg.rotation.z = side * 1.0;
+        add(leg, hide, 0.16, side * 0.24, z);
+      }
+    }
+  } else if (type === "duneRunner") {
+    // Dune runner: a lean figure in a sand-coloured hooded wrap, face hidden, satchel of shards.
+    const wrap = mat(scene, "runnerWrap", 0.82, 0.68, 0.45);
+    const veil = mat(scene, "runnerVeil", 0.25, 0.18, 0.12);
+    add(MeshBuilder.CreateCylinder("duneRobe", { height: 0.7, diameterTop: 0.3, diameterBottom: 0.48, tessellation: 10 }, scene), wrap, 0.62);
+    add(MeshBuilder.CreateSphere("duneHood", { diameter: 0.36, segments: 10 }, scene), wrap, 1.15);
+    add(MeshBuilder.CreateBox("duneVeil", { width: 0.22, height: 0.1, depth: 0.08 }, scene), veil, 1.13, 0, 0.15);
+    add(MeshBuilder.CreateBox("duneSatchel", { width: 0.22, height: 0.22, depth: 0.12 }, scene), mat(scene, "duneSatchelMat", 0.45, 0.3, 0.18), 0.75, 0.22, -0.14);
+    pair("leg", 0.42, 0.065, veil, 0.08, 0.42);
+    pair("arm", 0.44, 0.055, wrap, 0.2, 1.0);
+  } else if (type === "relicGolem") {
+    // Relic golem: stacked sandstone blocks with glowing carved runes and heavy stone fists.
+    const stone = mat(scene, "golemStone", 0.62, 0.5, 0.34, 0.2);
+    const rune = mat(scene, "golemRune", 0, 0, 0);
+    rune.emissiveColor = new Color3(1, 0.65, 0.2);
+    add(MeshBuilder.CreateBox("golemLegs", { width: 0.6, height: 0.45, depth: 0.4 }, scene), stone, 0.3);
+    add(MeshBuilder.CreateBox("golemTorso", { width: 0.85, height: 0.6, depth: 0.5 }, scene), stone, 0.85);
+    add(MeshBuilder.CreateBox("golemHead", { width: 0.38, height: 0.32, depth: 0.34 }, scene), stone, 1.32);
+    add(MeshBuilder.CreateBox("golemEyes", { width: 0.26, height: 0.05, depth: 0.04 }, scene), rune, 1.34, 0, 0.18);
+    add(MeshBuilder.CreateBox("golemRune", { width: 0.3, height: 0.08, depth: 0.04 }, scene), rune, 0.9, 0, 0.26);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateBox("golemFist", { width: 0.28, height: 0.3, depth: 0.3 }, scene), stone, 0.55, side * 0.6, 0.05);
+    }
+    pair("arm", 0.5, 0.12, stone, 0.55, 1.05);
+  } else if (type === "burialUrn") {
+    // Burial urn: a fat, painted clay jar with a sealed lid and a glowing glyph.
+    const clay = mat(scene, "urnClay", 0.6, 0.35, 0.2, 0.2);
+    const paint = mat(scene, "urnPaint", 0, 0, 0);
+    paint.emissiveColor = new Color3(0.9, 0.7, 0.3);
+    const jar = MeshBuilder.CreateSphere("urnJar", { diameter: 0.7, segments: 12 }, scene);
+    jar.scaling.y = 1.15;
+    jar.bakeCurrentTransformIntoVertices();
+    add(jar, clay, 0.42);
+    add(MeshBuilder.CreateCylinder("urnNeck", { diameterTop: 0.36, diameterBottom: 0.26, height: 0.18, tessellation: 12 }, scene), clay, 0.86);
+    add(MeshBuilder.CreateCylinder("urnLid", { diameter: 0.4, height: 0.06, tessellation: 12 }, scene), clay, 0.97);
+    add(MeshBuilder.CreateTorus("urnBand", { diameter: 0.68, thickness: 0.04, tessellation: 18 }, scene), paint, 0.5);
+  } else if (type === "sandWyrm") {
+    // The sand wyrm: a vast segmented worm rearing out of the sand, ringed maw glowing.
+    const hide = mat(scene, "wyrmHide", 0.55, 0.4, 0.24, 0.4);
+    const plate = mat(scene, "wyrmPlate", 0.4, 0.28, 0.16, 0.6);
+    const maw = mat(scene, "wyrmMaw", 0, 0, 0);
+    maw.emissiveColor = new Color3(1, 0.45, 0.15);
+    for (const [y, z, d] of [[0.5, -1.4, 1.3], [0.8, -0.7, 1.5], [1.3, 0, 1.6], [2.0, 0.4, 1.5], [2.6, 0.6, 1.3]] as const) {
+      add(MeshBuilder.CreateSphere("wyrmSegment", { diameter: d, segments: 12 }, scene), hide, y, 0, z);
+      add(MeshBuilder.CreateTorus("wyrmRidge", { diameter: d * 0.95, thickness: 0.1, tessellation: 18 }, scene), plate, y, 0, z);
+    }
+    const mouth = MeshBuilder.CreateTorus("wyrmMaw", { diameter: 0.9, thickness: 0.16, tessellation: 20 }, scene);
+    mouth.rotation.x = Math.PI / 2 - 0.4;
+    add(mouth, maw, 2.75, 0, 1.1);
+    const toothMat = mat(scene, "wyrmToothMat", 0.95, 0.9, 0.8, 0.6);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const tooth = MeshBuilder.CreateCylinder("wyrmTooth", { diameterTop: 0, diameterBottom: 0.1, height: 0.3, tessellation: 4 }, scene);
+      tooth.rotation.x = Math.PI / 2;
+      add(tooth, toothMat, 2.75 + Math.sin(a) * 0.35, Math.cos(a) * 0.35, 1.25);
+    }
+    // Whipping feelers that swing as it moves.
+    pair("arm", 1.4, 0.16, plate, 0.8, 2.4);
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     const coat = mat(scene, "techCoat", 0.92, 0.95, 0.97);

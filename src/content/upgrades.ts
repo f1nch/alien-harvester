@@ -10,7 +10,8 @@ export type UpgradeId =
   | "regeneration"
   | "resourceYield"
   | "thermalFat"
-  | "chitin";
+  | "chitin"
+  | "dustLids";
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -159,6 +160,18 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "amber",
     costs: [15, 35, 65, 105, 160],
     capByTier: [5, 5],
+  },
+  // Storm resistance: a third eyelid against blowing sand. Paid in relic shards
+  // (content/ashkar.ts), hidden until shards matter. Applied in game/world#activeBoost.
+  dustLids: {
+    id: "dustLids",
+    name: "Dust lids",
+    unit: "% storm resist",
+    base: 0,
+    perLevel: 20,
+    currency: "shards",
+    costs: [15, 40, 75, 120],
+    capByTier: [4, 4],
   },
 };
 

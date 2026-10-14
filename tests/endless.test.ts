@@ -35,7 +35,7 @@ function at(depth: number, tier = 1): ProgressState {
 }
 
 const rich = (p: ProgressState) => {
-  p.banked = { biomass: 1e7, genetic: 1e6, parts: 1e5, mutagen: 0, crystals: 1e5, alloy: 1e5, amber: 1e5 };
+  p.banked = { biomass: 1e7, genetic: 1e6, parts: 1e5, mutagen: 0, crystals: 1e5, alloy: 1e5, amber: 1e5, shards: 1e5 };
 };
 
 describe("endless evolution tiers", () => {

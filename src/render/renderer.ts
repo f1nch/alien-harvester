@@ -106,6 +106,15 @@ export class GameRenderer {
     this.crowd = new CrowdView(scene, shadows);
     this.structures = new StructuresView(scene, shadows);
     this.dressing = buildDressing(scene, map, opts.reducedEffects);
+    if (map.storms) {
+      // Storm haze never hides what the player reads in the world: reach, bars, telegraphs.
+      const clear = new Set(["radiusMat", "arrowMat", "barBg", "barFill", "telegraphRing", "telegraphFill", "shadeRing", "prizedHalo"]);
+      const unfog = (m: { name: string; fogEnabled?: boolean }) => {
+        if (clear.has(m.name) && "fogEnabled" in m) m.fogEnabled = false;
+      };
+      scene.materials.forEach(unfog);
+      scene.onNewMaterialAddedObservable.add(unfog);
+    }
     this.effects = new Effects(scene, !opts.reducedEffects);
     this.reducedEffects = opts.reducedEffects;
     if (!opts.reducedEffects) {
@@ -272,6 +281,17 @@ export class GameRenderer {
     this.crowd.update(dt, w.targets, alpha, this.creaturePos);
     this.structures.update(w, alpha, dt);
     this.dressing.update(dt);
+    // Sandstorms: a sand-coloured haze that thickens with the storm (and while it gathers).
+    if (this.map.storms) {
+      const s = w.storm;
+      const gather = s.phase === "warning" ? 0.25 : 0;
+      const k = Math.max(s.intensity, gather);
+      const scene = this.scene;
+      scene.fogMode = Scene.FOGMODE_EXP2;
+      scene.fogDensity = 0.004 + k * 0.022;
+      const haze = this.map.look?.haze ?? [0.6, 0.45, 0.25];
+      scene.fogColor.set(haze[0], haze[1], haze[2]);
+    }
 
     this.goals.length = w.tentacles.length;
     w.tentacles.forEach((t, i) => {

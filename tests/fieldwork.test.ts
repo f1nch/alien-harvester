@@ -30,7 +30,7 @@ function floor(depth: number, opts: { targets?: boolean } = {}): World {
   p.evolution = 1;
   for (const d of map.doors) p.unlockedDoors.push(d.id);
   for (const q of biome.quests) p.quests[q.id] = { count: 1, done: true };
-  p.banked = { biomass: 1e5, genetic: 1e4, parts: 1e4, mutagen: 0, crystals: 1e4, alloy: 0, amber: 0 };
+  p.banked = { biomass: 1e5, genetic: 1e4, parts: 1e4, mutagen: 0, crystals: 1e4, alloy: 0, amber: 0, shards: 0 };
   const w = createWorld(map, p);
   if (!opts.targets) {
     w.targets.length = 0;

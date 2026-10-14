@@ -21,7 +21,7 @@ import { CATCHER, DRONE, REFINERY, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 export const CONTENT_VERSION = 1;
 
 /** The level cap before endless levels (v9). */
@@ -222,6 +222,11 @@ function migrate(raw: Obj): Obj | null {
     // plating track, both parsing as 0 when absent. Nothing else changes; the bump stops
     // older builds dropping amber they don't know about.
     m = { ...m, schemaVersion: 16 };
+  }
+  if (m.schemaVersion === 16) {
+    // v17 adds Ashkar, the second portal world: the relic shards currency and the Dust lids
+    // track, both parsing as 0 when absent. The bump stops older builds dropping shards.
+    m = { ...m, schemaVersion: 17 };
   }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }

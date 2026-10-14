@@ -10,7 +10,9 @@ export type TargetTypeId =
   // Hangar
   | "dockhand" | "mechanic" | "loaderMech" | "fuelCell" | "overseerMech"
   // Vesh (portal world 1)
-  | "hiveForager" | "skitter" | "hiveWarrior" | "broodSac" | "hiveQueen";
+  | "hiveForager" | "skitter" | "hiveWarrior" | "broodSac" | "hiveQueen"
+  // Ashkar (portal world 2)
+  | "sandSkink" | "duneRunner" | "relicGolem" | "burialUrn" | "sandWyrm";
 
 /** "static": never moves (supply pods). */
 export type TargetBehavior = "wander" | "flee" | "guard" | "boss" | "static";
@@ -484,6 +486,92 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       chargeSpeed: 9,
       chargeDamage: 36,
       walkSpeed: 0.9,
+    },
+  },
+  // --- Ashkar, the desert ruins (portal world 2). Depth-0 equivalents. Relic shards are its currency.
+  // Sand skink: a big, slow lizard sunning itself, with shards glinting in its scales.
+  sandSkink: {
+    id: "sandSkink",
+    name: "Sand skink",
+    behavior: "wander",
+    resistance: 33,
+    weight: 2,
+    reward: { biomass: 5, shards: 1 },
+    xp: 13,
+    speed: 0.9,
+    respawnSeconds: 10,
+  },
+  // Dune runner: a hooded scavenger who bolts the moment it sees you.
+  duneRunner: {
+    id: "duneRunner",
+    name: "Dune runner",
+    behavior: "flee",
+    resistance: 26,
+    weight: 2,
+    reward: { biomass: 6, shards: 0.5 },
+    xp: 12,
+    speed: 1.3,
+    fleeSpeed: 3.2,
+    fleeRadius: 5,
+    respawnSeconds: 9,
+  },
+  // Relic golem: an animated stone guardian. Slow, but its fist reaches far and hits hard.
+  relicGolem: {
+    id: "relicGolem",
+    name: "Relic golem",
+    behavior: "guard",
+    resistance: 75,
+    weight: 4,
+    reward: { biomass: 10, shards: 2, parts: 1 },
+    xp: 28,
+    speed: 0.9,
+    combat: {
+      detectRadius: 7,
+      leashRadius: 10,
+      chaseSpeed: 2.2,
+      attackRange: 2.1,
+      damage: 22,
+      windupSeconds: 0.75,
+      cooldownSeconds: 2,
+      heldCreepSpeed: 0.5,
+    },
+    respawnSeconds: 18,
+  },
+  // Burial urn: a sealed urn full of grave goods. Never moves; crack it open for shards.
+  burialUrn: {
+    id: "burialUrn",
+    name: "Burial urn",
+    behavior: "static",
+    resistance: 70,
+    weight: 3,
+    reward: { genetic: 3, shards: 3 },
+    xp: 18,
+    speed: 0,
+    respawnSeconds: 45,
+  },
+  // The sand wyrm: a vast burrowing worm. Its charges are long and fast.
+  sandWyrm: {
+    id: "sandWyrm",
+    name: "Sand wyrm",
+    behavior: "boss",
+    resistance: 1550,
+    weight: 0,
+    reward: { shards: 25, biomass: 220, genetic: 20, parts: 7 },
+    xp: 650,
+    speed: 1,
+    multiGrab: true,
+    captureDecaySeconds: 20,
+    respawnSeconds: 180,
+    bossTuning: {
+      ...WARDEN,
+      slamRadius: 3.8,
+      slamDamage: 34,
+      slamWindup: 1.2,
+      chargeWindup: 1.3,
+      chargeSpeed: 11,
+      chargeDistance: 15,
+      chargeDamage: 40,
+      walkSpeed: 1,
     },
   },
   // Supply pod: a crate of stolen stock. Quick to crack open, light, and it may hold a

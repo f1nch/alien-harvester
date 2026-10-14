@@ -20,6 +20,7 @@ import { reactorRequirements, summonRequirements } from "../domain/reactor";
 import { clearRequirements, nextBiome } from "../domain/biome";
 import { BOOSTS, FRENZY, SUMMON, type BoostId } from "../content/feeding";
 import { COLD } from "../content/cold";
+import { stormReachCut } from "../game/systems/storm";
 import { MUTAGEN, MUTAGEN_IDS, type MutagenId } from "../content/mutagen";
 import { TARGETS, type TargetTypeId } from "../content/targets";
 import { BESTIARY_MILESTONES, inBestiary, milestonesReached } from "../domain/bestiary";
@@ -32,7 +33,7 @@ export function structureName(kind: StructureKind): string {
 }
 
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
-export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈" };
+export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈", shards: "◬" };
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
@@ -115,7 +116,12 @@ export interface HudCallbacks {
 
 /** Creatures here pay hive amber (so the amber chip and Chitin plating are worth showing). */
 function worldHasAmber(w: World): boolean {
-  return w.map.spawns.some((s) => (w.biome.targets[s.type].reward.amber ?? 0) > 0);
+  return worldPays(w, "amber");
+}
+
+/** Creatures on this floor pay this currency. */
+function worldPays(w: World, c: Currency): boolean {
+  return w.map.spawns.some((s) => (w.biome.targets[s.type].reward[c] ?? 0) > 0);
 }
 
 function requirementList(list: HTMLElement, reqs: Requirement[]): void {
@@ -165,6 +171,11 @@ export class Hud {
   private mutagenChip: HTMLElement;
   private amber: HTMLElement;
   private amberChip: HTMLElement;
+  private shards: HTMLElement;
+  private shardsChip: HTMLElement;
+  private stormBox: HTMLElement;
+  private stormText: HTMLElement;
+  private stormFill: HTMLElement;
   private feedBox: HTMLElement;
   private feedText: HTMLElement;
   private feedFill: HTMLElement;
@@ -267,6 +278,9 @@ export class Hud {
     const amb = chip("◈", "amber", "Hive amber");
     this.amber = amb.value;
     this.amberChip = amb.root;
+    const sha = chip("◬", "shards", "Relic shards");
+    this.shards = sha.value;
+    this.shardsChip = sha.root;
 
     const lvl = el("div", "chip level-chip");
     this.level = el("span", "chip-value", "Lv 1");
@@ -317,7 +331,14 @@ export class Hud {
     this.chillFill = el("div", "chill-fill");
     chillBar.append(this.chillFill);
     this.chillBox.append(this.chillText, chillBar);
-    top.append(bio.root, gen.root, cry.root, amb.root, mut.root, lvl, bars, this.feedBox, this.chillBox);
+    this.stormBox = el("div", "feed-meter storm-meter hidden");
+    this.stormBox.setAttribute("role", "status");
+    this.stormText = el("span", "feed-text");
+    const stormBar = el("div", "cargo-bar");
+    this.stormFill = el("div", "storm-fill");
+    stormBar.append(this.stormFill);
+    this.stormBox.append(this.stormText, stormBar);
+    top.append(bio.root, gen.root, cry.root, amb.root, sha.root, mut.root, lvl, bars, this.feedBox, this.chillBox, this.stormBox);
 
     // Objectives and hints flow under the HUD so they never overlap it as it wraps.
     const sub = el("div", "hud-sub");
@@ -698,7 +719,7 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, p.banked.amber, w.chillApplied, feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired, p.summon.left,
+      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, p.banked.amber, p.banked.shards, w.chillApplied, w.storm.phase, w.stormApplied, Math.round(w.storm.intensity * 10), feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired, p.summon.left,
       s.boss ? `${Math.round(s.boss.progress * 100)}:${s.boss.boss?.state}` : "", s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
@@ -716,10 +737,13 @@ export class Hud {
     this.amber.textContent = compact(p.banked.amber);
     // Amber appears on the first world that has it, and stays once earned.
     this.amberChip.classList.toggle("hidden", p.banked.amber === 0 && !worldHasAmber(w));
+    this.shards.textContent = compact(p.banked.shards);
+    this.shardsChip.classList.toggle("hidden", p.banked.shards === 0 && !worldPays(w, "shards"));
     // Mutagen appears with the first one earned.
     this.mutagenChip.classList.toggle("hidden", p.banked.mutagen === 0 && Object.keys(p.mutagenLevels).length === 0);
     this.renderFeeding(w);
     this.renderChill(w);
+    this.renderStorm(w);
     this.renderMutagen(w);
     this.renderBestiary(w);
 
@@ -766,7 +790,8 @@ export class Hud {
       const row = this.rows.get(id)!;
       const lvl = p.upgrades[id];
       const hidden = lvl === 0 && ((id === "thermalFat" && !w.map.zones.some((z) => z.cold))
-        || (id === "chitin" && p.banked.amber === 0 && !worldHasAmber(w)));
+        || (id === "chitin" && p.banked.amber === 0 && !worldHasAmber(w))
+        || (id === "dustLids" && p.banked.shards === 0 && !worldPays(w, "shards")));
       row.root.classList.toggle("hidden", hidden);
       const cost = nextCost(p, id);
       const cur = upgradeValue(p, id);
@@ -874,6 +899,24 @@ export class Hud {
     this.chillFill.style.width = `${pct}%`;
   }
 
+  /** Sandstorms: a warning while one gathers, then what it's costing you (or that you're sheltered). */
+  private renderStorm(w: World): void {
+    const s = w.storm;
+    // Shown from the warning until the storm has fully died down.
+    const show = !!w.map.storms && (s.phase !== "calm" || s.intensity > 0);
+    this.stormBox.classList.toggle("hidden", !show);
+    if (!show) return;
+    if (s.phase === "warning") {
+      this.stormText.textContent = "🌪 Sandstorm coming · get under a canopy or into the ruins";
+      this.stormFill.style.width = "0%";
+      return;
+    }
+    const felt = w.stormApplied;
+    const cut = Math.round(stormReachCut(w));
+    this.stormText.textContent = felt > 0 ? `🌪 Sandstorm · reach −${cut}% · find shelter` : "🌪 Sandstorm · sheltered";
+    this.stormFill.style.width = `${Math.round(s.intensity * 100)}%`;
+  }
+
   private renderMutagen(w: World): void {
     const p = w.progress;
     for (const id of MUTAGEN_IDS) {
@@ -978,6 +1021,7 @@ export class Hud {
       ["Cryo crystals", String(s.crystals)],
       ["Alloy", String(s.alloy)],
       ["Hive amber", String(s.amber)],
+      ["Relic shards", String(s.shards)],
       ["Location", s.place],
       ["Doors open", String(s.doorsOpen)],
       ["Objectives done", String(s.questsDone)],

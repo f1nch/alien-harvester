@@ -12,7 +12,7 @@ export interface Rect {
 export type ZoneId = string;
 
 /** How a zone is dressed (light colour, machinery). Several maps can share a theme. */
-export type ZoneTheme = "containment" | "service" | "security" | "reactor" | "dock" | "cold" | "vault" | "lab" | "core" | "jungle" | "hive";
+export type ZoneTheme = "containment" | "service" | "security" | "reactor" | "dock" | "cold" | "vault" | "lab" | "core" | "jungle" | "hive" | "dunes" | "ruins";
 
 export interface ZoneDef {
   id: ZoneId;
@@ -20,6 +20,8 @@ export interface ZoneDef {
   theme: ZoneTheme;
   /** Freezing: chill builds here away from heat vents (content/cold.ts). */
   cold?: boolean;
+  /** Open to the sky: sandstorms reach you here (content/storm.ts). Sheltered by default. */
+  exposed?: boolean;
   rect: Rect;
   /** Floor tint so zones read as distinct places. */
   tint: [number, number, number];
@@ -64,6 +66,10 @@ export interface MapLook {
   ambient: [number, number, number];
   /** Flora on the walls: caps and stalks. */
   flora: [number, number, number];
+  /** How props are drawn: gnarled trunks under glowing caps (default) or broken stone pillars. */
+  props?: "trunks" | "pillars";
+  /** Storm haze colour, for maps with storms. */
+  haze?: [number, number, number];
 }
 
 export interface MapDef {
@@ -81,6 +87,10 @@ export interface MapDef {
   heatVents?: Array<{ x: number; z: number; radius: number }>;
   /** Sticky resin on the ground: moving through it is slow (game/systems/movement.ts). */
   resin?: Array<{ x: number; z: number; radius: number }>;
+  /** Sandstorms sweep the exposed zones of this map (game/systems/storm.ts). */
+  storms?: boolean;
+  /** Ruined canopies in exposed zones: shelter from storms. */
+  shade?: Array<{ x: number; z: number; radius: number }>;
   /** How the map is drawn: facility rooms (the default) or an alien world outdoors. */
   look?: MapLook;
 }

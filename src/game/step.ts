@@ -2,6 +2,7 @@ import { updateCapture } from "./systems/capture";
 import { updateCatcher } from "./systems/catcher";
 import { updatePlayerHealth } from "./systems/combat";
 import { updateCold } from "./systems/cold";
+import { updateStorm } from "./systems/storm";
 import { updateDeposit } from "./systems/deposit";
 import { updateFeeding } from "./systems/feeding";
 import { updatePlayer } from "./systems/movement";
@@ -15,6 +16,7 @@ export function stepWorld(w: World, dt = SIM_DT): void {
   w.progress.playSeconds += dt;
   updatePlayer(w, dt);
   updateCold(w, dt);
+  updateStorm(w, dt);
   updateTargets(w, dt);
   updateSpawns(w, dt);
   updateCapture(w, dt);

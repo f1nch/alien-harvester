@@ -7,6 +7,7 @@ import { CRYO_LABS } from "./cryo";
 import { SPECIMEN_VAULTS } from "./vaults";
 import { HANGAR } from "./hangar";
 import { VESH } from "./vesh";
+import { ASHKAR } from "./ashkar";
 import { REACTOR } from "./reactor";
 
 /** The machine a biome's quest chain ends at (the reactor console in the facility). */
@@ -100,4 +101,5 @@ export const BIOMES: readonly BiomeDef[] = [
   SPECIMEN_VAULTS,
   HANGAR,
   VESH,
+  ASHKAR,
 ];

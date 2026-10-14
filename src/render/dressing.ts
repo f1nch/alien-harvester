@@ -47,6 +47,8 @@ const POOL_TINT: Record<ZoneTheme, Color3> = {
   core: new Color3(0.3, 0.85, 1),
   jungle: new Color3(0.35, 0.85, 0.4),
   hive: new Color3(0.95, 0.6, 0.2),
+  dunes: new Color3(1, 0.75, 0.4),
+  ruins: new Color3(0.95, 0.55, 0.3),
 };
 
 /** Additive light pools in a loose grid over each zone. */
@@ -110,14 +112,24 @@ function doorStripes(scene: Scene, map: MapDef): void {
 /** Zone names painted on the floor just inside each zone's entrance. */
 function zoneLabels(scene: Scene, map: MapDef): void {
   for (const zone of map.zones) {
-    const tex = new DynamicTexture(`label-${zone.id}`, { width: 512, height: 96 }, scene, true);
+    // The font shrinks until the name fits with a margin: long names ("Specimen intake")
+    // used to run off both ends of the canvas.
+    const W = 512;
+    const H = 96;
+    const tex = new DynamicTexture(`label-${zone.id}`, { width: W, height: H }, scene, true);
     const ctx = tex.getContext() as CanvasRenderingContext2D;
-    ctx.clearRect(0, 0, 512, 96);
-    ctx.font = "700 64px system-ui, sans-serif";
+    ctx.clearRect(0, 0, W, H);
+    const text = zone.name.toUpperCase();
+    let size = 64;
+    ctx.font = `700 ${size}px system-ui, sans-serif`;
+    while (size > 20 && ctx.measureText(text).width > W * 0.92) {
+      size -= 4;
+      ctx.font = `700 ${size}px system-ui, sans-serif`;
+    }
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "rgba(220, 225, 255, 0.85)";
-    ctx.fillText(zone.name.toUpperCase(), 256, 50);
+    ctx.fillText(text, W / 2, H / 2 + 2);
     tex.update();
     tex.hasAlpha = true;
     const mat = new StandardMaterial(`labelMat-${zone.id}`, scene);
@@ -400,6 +412,40 @@ function resinPools(scene: Scene, map: MapDef): void {
   });
 }
 
+/** Shelter from sandstorms: a cracked stone slab on four posts, with a cool floor ring under it. */
+function shadeCanopies(scene: Scene, map: MapDef): void {
+  const spots = map.shade;
+  if (!spots || spots.length === 0) return;
+  const stone = new StandardMaterial("shadeStone", scene);
+  stone.diffuseColor = map.look ? new Color3(...map.look.prop).scale(0.9) : new Color3(0.4, 0.35, 0.3);
+  stone.specularColor = Color3.Black();
+  // See-through roofs: the angled camera looks through them at the creature sheltering below.
+  const roof = stone.clone("shadeRoof");
+  roof.alpha = 0.35;
+  const ring = emissive(scene, "shadeRing", new Color3(0.35, 0.75, 0.9), 0.6);
+  spots.forEach((p, i) => {
+    const slab = MeshBuilder.CreateCylinder(`shadeSlab${i}`, { diameter: p.radius * 2.1, height: 0.18, tessellation: 7 }, scene);
+    slab.position.set(p.x, 2.4, p.z);
+    slab.rotation.y = i * 0.7;
+    slab.material = roof;
+    slab.isPickable = false;
+    slab.freezeWorldMatrix();
+    for (let k = 0; k < 4; k++) {
+      const a = i * 0.7 + (k / 4) * Math.PI * 2 + Math.PI / 4;
+      const post = MeshBuilder.CreateCylinder(`shadePost${i}-${k}`, { diameter: 0.22, height: 2.4, tessellation: 6 }, scene);
+      post.position.set(p.x + Math.cos(a) * p.radius * 0.85, 1.2, p.z + Math.sin(a) * p.radius * 0.85);
+      post.material = stone;
+      post.isPickable = false;
+      post.freezeWorldMatrix();
+    }
+    const r = MeshBuilder.CreateTorus(`shadeRing${i}`, { diameter: p.radius * 2, thickness: 0.06, tessellation: 40 }, scene);
+    r.position.set(p.x, 0.04, p.z);
+    r.material = ring;
+    r.isPickable = false;
+    r.freezeWorldMatrix();
+  });
+}
+
 /** Glowing fungus caps and fern fronds along every wall top, instanced from two templates. */
 function flora(scene: Scene, map: MapDef, look: MapLook): void {
   const capMat = emissive(scene, "floraCap", new Color3(...look.flora));
@@ -469,6 +515,7 @@ export function buildDressing(scene: Scene, map: MapDef, reducedEffects: boolean
   lightPools(scene, map);
   zoneLabels(scene, map);
   resinPools(scene, map);
+  shadeCanopies(scene, map);
   if (map.look) {
     // Alien worlds: flora instead of facility lamps, pipes and machinery.
     flora(scene, map, map.look);

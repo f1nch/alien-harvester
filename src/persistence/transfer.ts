@@ -36,6 +36,7 @@ export interface SaveSummary {
   crystals: number;
   alloy: number;
   amber: number;
+  shards: number;
   doorsOpen: number;
   questsDone: number;
   reactorRepaired: boolean;
@@ -54,6 +55,7 @@ export function summarize(save: SaveFile): SaveSummary {
     crystals: Math.floor(p.banked.crystals),
     alloy: Math.floor(p.banked.alloy),
     amber: Math.floor(p.banked.amber),
+    shards: Math.floor(p.banked.shards),
     doorsOpen: p.unlockedDoors.length,
     questsDone: Object.values(p.quests).filter((q) => q.done).length,
     reactorRepaired: p.reactorRepaired,

@@ -17,7 +17,8 @@ describe("Hangar", () => {
     expect(biomeAt(3).name).toBe("Hangar");
     expect(biomeAt(3).region).toBe("Facility floor B4");
     expect(HANGAR.exit.name).toBe("Portal");
-    expect(biomeAt(8).name).toBe("Hangar II");
+    // Its second lap comes one full round of floors later.
+    expect(biomeAt(3 + BIOMES.length).name).toBe("Hangar II");
   });
 
   it("follows the vaults: moving on from depth 2 lands in the hangar", () => {
@@ -82,7 +83,7 @@ describe("v15 saves: the floor is saved", () => {
     }
   });
 
-  it("then moves on in story order: facility, cryo, vaults, hangar, vesh, facility", () => {
+  it("then moves on in story order: facility, cryo, vaults, hangar, vesh and on", () => {
     const p = parseSave(v14At(3))!.progress; // the facility at depth 3 (Research wing II)
     expect(biomeAt(p.depth, p.floor).name).toBe("Research wing II");
     const order: string[] = [];
@@ -91,7 +92,9 @@ describe("v15 saves: the floor is saved", () => {
       enterNextBiome(p);
       order.push(p.floor);
     }
-    expect(order).toEqual(["cryo", "vaults", "hangar", "vesh", "facility"]);
+    // Story order, whatever floors exist: the ones after the facility, wrapping round.
+    expect(order).toEqual([1, 2, 3, 4, 5].map((i) => BIOMES[i % BIOMES.length]!.id));
+    expect(order.slice(0, 4)).toEqual(["cryo", "vaults", "hangar", "vesh"]);
     expect(p.depth).toBe(8);
   });
 

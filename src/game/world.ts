@@ -11,6 +11,7 @@ import { currentBiome, scaleReward, type ActiveBiome } from "../domain/biome";
 import { computeStats, type PlayerStats, type StatBoost } from "../domain/economy";
 import { BOOSTS, FRENZY, SUMMON, type BoostId } from "../content/feeding";
 import { COLD } from "../content/cold";
+import { newStorm, stormReachCut, type StormState } from "./systems/storm";
 import type { Craving } from "../domain/cravings";
 import { feedingTuning } from "../domain/mutagen";
 import { fillCravings } from "../domain/cravings";
@@ -123,6 +124,9 @@ export type GameEvent =
   /** Moved on; the world must be rebuilt for the new biome's map. */
   | { type: "biomeLeft"; depth: number }
   | { type: "frenzyStart" }
+  | { type: "stormWarning" }
+  | { type: "stormStart" }
+  | { type: "stormEnd" }
   | { type: "frenzyEnd" }
   | { type: "prizedAppeared"; target: TargetEntity }
   | { type: "prizedEscaped" }
@@ -169,6 +173,10 @@ export interface World {
   chill: number;
   /** The chill level the current stats were computed with (steps of COLD.statStep). */
   chillApplied: number;
+  /** The sandstorm cycle on stormy worlds. Transient. */
+  storm: StormState;
+  /** The storm penalty the current stats were computed with (steps of STORM.statStep). */
+  stormApplied: number;
   /** One entry per tentacle; at most one target each. */
   tentacles: Array<TargetEntity | null>;
   hash: SpatialHash<TargetEntity>;
@@ -212,6 +220,8 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
     },
     chill: 0,
     chillApplied: 0,
+    storm: newStorm(),
+    stormApplied: 0,
     hash: new SpatialHash<TargetEntity>(4),
     depositBudget: 0,
     cargoFull: false,
@@ -355,6 +365,9 @@ export function activeBoost(w: World): StatBoost {
     out.moveSpeed = -COLD.speedPenalty * w.chillApplied;
     out.capturePower = (out.capturePower ?? 0) - COLD.powerPenalty * w.chillApplied;
   }
+  // Sandstorms cut reach only (Dust lids soften it): the storm is about getting close.
+  const storm = stormReachCut(w);
+  if (storm > 0) out.captureRadius = (out.captureRadius ?? 0) - storm;
   for (const [id, left] of Object.entries(w.feeding.boosts) as Array<[BoostId, number]>) {
     if (left <= 0) continue;
     const b = BOOSTS[id];
