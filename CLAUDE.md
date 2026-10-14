@@ -1,6 +1,8 @@
 # Alien Harvester: notes for Claude sessions
 
-Design source of truth: [Alien-Harvester-Web-Game-Spec.md](Alien-Harvester-Web-Game-Spec.md). Status and milestones: [docs/ROADMAP.md](docs/ROADMAP.md). Repo: https://github.com/f1nch/alien-harvester (push to `main`).
+Design source of truth: [Alien-Harvester-Web-Game-Spec.md](Alien-Harvester-Web-Game-Spec.md). Status and milestones: [docs/ROADMAP.md](docs/ROADMAP.md). Repo: https://github.com/f1nch/alien-harvester (push to `main`). Expansion design (biomes, loop features, endless evolution): [docs/EXPANSION_DESIGN.md](docs/EXPANSION_DESIGN.md).
+
+Pushing to `main` deploys to GitHub Pages (https://f1nch.github.io/alien-harvester/) through `.github/workflows/deploy.yml`: tests, then a build with a relative `base`. Keep asset URLs relative (e.g. `models/...`, never `/models/...`).
 
 ## Commands
 
@@ -20,7 +22,7 @@ Design source of truth: [Alien-Harvester-Web-Game-Spec.md](Alien-Harvester-Web-G
 
 ## Saves (high risk; handle carefully)
 
-- Schema version is in `persistence/schema.ts` (currently 8). Any change to persisted state means: bump `SCHEMA_VERSION`, add a step to `migrate()`, validate in `parseSave`, and add a migration test. Tests use the `SCHEMA_VERSION` constant, never literals.
+- Schema version is in `persistence/schema.ts` (currently 14). Any change to persisted state means: bump `SCHEMA_VERSION`, add a step to `migrate()`, validate in `parseSave`, and add a migration test. Tests use the `SCHEMA_VERSION` constant, never literals.
 - `parseSave` must accept every reachable live state, because `store.write` refuses invalid saves and would block saving for good. Bound numbers (`MAX_AMOUNT`). Parse order matters: perks before cargo and health; structures after doors.
 - Never lower an upgrade cap or rename persistent IDs (quests, perks, spawns, doors). A test pins the caps.
 - The store keeps `current`, `previous`, `premigration:v<n>`, `quarantine:<n>` and `preimport:<n>`. Backup slots are never overwritten.
@@ -28,7 +30,7 @@ Design source of truth: [Alien-Harvester-Web-Game-Spec.md](Alien-Harvester-Web-G
 ## Workflow the user expects
 
 - Per the user's global CLAUDE.md, high-risk changes (saves and migrations, economy and resource transfers, anything that could lose progress) get a **reviewer subagent pass** before committing; fix the findings, add regression tests, then commit and push.
-- Commit messages end with the co-author line given by the session. Work directly on `main`.
+- Commit messages end with the co-author line given by the session. Work directly on `main`, unless another agent has uncommitted work in this checkout: then use a separate git worktree and branch, never touch their files, and don't use a bare `git stash` (the stash is shared between worktrees).
 - Verify UI changes in the browser on port 5200 at the mobile preset (375×812), then reset the viewport.
 
 ## Next up (see roadmap)
