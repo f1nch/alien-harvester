@@ -32,6 +32,7 @@ export interface SaveSummary {
   biomass: number;
   genetic: number;
   parts: number;
+  mutagen: number;
   doorsOpen: number;
   questsDone: number;
   reactorRepaired: boolean;
@@ -46,6 +47,7 @@ export function summarize(save: SaveFile): SaveSummary {
     biomass: Math.floor(p.banked.biomass),
     genetic: Math.floor(p.banked.genetic),
     parts: Math.floor(p.banked.parts),
+    mutagen: Math.floor(p.banked.mutagen),
     doorsOpen: p.unlockedDoors.length,
     questsDone: Object.values(p.quests).filter((q) => q.done).length,
     reactorRepaired: p.reactorRepaired,

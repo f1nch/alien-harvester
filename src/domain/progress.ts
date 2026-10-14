@@ -1,4 +1,6 @@
 import { emptyWallet, type Reward, type Wallet } from "../content/currencies";
+import type { Craving } from "./cravings";
+import type { MutagenId } from "../content/mutagen";
 import type { MapDef } from "../content/map";
 import type { PerkId } from "../content/perks";
 import type { TargetTypeId } from "../content/targets";
@@ -60,6 +62,14 @@ export interface ProgressState {
    * quests, spawn timers and reactorRepaired belong to the current biome.
    */
   depth: number;
+  /** Current cravings (short goals paying mutagen). Reset when moving on. */
+  cravings: Craving[];
+  /** Cravings rolled so far: seeds the next roll, so reloading never rerolls. */
+  cravingRolls: number;
+  /** Mutagen mutation levels. Not refunded by respec. */
+  mutagenLevels: Partial<Record<MutagenId, number>>;
+  /** Lifetime captures per creature type. */
+  bestiary: Partial<Record<TargetTypeId, number>>;
 }
 
 export function newProgress(map: MapDef): ProgressState {
@@ -90,6 +100,10 @@ export function newProgress(map: MapDef): ProgressState {
     reactorRepaired: false,
     playSeconds: 0,
     depth: 0,
+    cravings: [],
+    cravingRolls: 0,
+    mutagenLevels: {},
+    bestiary: {},
   };
 }
 

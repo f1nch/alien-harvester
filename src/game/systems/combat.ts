@@ -1,4 +1,6 @@
 import { dist2, hasLineOfSight, pointInRect } from "../geometry";
+import { onPlayerHit } from "./feeding";
+import { newTrip } from "../world";
 import type { TargetEntity, World } from "../world";
 import { inBase } from "./deposit";
 import { moveToward, pickGoal, wanderStep } from "./wander";
@@ -101,6 +103,7 @@ export function damagePlayer(w: World, amount: number, by: TargetEntity): boolea
   if (w.player.invulnerable > 0) return false;
   w.progress.player.health = Math.max(0, w.progress.player.health - amount);
   w.player.sinceHit = 0;
+  onPlayerHit(w);
   w.events.push({ type: "playerHit", damage: amount, by });
   return true;
 }
@@ -130,6 +133,9 @@ export function die(w: World): void {
   const forgiven = !prog.firstDeathForgiven && prog.cargo.length > 0;
   const lost = forgiven ? [] : prog.cargo.splice(0);
   if (forgiven) prog.firstDeathForgiven = true;
+  // A lost hold ends the trip and the combo.
+  if (!forgiven) w.feeding.trip = newTrip();
+  w.feeding.combo = 0;
 
   // Cancel all capture progress.
   for (let i = 0; i < w.tentacles.length; i++) {

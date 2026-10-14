@@ -1,8 +1,9 @@
 import type { Reward } from "./currencies";
 
-export type TargetTypeId = "worker" | "runner" | "technician" | "guard" | "armoredGuard" | "boss";
+export type TargetTypeId = "worker" | "runner" | "technician" | "guard" | "armoredGuard" | "boss" | "pod";
 
-export type TargetBehavior = "wander" | "flee" | "guard" | "boss";
+/** "static": never moves (supply pods). */
+export type TargetBehavior = "wander" | "flee" | "guard" | "boss" | "static";
 
 /** Hostile behaviour tuning. Attacks are telegraphed: windup, then a strike that only lands if the player is still in range. */
 export interface CombatDef {
@@ -136,6 +137,19 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
     multiGrab: true,
     captureDecaySeconds: 20,
     respawnSeconds: 180,
+  },
+  // Supply pod: a crate of stolen stock. Quick to crack open, light, and it may hold a
+  // short power-up (content/feeding.ts). Not a creature, so the bestiary ignores it.
+  pod: {
+    id: "pod",
+    name: "Supply pod",
+    behavior: "static",
+    resistance: 12,
+    weight: 1,
+    reward: { biomass: 8, genetic: 1 },
+    xp: 4,
+    speed: 0,
+    respawnSeconds: 120,
   },
 };
 

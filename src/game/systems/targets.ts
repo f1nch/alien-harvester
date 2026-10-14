@@ -1,3 +1,4 @@
+import { PRIZED } from "../../content/feeding";
 import { hasLineOfSight, resolveCircle } from "../geometry";
 import { spawnTarget, TARGET_RADIUS, type World } from "../world";
 import { updateBoss } from "./boss";
@@ -19,18 +20,20 @@ export function updateTargets(w: World, dt: number): void {
       updateBoss(w, t, dt);
       continue;
     }
+    if (t.def.behavior === "static") continue;
     if (t.held) {
       t.fleeing = false;
       continue;
     }
 
-    if (t.def.behavior === "flee") {
+    // Prized specimens bolt from the player whatever they normally do.
+    if (t.def.behavior === "flee" || t.prized) {
       const dx = t.x - p.x;
       const dz = t.z - p.z;
       const d = Math.hypot(dx, dz);
-      const r = t.def.fleeRadius ?? 0;
+      const r = t.prized ? PRIZED.fleeRadius : t.def.fleeRadius ?? 0;
       if (d < r && d > 1e-6 && hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles)) {
-        const step = (t.def.fleeSpeed ?? t.def.speed) * dt;
+        const step = (t.prized ? PRIZED.fleeSpeed : t.def.fleeSpeed ?? t.def.speed) * dt;
         t.x += (dx / d) * step;
         t.z += (dz / d) * step;
         t.heading = Math.atan2(dx, dz);

@@ -137,6 +137,15 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     add(MeshBuilder.CreateBox("armorVisorStrip", { width: 0.28, height: 0.06, depth: 0.08 }, scene), visor, 1.22, 0, 0.18);
     pair("leg", 0.46, 0.12, plate, 0.15, 0.47);
     pair("arm", 0.5, 0.11, suit, 0.43, 0.98);
+  } else if (type === "pod") {
+    // Supply pod: a squat crate with glowing seams, so it reads as loot rather than a person.
+    const shell = mat(scene, "podShell", 0.3, 0.32, 0.36, 0.4);
+    const seam = mat(scene, "podSeam", 0, 0, 0);
+    seam.emissiveColor = new Color3(1, 0.75, 0.25);
+    add(MeshBuilder.CreateBox("podBody", { width: 0.62, height: 0.46, depth: 0.62 }, scene), shell, 0.23);
+    add(MeshBuilder.CreateBox("podLid", { width: 0.68, height: 0.08, depth: 0.68 }, scene), shell, 0.5);
+    add(MeshBuilder.CreateBox("podSeamH", { width: 0.64, height: 0.05, depth: 0.64 }, scene), seam, 0.3);
+    add(MeshBuilder.CreateBox("podLight", { width: 0.14, height: 0.06, depth: 0.14 }, scene), seam, 0.57);
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     const coat = mat(scene, "techCoat", 0.92, 0.95, 0.97);
@@ -170,6 +179,8 @@ export class CrowdView {
   private time = 0;
   private seen = new Set<number>();
   private ringMat: StandardMaterial | null = null;
+  /** A golden halo over the prized specimen (there is at most one). */
+  private halo: Mesh | null = null;
   private fillMat: StandardMaterial | null = null;
 
   /** A ground strip the warden's charge will run along, filling as the windup completes. */
@@ -214,6 +225,28 @@ export class CrowdView {
   }
 
   constructor(private scene: Scene, private shadows: ShadowGenerator | null) {}
+
+  private updateHalo(targets: readonly TargetEntity[], alpha: number): void {
+    const prized = targets.find((t) => t.prized);
+    if (!prized) {
+      this.halo?.setEnabled(false);
+      return;
+    }
+    if (!this.halo) {
+      const m = new StandardMaterial("prizedHalo", this.scene);
+      m.diffuseColor = Color3.Black();
+      m.emissiveColor = new Color3(1, 0.82, 0.3);
+      m.disableLighting = true;
+      this.halo = MeshBuilder.CreateTorus("prizedHalo", { diameter: 0.7, thickness: 0.07, tessellation: 32 }, this.scene);
+      this.halo.material = m;
+      this.halo.isPickable = false;
+    }
+    const x = prized.prevX + (prized.x - prized.prevX) * alpha;
+    const z = prized.prevZ + (prized.z - prized.prevZ) * alpha;
+    this.halo.setEnabled(true);
+    this.halo.position.set(x, 1.85 + Math.sin(this.time * 4) * 0.08, z);
+    this.halo.rotation.y += 0.05;
+  }
 
   private template(type: TargetTypeId): Template {
     let t = this.templates.get(type);
@@ -367,6 +400,7 @@ export class CrowdView {
       v.node.position.set(x, y, z);
       v.node.rotation.set(rotX, facing, rotZ);
     }
+    this.updateHalo(targets, alpha);
     for (const [id, v] of this.live) {
       if (this.seen.has(id)) continue;
       this.live.delete(id);

@@ -173,6 +173,11 @@ export const FACILITY: MapDef = {
     ...spawns("security-crew-t", "technician", [[-2, 58], [6, 74]], 2),
     // Panicked staff trapped in the reactor hall.
     ...spawns("reactor-staff", "worker", [[-8, 94], [8, 94], [-8, 78], [8, 78]], 1.5),
+    // Supply pods: one per room, tucked in corners away from the main routes.
+    ...spawns("pod-containment", "pod", [[-9, 13]], 0),
+    ...spawns("pod-service", "pod", [[-12.5, 42.5]], 0),
+    ...spawns("pod-security", "pod", [[10.5, 73.5]], 0),
+    ...spawns("pod-reactor", "pod", [[8.5, 86]], 0),
   ],
 };
 

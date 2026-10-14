@@ -17,10 +17,16 @@ import { activeQuests, questCount } from "../domain/quests";
 import type { TargetEntity, World } from "../game/world";
 import { reactorRequirements } from "../domain/reactor";
 import { biomeAt, clearRequirements } from "../domain/biome";
+import { BOOSTS, FRENZY, type BoostId } from "../content/feeding";
+import { MUTAGEN, MUTAGEN_IDS, type MutagenId } from "../content/mutagen";
+import { TARGETS, type TargetTypeId } from "../content/targets";
+import { BESTIARY_MILESTONES, inBestiary, milestonesReached } from "../domain/bestiary";
+import { describeCraving } from "../domain/cravings";
+import { mutagenLevel, nextMutagenCost } from "../domain/mutagen";
 import { MAX_IMPORT_BYTES, type SaveSummary } from "../persistence/transfer";
 
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
-export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢" };
+export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺" };
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
@@ -46,6 +52,13 @@ function chip(icon: string, iconCls: string, label: string): { root: HTMLElement
   return { root, value };
 }
 
+/** What the feeding meter and hints show; changes trigger a HUD redraw. */
+function feedKey(w: World): string {
+  const f = w.feeding;
+  const boosts = Object.entries(f.boosts).map(([id, left]) => `${id}${Math.ceil(left ?? 0)}`).join("");
+  return [f.combo, Math.ceil(f.frenzy), Math.ceil(f.prizedLeft), w.targets.some((t) => t.prized && t.held), w.targets.some((t) => t.prized), boosts].join(",");
+}
+
 export interface HudCallbacks {
   onOpenUpgrades(): void;
   onCloseUpgrades(): void;
@@ -56,6 +69,7 @@ export interface HudCallbacks {
   onRespec(): void;
   onBuildStructure(kind: StructureKind): void;
   onRepair(): void;
+  onBuyMutagen(id: MutagenId): void;
   /** Take the way on (elevator or portal) to the next biome. */
   onLeaveBiome(): void;
   onExportDownload(): void;
@@ -112,6 +126,13 @@ export class Hud {
   private biomass: HTMLElement;
   private genetic: HTMLElement;
   private geneticChip: HTMLElement;
+  private mutagen: HTMLElement;
+  private mutagenChip: HTMLElement;
+  private feedBox: HTMLElement;
+  private feedText: HTMLElement;
+  private feedFill: HTMLElement;
+  private mutagenRows = new Map<MutagenId, { level: HTMLElement; buy: HTMLButtonElement }>();
+  private bestiaryList: HTMLElement;
   private level: HTMLElement;
   private levelFill: HTMLElement;
   private levelText: HTMLElement;
@@ -186,6 +207,9 @@ export class Hud {
     const gen = chip("✦", "genetic", "Genetic");
     this.genetic = gen.value;
     this.geneticChip = gen.root;
+    const mut = chip("✺", "mutagen", "Mutagen");
+    this.mutagen = mut.value;
+    this.mutagenChip = mut.root;
 
     const lvl = el("div", "chip level-chip");
     this.level = el("span", "chip-value", "Lv 1");
@@ -219,7 +243,16 @@ export class Hud {
     this.cargoBox.append(cargoLabel, bar);
     const bars = el("div", "hud-bars");
     bars.append(this.healthBox, this.cargoBox);
-    top.append(bio.root, gen.root, lvl, bars);
+    // Combo toward a feeding frenzy, or the frenzy itself: full width under the bars,
+    // so it never squeezes the objectives.
+    this.feedBox = el("div", "feed-meter hidden");
+    this.feedBox.setAttribute("role", "status");
+    this.feedText = el("span", "feed-text");
+    const feedBar = el("div", "cargo-bar");
+    this.feedFill = el("div", "feed-fill");
+    feedBar.append(this.feedFill);
+    this.feedBox.append(this.feedText, feedBar);
+    top.append(bio.root, gen.root, mut.root, lvl, bars, this.feedBox);
 
     // Objectives and hints flow under the HUD so they never overlap it as it wraps.
     const sub = el("div", "hud-sub");
@@ -361,6 +394,34 @@ export class Hud {
       this.structureRows.set(kind, { status, reqs, btn });
     }
     card.append(structures);
+
+    // Mutagen mutations: tune the loop (paid in mutagen from cravings, prized specimens, the bestiary).
+    const mutagenSection = el("section", "structures mutagen");
+    mutagenSection.setAttribute("aria-label", "Mutagen mutations");
+    mutagenSection.append(el("h3", undefined, "Mutagen mutations"), el("p", "panel-note", "Earned from cravings, prized specimens and the bestiary. Kept when you reset mutations."));
+    for (const id of MUTAGEN_IDS) {
+      const def = MUTAGEN[id];
+      const row = el("div", "up-row");
+      const info = el("div", "up-info");
+      const name = el("div", "up-name", def.name);
+      const level = el("span", "up-level");
+      name.append(level);
+      info.append(name, el("div", "up-value", def.perLevel));
+      const buy = el("button", "btn btn-buy");
+      buy.addEventListener("click", () => cb.onBuyMutagen(id));
+      row.append(info, buy);
+      mutagenSection.append(row);
+      this.mutagenRows.set(id, { level, buy });
+    }
+    card.append(mutagenSection);
+
+    // Bestiary: lifetime captures per creature, with milestones.
+    const bestiary = el("section", "structures bestiary");
+    bestiary.setAttribute("aria-label", "Bestiary");
+    bestiary.append(el("h3", undefined, "Bestiary"), el("p", "panel-note", `Milestones at ${BESTIARY_MILESTONES.map((m) => m.count).join(", ")} captures pay mutagen and add 1% capture power each.`));
+    this.bestiaryList = el("ul", "bestiary-list");
+    bestiary.append(this.bestiaryList);
+    card.append(bestiary);
 
     // Free respec, two-tap confirm, only at base.
     const respec = el("section", "respec");
@@ -524,7 +585,7 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.banked.parts, p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired,
+      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired,
       s.boss ? `${Math.round(s.boss.progress * 100)}:${s.boss.boss?.state}` : "", s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
@@ -535,6 +596,12 @@ export class Hud {
     this.genetic.textContent = fmt(Math.floor(p.banked.genetic));
     // Genetic material appears once it matters, to keep the first minutes uncluttered.
     this.geneticChip.classList.toggle("hidden", p.banked.genetic === 0 && p.unlockedDoors.length === 0);
+    this.mutagen.textContent = fmt(Math.floor(p.banked.mutagen));
+    // Mutagen appears with the first one earned.
+    this.mutagenChip.classList.toggle("hidden", p.banked.mutagen === 0 && Object.keys(p.mutagenLevels).length === 0);
+    this.renderFeeding(w);
+    this.renderMutagen(w);
+    this.renderBestiary(w);
 
     const lp = levelProgress(p.xp);
     this.level.textContent = `Lv ${lp.level}`;
@@ -562,7 +629,11 @@ export class Hud {
     this.renderDoor(w, s.door);
 
     let hint = "";
+    const prized = w.targets.find((t) => t.prized);
+    const boosts = (Object.entries(w.feeding.boosts) as Array<[BoostId, number]>).map(([id, left]) => `${BOOSTS[id].name} ${Math.ceil(left)}s`);
     if (w.cargoFull && !s.inBase) hint = "Cargo full — return to base ▼";
+    else if (prized) hint = prized.held ? `★ Prized ${prized.def.name.toLowerCase()} in your grip — hold on!` : `★ A prized ${prized.def.name.toLowerCase()} is loose! ${Math.ceil(w.feeding.prizedLeft)}s`;
+    else if (boosts.length) hint = boosts.join(" · ");
     else if (s.inBase && cargo > 0) hint = "Depositing…";
     else if (p.xp === 0) hint = "Move near workers to capture them";
     this.hint.textContent = hint;
@@ -618,6 +689,14 @@ export class Hud {
         if (target > 1) row.append(el("span", "quest-count", `${fmt(Math.floor(questCount(w.progress, q.id)))} / ${target}`));
         return row;
       }),
+      ...(p.cravings.length ? [el("div", "quests-title cravings-title", "Cravings")] : []),
+      ...p.cravings.map((c) => {
+        const row = el("div", "quest craving");
+        row.append(el("span", "quest-name", describeCraving(c)));
+        const count = c.goal > 1 ? `${fmt(Math.floor(c.progress))}/${c.goal} ` : "";
+        row.append(el("span", "quest-count", `${count}✺${c.reward}`));
+        return row;
+      }),
     );
   }
 
@@ -640,6 +719,43 @@ export class Hud {
     this.bossState.textContent = label;
     this.bossBar.classList.toggle("stunned", state === "stunned");
     this.bossBar.classList.toggle("danger", state === "chargeWindup" || state === "slamWindup");
+  }
+
+  private renderFeeding(w: World): void {
+    const f = w.feeding;
+    const frenzy = f.frenzy > 0;
+    this.feedBox.classList.toggle("hidden", !frenzy && f.combo === 0);
+    this.feedBox.classList.toggle("frenzy", frenzy);
+    this.feedText.textContent = frenzy ? `FEEDING FRENZY · capture ×2 · ${Math.ceil(f.frenzy)}s` : `Combo ${f.combo} / ${FRENZY.combo}`;
+    this.feedFill.style.width = frenzy ? "100%" : `${(f.combo / FRENZY.combo) * 100}%`;
+  }
+
+  private renderMutagen(w: World): void {
+    const p = w.progress;
+    for (const id of MUTAGEN_IDS) {
+      const row = this.mutagenRows.get(id)!;
+      row.level.textContent = ` Lv ${mutagenLevel(p, id)}/${MUTAGEN[id].costs.length}`;
+      const cost = nextMutagenCost(p, id);
+      row.buy.disabled = cost === null || p.banked.mutagen < cost;
+      row.buy.textContent = cost === null ? "Maxed" : `Buy · ${cost} ✺`;
+      row.buy.setAttribute("aria-label", cost === null ? `${MUTAGEN[id].name} maxed` : `Buy ${MUTAGEN[id].name} for ${cost} mutagen`);
+    }
+  }
+
+  private renderBestiary(w: World): void {
+    const p = w.progress;
+    const types = (Object.keys(TARGETS) as TargetTypeId[]).filter(inBestiary);
+    this.bestiaryList.replaceChildren(...types.map((t) => {
+      const n = p.bestiary[t] ?? 0;
+      const next = BESTIARY_MILESTONES.find((m) => n < m.count);
+      const li = el("li", n > 0 ? "seen" : "unseen");
+      li.append(
+        el("span", "req-label", n > 0 ? TARGETS[t].name : "???"),
+        el("span", "req-progress", next ? `${n} / ${next.count}` : `${n} · complete`),
+        el("span", "req-mark", "★".repeat(milestonesReached(n)) || "·"),
+      );
+      return li;
+    }));
   }
 
   private renderExit(w: World, near: boolean): void {
@@ -699,6 +815,7 @@ export class Hud {
       ["Biomass", String(s.biomass)],
       ["Genetic material", String(s.genetic)],
       ["Reactor parts", String(s.parts)],
+      ["Mutagen", String(s.mutagen)],
       ["Location", s.place],
       ["Doors open", String(s.doorsOpen)],
       ["Objectives done", String(s.questsDone)],

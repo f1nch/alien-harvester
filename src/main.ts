@@ -1,6 +1,9 @@
 import "./ui/styles.css";
 import type { MapDef } from "./content/map";
 import { biomeAt } from "./domain/biome";
+import { BOOSTS, PRIZED } from "./content/feeding";
+import { TARGETS } from "./content/targets";
+import { describeCraving } from "./domain/cravings";
 import type { UpgradeId } from "./content/upgrades";
 import { newProgress } from "./domain/progress";
 import { CURRENCIES, CURRENCY_LABEL, emptyWallet } from "./content/currencies";
@@ -11,7 +14,7 @@ import type { CargoDrop } from "./domain/progress";
 import { UPGRADE_IDS } from "./content/upgrades";
 import { capAt, tableCostForLevels } from "./domain/economy";
 import { devCompleteActive } from "./domain/quests";
-import { buildStructure, leaveBiome, nearExit, nearReactor, repair, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
+import { buildStructure, buyMutagenMutation, leaveBiome, nearExit, nearReactor, repair, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
 import { inBase } from "./game/systems/deposit";
@@ -125,6 +128,13 @@ async function boot(): Promise<void> {
     onRepair: () => {
       if (!ready) return;
       if (repair(world).ok) {
+        refreshHud();
+        void save();
+      }
+    },
+    onBuyMutagen: (id) => {
+      if (!ready) return;
+      if (buyMutagenMutation(world, id).ok) {
         refreshHud();
         void save();
       }
@@ -250,7 +260,7 @@ async function boot(): Promise<void> {
   const renderer = new GameRenderer(canvas, room, { reducedEffects: settings.reducedEffects, creatureModels: !forceProcedural });
   const input = new InputController(zone);
   const floaters = new Floaters(uiRoot, !settings.reducedEffects);
-  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢" } as const;
+  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺" } as const;
   const loop = new FixedLoop((dt) => stepWorld(world, dt), { hz: SIM_HZ, maxStepsPerFrame: 5 });
   renderer.snapCamera(world);
   if (import.meta.env.DEV) {
@@ -479,6 +489,24 @@ async function boot(): Promise<void> {
           saveNow = true;
         } else if (e.type === "reactorRepaired") {
           showCompletion();
+          saveNow = true;
+        } else if (e.type === "frenzyStart") {
+          hud.toast("Feeding frenzy! Capture power doubled", 2);
+        } else if (e.type === "prizedAppeared") {
+          hud.toast(`A prized ${e.target.def.name.toLowerCase()} is loose. Catch it before it slips away!`, 4);
+        } else if (e.type === "prizedCaught") {
+          hud.toast(`Prized ${e.target.def.name.toLowerCase()} caught! Bonus banked, +${PRIZED.mutagen} ✺`, 4);
+          saveNow = true;
+        } else if (e.type === "prizedEscaped") {
+          hud.toast("The prized specimen got away.", 3);
+        } else if (e.type === "boostStarted") {
+          const b = BOOSTS[e.boost];
+          hud.toast(`${b.name}! +${b.percent}% ${b.stat === "captureRadius" ? "reach" : b.stat === "moveSpeed" ? "speed" : "capture power"}`, 3);
+        } else if (e.type === "cravingDone") {
+          hud.toast(`Craving satisfied: ${describeCraving(e.craving)} · +${e.craving.reward} ✺`, 3);
+          saveNow = true;
+        } else if (e.type === "bestiaryMilestone") {
+          hud.toast(`Bestiary: ${e.count} ${TARGETS[e.target].name.toLowerCase()}s · +${e.mutagen} ✺, +1% capture power`, 4);
           saveNow = true;
         } else if (e.type === "structureBuilt") {
           const name = e.kind === "vat" ? "Biomass vat" : "Delivery drone";

@@ -434,6 +434,19 @@ html, body {
 .boss-bar.danger .boss-state { color: #ff8a6a; font-weight: 700; }
 .reactor-card { border-color: #ff6a3d; }
 .exit-card { border-color: #5ce1ff; }
+.chip-icon.mutagen { color: #ff7ad9; }
+.cravings-title { margin-top: 6px; }
+.craving .quest-count { color: #ff7ad9; }
+.feed-meter { flex-basis: 100%; box-sizing: border-box; background: rgba(10, 8, 20, 0.8); border: 1px solid rgba(255, 122, 217, 0.4); border-radius: 10px; padding: 4px 8px; font-size: 12px; min-width: 140px; }
+.feed-meter .feed-text { display: block; margin-bottom: 3px; font-weight: 700; }
+.feed-fill { height: 100%; width: 0; background: #ff7ad9; border-radius: inherit; transition: width 0.2s; }
+.feed-meter.frenzy { border-color: #ff7ad9; animation: frenzy-pulse 0.6s ease-in-out infinite alternate; }
+@keyframes frenzy-pulse { from { box-shadow: 0 0 6px rgba(255, 122, 217, 0.4); } to { box-shadow: 0 0 16px rgba(255, 122, 217, 0.9); } }
+@media (prefers-reduced-motion: reduce) { .feed-meter.frenzy { animation: none; } }
+.bestiary-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.bestiary-list li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 3px 0; font-size: 13px; }
+.bestiary-list li.unseen { opacity: 0.55; }
+.bestiary-list .req-mark { color: #ffd166; min-width: 3ch; text-align: right; }
 .exit-note { margin: 4px 0 6px; font-size: 13px; opacity: 0.9; }
 .completion { align-items: center; z-index: 8; }
 .completion h2 { margin: 0; font-size: 24px; }

@@ -3,6 +3,7 @@ import { dist2, hasLineOfSight } from "../geometry";
 import { WARDEN } from "../../content/reactor";
 import { gainXp, questEvent, type TargetEntity, type World } from "../world";
 import { bossStunned } from "./boss";
+import { onCaptured } from "./feeding";
 
 /** Seconds a target may be out of reach before its progress starts to decay. */
 export const GRACE_SECONDS = 0.3;
@@ -106,7 +107,8 @@ export function updateCapture(w: World, dt: number): void {
 
 function lightestTarget(w: World): number {
   let min = Infinity;
-  for (const t of w.targets) if (t.def.weight > 0) min = Math.min(min, t.def.weight);
+  // Creatures only: a light supply pod mustn't hide that no creature fits any more.
+  for (const t of w.targets) if (t.def.weight > 0 && t.def.behavior !== "static") min = Math.min(min, t.def.weight);
   return Number.isFinite(min) ? min : 0;
 }
 
@@ -146,6 +148,7 @@ function complete(w: World, t: TargetEntity): void {
   w.progress.cargo.push({ type: t.def.id, weight: t.def.weight, reward: { ...t.def.reward } });
   w.progress.spawnCooldowns[t.spawnId] = t.def.respawnSeconds;
   w.events.push({ type: "captured", target: t, slot });
+  onCaptured(w, t);
   gainXp(w, t.def.xp);
   questEvent(w, { kind: "capture", target: t.def.id });
   if (t.def.behavior === "boss") {

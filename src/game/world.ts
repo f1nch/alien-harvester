@@ -5,9 +5,13 @@ import type { StructureKind } from "../domain/structures";
 import type { DroneMode } from "./systems/structures";
 import { newBossRuntime, type BossRuntime } from "./systems/boss";
 import type { QuestDef } from "../content/quests";
-import type { TargetDef } from "../content/targets";
+import type { TargetDef, TargetTypeId } from "../content/targets";
 import { biomeAt, type ActiveBiome } from "../domain/biome";
-import { computeStats, type PlayerStats } from "../domain/economy";
+import { computeStats, type PlayerStats, type StatBoost } from "../domain/economy";
+import { BOOSTS, FRENZY, type BoostId } from "../content/feeding";
+import type { Craving } from "../domain/cravings";
+import { feedingTuning } from "../domain/mutagen";
+import { fillCravings } from "../domain/cravings";
 import { addXp } from "../domain/levels";
 import { queuePerkChoices } from "../domain/perks";
 import type { CargoDrop, ProgressState } from "../domain/progress";
@@ -51,6 +55,43 @@ export interface TargetEntity {
   aiTimer: number;
   /** Boss state machine (the warden only). */
   boss?: BossRuntime;
+  /** A prized specimen: glows, bolts, and pays a big bonus. Transient. */
+  prized?: boolean;
+}
+
+/**
+ * The moment-to-moment loop (frenzy, prized specimens, pod boosts, trip tracking).
+ * Transient: none of it is saved, and it only advances in stepWorld.
+ */
+export interface Trip {
+  biomass: number;
+  peak: number;
+  hit: boolean;
+}
+
+export function newTrip(): Trip {
+  return { biomass: 0, peak: 0, hit: false };
+}
+
+export interface FeedingState {
+  /** Captures in a row; drops when comboTimer runs out. */
+  combo: number;
+  comboTimer: number;
+  /** Seconds of feeding frenzy left (0 when none). */
+  frenzy: number;
+  /** Seconds until the next prized specimen appears. */
+  prizedTimer: number;
+  /** Seconds the current prized specimen has left (0 when none). */
+  prizedLeft: number;
+  /** Seconds left on each active pod power-up. */
+  boosts: Partial<Record<BoostId, number>>;
+  /** Play-time stamps of recent captures, for "within T seconds" cravings. */
+  recentCaptures: number[];
+  /**
+   * The current trip: since the hold was last empty, the fullest it got, biomass banked
+   * at base, and whether the creature was hit.
+   */
+  trip: Trip;
 }
 
 export type GuardState = "patrol" | "chase" | "windup" | "recover" | "return";
@@ -73,6 +114,14 @@ export type GameEvent =
   | { type: "reactorRepaired" }
   /** Moved on; the world must be rebuilt for the new biome's map. */
   | { type: "biomeLeft"; depth: number }
+  | { type: "frenzyStart" }
+  | { type: "frenzyEnd" }
+  | { type: "prizedAppeared"; target: TargetEntity }
+  | { type: "prizedEscaped" }
+  | { type: "prizedCaught"; target: TargetEntity }
+  | { type: "boostStarted"; boost: BoostId }
+  | { type: "cravingDone"; craving: Craving }
+  | { type: "bestiaryMilestone"; target: TargetTypeId; count: number; mutagen: number }
   | { type: "playerHit"; damage: number; by: TargetEntity }
   | { type: "strike"; by: TargetEntity; hit: boolean }
   | { type: "died"; lost: CargoDrop[]; forgiven: boolean };
@@ -103,6 +152,7 @@ export interface World {
   /** Desired movement, already normalised to length <= 1. */
   input: { x: number; z: number };
   targets: TargetEntity[];
+  feeding: FeedingState;
   /** One entry per tentacle; at most one target each. */
   tentacles: Array<TargetEntity | null>;
   hash: SpatialHash<TargetEntity>;
@@ -136,6 +186,11 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
     input: { x: 0, z: 0 },
     targets: [],
     tentacles: [],
+    feeding: {
+      combo: 0, comboTimer: 0, frenzy: 0,
+      prizedTimer: feedingTuning(progress).prizedInterval, prizedLeft: 0,
+      boosts: {}, recentCaptures: [], trip: newTrip(),
+    },
     hash: new SpatialHash<TargetEntity>(4),
     depositBudget: 0,
     cargoFull: false,
@@ -145,6 +200,7 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
     nextId: 1,
   };
   refreshObstacles(w);
+  fillCravings(progress);
   for (const s of map.spawns) {
     if ((progress.spawnCooldowns[s.id] ?? 0) <= 0) spawnTarget(w, s.id);
   }
@@ -197,9 +253,21 @@ export function spawnTarget(w: World, spawnId: string): TargetEntity | null {
   return t;
 }
 
-/** Call after anything that changes upgrades. */
+/** Call after anything that changes upgrades, perks, the bestiary, or a frenzy or boost. */
 export function refreshStats(w: World): void {
-  w.stats = computeStats(w.progress);
+  w.stats = computeStats(w.progress, activeBoost(w));
+}
+
+/** Percent boosts from a running frenzy and pod power-ups. */
+export function activeBoost(w: World): StatBoost {
+  const out: StatBoost = {};
+  if (w.feeding.frenzy > 0) out.capturePower = FRENZY.powerPercent;
+  for (const [id, left] of Object.entries(w.feeding.boosts) as Array<[BoostId, number]>) {
+    if (left <= 0) continue;
+    const b = BOOSTS[id];
+    out[b.stat] = (out[b.stat] ?? 0) + b.percent;
+  }
+  return out;
 }
 
 export function pushQuestOutcome(w: World, out: QuestOutcome): void {

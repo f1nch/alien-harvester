@@ -1,5 +1,6 @@
 import { EVOLUTIONS } from "../content/evolution";
 import { tidy } from "./biome";
+import { bestiaryPowerPercent } from "./bestiary";
 import { perkBonuses } from "./perks";
 import { CURRENCIES, emptyWallet, roundCents, type Wallet } from "../content/currencies";
 import { UPGRADE_IDS, UPGRADES, type UpgradeId } from "../content/upgrades";
@@ -34,6 +35,10 @@ export function upgradeValue(p: ProgressState, id: UpgradeId, level = p.upgrades
   return id === "tentacles" ? v + tentacleBonus(p.evolution) : v;
 }
 
+/** Short-lived percentage boosts (feeding frenzy, supply-pod power-ups). Never saved. */
+export type StatBoost = Partial<Record<"capturePower" | "captureRadius" | "moveSpeed", number>>;
+const NO_BOOST: StatBoost = {};
+
 /**
  * Single place where progression becomes stats. Order is fixed:
  *   1. upgrade track value (base + levels, plus evolution bonuses),
@@ -41,16 +46,18 @@ export function upgradeValue(p: ProgressState, id: UpgradeId, level = p.upgrades
  *   3. flat perk bonuses.
  * Each stat is then applied in exactly one system, so nothing compounds by accident.
  */
-export function computeStats(p: ProgressState): PlayerStats {
+export function computeStats(p: ProgressState, boost: StatBoost = NO_BOOST): PlayerStats {
   const v = (id: UpgradeId) => upgradeValue(p, id);
   const perk = perkBonuses(p);
   // Multiply before dividing so e.g. 20 * 107 / 100 can't become 21.3999… and floor wrong.
   const pct = (value: number, percent: number) => (value * (100 + percent)) / 100;
   const maxHealth = Math.round(pct(v("maxHealth"), perk.percent.maxHealth));
+  // Bestiary milestones and short boosts join the perk percentages (summed, applied once).
+  const power = perk.percent.capturePower + bestiaryPowerPercent(p) + (boost.capturePower ?? 0);
   return {
-    moveSpeed: pct(v("moveSpeed"), perk.percent.moveSpeed),
-    captureRadius: pct(v("captureRadius"), perk.percent.captureRadius),
-    capturePower: pct(v("capturePower"), perk.percent.capturePower),
+    moveSpeed: pct(v("moveSpeed"), perk.percent.moveSpeed + (boost.moveSpeed ?? 0)),
+    captureRadius: pct(v("captureRadius"), perk.percent.captureRadius + (boost.captureRadius ?? 0)),
+    capturePower: pct(v("capturePower"), power),
     tentacles: v("tentacles"),
     // Whole units: cargo weights are integers.
     cargoCapacity: Math.floor(pct(v("cargoCapacity"), perk.percent.cargoCapacity)),

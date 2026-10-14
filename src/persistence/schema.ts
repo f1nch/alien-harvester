@@ -2,6 +2,10 @@ import { CURRENCIES, emptyWallet } from "../content/currencies";
 import { reachableZones, zoneAtOrDoorway } from "../content/map";
 import { goalTarget } from "../content/quests";
 import { isTargetType } from "../content/targets";
+import { isMutagenId, MUTAGEN } from "../content/mutagen";
+import { inBestiary } from "../domain/bestiary";
+import { CRAVING_KINDS, type Craving, type CravingKind } from "../domain/cravings";
+import { feedingTuning } from "../domain/mutagen";
 import { biomeAt, MAX_DEPTH, type ActiveBiome } from "../domain/biome";
 import { UPGRADE_IDS, UPGRADES } from "../content/upgrades";
 import { MAX_TIER } from "../content/evolution";
@@ -15,7 +19,7 @@ import { DRONE, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 export const CONTENT_VERSION = 1;
 
 /** The level cap before endless levels (v9). */
@@ -119,6 +123,12 @@ function migrate(raw: Obj): Obj | null {
     const progress = isObj(m.progress) ? { ...m.progress, depth: 0 } : m.progress;
     m = { ...m, schemaVersion: 9, progress };
   }
+  if (m.schemaVersion === 9) {
+    // v10 adds mutagen (a currency, parsed as 0 when absent), cravings, mutagen
+    // mutations and the bestiary. Everyone starts with none; cravings roll on load.
+    const progress = isObj(m.progress) ? { ...m.progress, cravings: [], cravingRolls: 0, mutagenLevels: {}, bestiary: {} } : m.progress;
+    m = { ...m, schemaVersion: 10, progress };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
@@ -134,6 +144,25 @@ function parseDrop(d: unknown, biome: ActiveBiome): CargoDrop | null {
   if (!isTargetType(d.type)) return null;
   const def = biome.targets[d.type];
   return { type: def.id, weight: def.weight, reward: { ...def.reward } };
+}
+
+function parseCraving(c: unknown, playSeconds: number): Craving | null {
+  if (!isObj(c) || typeof c.kind !== "string" || !(CRAVING_KINDS as readonly string[]).includes(c.kind)) return null;
+  if (!isNonNeg(c.goal) || c.goal < 1 || !isNonNeg(c.progress) || !isNonNeg(c.reward) || c.reward > 1000) return null;
+  const kind = c.kind as CravingKind;
+  const out: Craving = { kind, goal: c.goal, progress: Math.min(c.progress, c.goal), reward: c.reward };
+  if (kind === "capture") {
+    if (!isTargetType(c.target) || !inBestiary(c.target) || c.target === "boss") return null;
+    out.target = c.target;
+  }
+  if (kind === "burst") {
+    if (!isNum(c.seconds) || c.seconds <= 0 || c.seconds > 600) return null;
+    out.seconds = c.seconds;
+    // "Within T seconds" counts captures this session only: the window starts again on load.
+    out.progress = 0;
+    out.since = playSeconds;
+  }
+  return out;
 }
 
 /**
@@ -322,6 +351,30 @@ export function parseSave(raw: unknown): SaveFile | null {
   if (typeof p.reactorRepaired !== "boolean" || !isNonNeg(p.playSeconds)) return null;
   progress.reactorRepaired = p.reactorRepaired;
   progress.playSeconds = p.playSeconds;
+
+  // Mutagen mutations before cravings: they set how many cravings there can be.
+  if (!isObj(p.mutagenLevels)) return null;
+  for (const [id, lvl] of Object.entries(p.mutagenLevels)) {
+    if (!isMutagenId(id)) continue; // removed from content
+    if (!Number.isInteger(lvl) || (lvl as number) < 0) return null;
+    progress.mutagenLevels[id] = Math.min(lvl as number, MUTAGEN[id].costs.length);
+  }
+
+  if (!isObj(p.bestiary)) return null;
+  for (const [id, n] of Object.entries(p.bestiary)) {
+    if (!isTargetType(id) || !inBestiary(id)) continue;
+    if (!Number.isInteger(n) || !isNonNeg(n)) return null;
+    progress.bestiary[id] = n as number;
+  }
+
+  if (!Array.isArray(p.cravings) || !Number.isInteger(p.cravingRolls) || !isNonNeg(p.cravingRolls)) return null;
+  progress.cravingRolls = p.cravingRolls as number;
+  // Cravings are rebuilt field by field; anything odd is dropped (a fresh one rolls on load).
+  for (const c of p.cravings) {
+    const craving = parseCraving(c, progress.playSeconds);
+    if (craving) progress.cravings.push(craving);
+  }
+  progress.cravings = progress.cravings.slice(0, feedingTuning(progress).cravingSlots);
 
   const settings = defaultSettings();
   if (isObj(m.settings)) {

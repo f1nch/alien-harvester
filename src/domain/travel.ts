@@ -18,6 +18,8 @@ export function enterNextBiome(p: ProgressState): void {
   p.unlockedDoors = [];
   p.quests = {};
   p.reactorRepaired = false;
+  // Cravings name this floor's creatures and rooms: new ones are rolled on arrival.
+  p.cravings = [];
   p.spawnCooldowns = {};
   for (const s of map.spawns) p.spawnCooldowns[s.id] = 0;
   p.player = { x: map.playerSpawn.x, z: map.playerSpawn.z, health: computeStats(p).maxHealth };

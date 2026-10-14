@@ -7,6 +7,9 @@ import { choosePerk, claimFallback, type ChooseResult } from "../domain/perks";
 import { CURRENCIES, emptyWallet, roundCents, type Wallet } from "../content/currencies";
 import { isBiomeCleared, MAX_DEPTH } from "../domain/biome";
 import { enterNextBiome } from "../domain/travel";
+import type { MutagenId } from "../content/mutagen";
+import { fillCravings } from "../domain/cravings";
+import { buyMutagen, type MutagenResult } from "../domain/mutagen";
 import { VAT } from "../content/structures";
 import { repairReactor, type RepairResult } from "../domain/reactor";
 import { advanceStructure, vatBatchDrop, type StructureKind, type StructureResult } from "../domain/structures";
@@ -35,6 +38,15 @@ export function openDoor(w: World, door: DoorDef): UnlockResult {
   refreshObstacles(w);
   w.events.push({ type: "doorUnlocked", door: door.id });
   questEvent(w, { kind: "unlockDoor", door: door.id });
+  return r;
+}
+
+/** Buy a mutagen mutation (loop tuning; a fourth craving rolls straight away). */
+export function buyMutagenMutation(w: World, id: MutagenId): MutagenResult {
+  const r = buyMutagen(w.progress, id);
+  if (!r.ok) return r;
+  fillCravings(w.progress);
+  w.events.push({ type: "purchased" });
   return r;
 }
 
