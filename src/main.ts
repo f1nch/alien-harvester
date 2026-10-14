@@ -1,21 +1,21 @@
 import "./ui/styles.css";
-import { FACILITY } from "./content/map";
+import type { MapDef } from "./content/map";
+import { biomeAt } from "./domain/biome";
 import type { UpgradeId } from "./content/upgrades";
 import { newProgress } from "./domain/progress";
 import { CURRENCIES, CURRENCY_LABEL, emptyWallet } from "./content/currencies";
 import { FORM_NAMES } from "./content/evolution";
 import { pointInRect } from "./game/geometry";
-import { QUESTS } from "./content/quests";
 import { levelForXp } from "./domain/levels";
 import type { CargoDrop } from "./domain/progress";
 import { UPGRADE_IDS } from "./content/upgrades";
-import { capAtTier, tableCostForLevels } from "./domain/economy";
+import { capAt, tableCostForLevels } from "./domain/economy";
 import { devCompleteActive } from "./domain/quests";
-import { buildStructure, nearReactor, repair, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
+import { buildStructure, leaveBiome, nearExit, nearReactor, repair, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
 import { inBase } from "./game/systems/deposit";
-import { createWorld, gainXp, pushQuestOutcome, refreshStats, SIM_HZ, type TargetEntity, type World } from "./game/world";
+import { createWorld, gainXp, pushQuestOutcome, refreshObstacles, refreshStats, SIM_HZ, type TargetEntity, type World } from "./game/world";
 import { defaultSettings, toSaveFile, type SaveFile, type Settings } from "./persistence/schema";
 import { exportFileName, exportText, IMPORT_ERRORS, parseImport } from "./persistence/transfer";
 import { acquireActiveTabLock, SaveStore } from "./persistence/store";
@@ -44,11 +44,15 @@ function deathMessage(forgiven: boolean, lost: readonly CargoDrop[]): string {
   return `You were overwhelmed and returned to base. Lost unbanked cargo: ${parts.join(", ")}.`;
 }
 
+/** Set just before the reload into a new biome, so its arrival line shows once. */
+const ARRIVED_KEY = "alien-harvester-arrived";
+
 async function boot(): Promise<void> {
   const canvas = document.getElementById("scene") as HTMLCanvasElement;
   const uiRoot = document.getElementById("ui")!;
   const zone = document.getElementById("joystick-zone")!;
-  const room = FACILITY;
+  /** The current biome's map; set once the save has loaded. */
+  let room: MapDef = biomeAt(0).def.map;
 
   let world: World;
   let settings: Settings = defaultSettings();
@@ -61,7 +65,7 @@ async function boot(): Promise<void> {
   let loadFailed = false;
   /** A validated import waiting for the player's confirmation. */
   let pendingImport: SaveFile | null = null;
-  const store = new SaveStore(room);
+  const store = new SaveStore();
 
   const hud = new Hud(uiRoot, {
     onOpenUpgrades: () => ready && setUpgradesOpen(true),
@@ -125,6 +129,25 @@ async function boot(): Promise<void> {
         void save();
       }
     },
+    onLeaveBiome: () => {
+      if (!ready) return;
+      const r = leaveBiome(world);
+      if (!r.ok) return;
+      // The new biome has its own map: save, then rebuild everything by reloading.
+      loop.pause("travel");
+      input.reset();
+      const dest = biomeAt(world.progress.depth);
+      hud.block(`${world.biome.def.exit.name}…`, `Heading down to ${dest.name}.`);
+      void save().then((ok) => {
+        if (!ok) {
+          // Nothing was written, so a reload returns to just before the elevator.
+          hud.block("Couldn't save", "The trip down wasn't saved. Reload to return to the elevator and try again.");
+          return;
+        }
+        try { sessionStorage.setItem(ARRIVED_KEY, "1"); } catch { /* arrival line is optional */ }
+        location.reload();
+      });
+    },
     onCloseCompletion: () => {
       if (!ready) return;
       hud.showCompletion(null);
@@ -167,7 +190,7 @@ async function boot(): Promise<void> {
     onImportText: (text) => {
       // Ignore a file read that finishes after the panel was closed.
       if (!ready || !hud.upgradesOpen) return;
-      const r = parseImport(text, room);
+      const r = parseImport(text);
       pendingImport = r.ok ? r.save : null;
       hud.showImportPreview(r.ok ? { summary: r.summary } : { error: IMPORT_ERRORS[r.reason] });
     },
@@ -212,6 +235,7 @@ async function boot(): Promise<void> {
     }
     recovered = result.recovered;
     if (result.save) settings = result.save.settings;
+    if (result.save) room = biomeAt(result.save.progress.depth).def.map;
     world = createWorld(room, result.save?.progress ?? newProgress(room), seed);
   } catch (err) {
     console.error("Load failed", err);
@@ -249,11 +273,23 @@ async function boot(): Promise<void> {
           pushQuestOutcome(world, devCompleteActive(world.progress));
           after();
         },
+        clearBiome: () => {
+          const p = world.progress;
+          for (const d of world.map.doors) if (!p.unlockedDoors.includes(d.id)) p.unlockedDoors.push(d.id);
+          for (const q of world.biome.quests) p.quests[q.id] = { count: 1, done: true };
+          p.reactorRepaired = true;
+          refreshObstacles(world);
+          const exit = world.biome.def.exit;
+          world.player.x = world.player.prevX = p.player.x = exit.x;
+          world.player.z = world.player.prevZ = p.player.z = exit.z + 1.5;
+          renderer.snapCamera(world);
+          after();
+        },
         devolve: () => {
           const p = world.progress;
           p.evolution = Math.max(0, p.evolution - 1);
           for (const id of UPGRADE_IDS) {
-            const capped = Math.min(p.upgrades[id], capAtTier(id, p.evolution));
+            const capped = Math.min(p.upgrades[id], capAt(id, p.evolution, p.depth));
             if (capped < p.upgrades[id]) p.upgradeSpent[id] = tableCostForLevels(id, capped);
             p.upgrades[id] = capped;
           }
@@ -290,6 +326,7 @@ async function boot(): Promise<void> {
       respecBlocker: respecBlocker(world),
       boss: engagedBoss(world),
       atReactor: nearReactor(world),
+      atExit: nearExit(world),
     });
   }
 
@@ -298,11 +335,13 @@ async function boot(): Promise<void> {
     loop.pause("completion");
     input.reset();
     hud.showCompletion({
+      title: world.biome.objective.doneTitle,
+      body: world.biome.objective.doneBody,
       level: levelForXp(p.xp),
       form: FORM_NAMES[p.evolution] ?? "Unknown",
       playSeconds: p.playSeconds,
-      questsDone: QUESTS.filter((q) => p.quests[q.id]?.done).length,
-      questsTotal: QUESTS.length,
+      questsDone: world.biome.quests.filter((q) => p.quests[q.id]?.done).length,
+      questsTotal: world.biome.quests.length,
       perksTaken: Object.values(p.perks).reduce((a, n) => a + (n ?? 0), 0),
     });
   }
@@ -313,15 +352,18 @@ async function boot(): Promise<void> {
   }
   applySettings();
 
-  async function save(): Promise<void> {
-    if (readOnly) return;
+  /** Resolves true once written (false when saving is off or failed). */
+  async function save(): Promise<boolean> {
+    if (readOnly) return false;
     try {
       await store.write(toSaveFile(world.progress, settings));
       saveFailedShown = false;
+      return true;
     } catch (err) {
       console.error("Save failed", err);
       if (!saveFailedShown) hud.toast("Saving failed — progress since the last save may be lost.", 5);
       saveFailedShown = true;
+      return false;
     }
   }
 
@@ -375,6 +417,16 @@ async function boot(): Promise<void> {
   if (recovered) {
     hud.toast("Latest save was unreadable; restored the previous snapshot.", 5);
     void save();
+  }
+
+  // One line of story on arriving somewhere new (or starting out).
+  let arrived = false;
+  try {
+    arrived = sessionStorage.getItem(ARRIVED_KEY) === "1";
+    sessionStorage.removeItem(ARRIVED_KEY);
+  } catch { /* storage blocked: skip the line */ }
+  if (arrived || world.progress.playSeconds === 0) {
+    hud.toast(`${world.biome.region} · ${world.biome.arrival}`, 7);
   }
 
   let lastSaveTick = world.tick;

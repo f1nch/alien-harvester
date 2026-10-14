@@ -10,7 +10,7 @@ import { createWorld, gainXp, questEvent } from "../src/game/world";
 import { defaultSettings, parseSave, SCHEMA_VERSION, toSaveFile } from "../src/persistence/schema";
 
 const roundTrip = (p: ReturnType<typeof newProgress>) =>
-  parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))), FACILITY)!.progress;
+  parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))))!.progress;
 
 describe("perk choices", () => {
   it("each level-up queues one choice of three distinct legal perks", () => {
@@ -146,8 +146,8 @@ describe("perk saves", () => {
     v5.progress.xp = 400; // level 4
     delete v5.progress.perks;
     delete v5.progress.pendingPerks;
-    const a = parseSave(structuredClone(v5), FACILITY)!;
-    const b = parseSave(structuredClone(v5), FACILITY)!;
+    const a = parseSave(structuredClone(v5))!;
+    const b = parseSave(structuredClone(v5))!;
     expect(a.schemaVersion).toBe(SCHEMA_VERSION);
     expect(a.progress.pendingPerks.map((c) => c.level)).toEqual([2, 3, 4]);
     expect(a.progress.pendingPerks).toEqual(b.progress.pendingPerks);
@@ -163,16 +163,17 @@ describe("perk saves", () => {
 
   it("drops removed perks, clamps stacks, rejects malformed data", () => {
     const s = toSaveFile(newProgress(FACILITY), defaultSettings()) as any;
+    s.progress.xp = 200; // level 3, so choices for levels 2 and 3 are real
     s.progress.perks = { cargo: 9, gone: 2 };
     s.progress.pendingPerks = [{ level: 2, options: ["gone", "power", "power"] }, { level: 3, options: ["gone"] }];
-    const parsed = parseSave(s, FACILITY)!;
+    const parsed = parseSave(s)!;
     expect(parsed.progress.perks).toEqual({ cargo: 3 });
     expect(parsed.progress.pendingPerks).toEqual([
       { level: 2, options: ["power"] },
       { level: 3, options: ["biomassCache"] },
     ]);
     s.progress.perks = { cargo: 1.5 };
-    expect(parseSave(s, FACILITY)).toBeNull();
+    expect(parseSave(s)).toBeNull();
   });
 
   it("perks that raise capacity are applied before cargo is validated on load", () => {
@@ -195,16 +196,16 @@ describe("perk review regressions", () => {
   it("rejects pending choices with impossible levels", () => {
     const s = toSaveFile(newProgress(FACILITY), defaultSettings()) as any;
     s.progress.pendingPerks = [{ level: -5, options: ["biomassCache"] }];
-    expect(parseSave(s, FACILITY)).toBeNull();
+    expect(parseSave(s)).toBeNull();
     s.progress.pendingPerks = [{ level: 999, options: ["biomassCache"] }];
-    expect(parseSave(s, FACILITY)).toBeNull();
+    expect(parseSave(s)).toBeNull();
   });
 
   it("current-version saves never backfill, whatever extra keys they carry", () => {
     const s = toSaveFile(newProgress(FACILITY), defaultSettings()) as any;
     s.progress.xp = 400;
     s.progress.__perkBackfill = true;
-    expect(parseSave(s, FACILITY)!.progress.pendingPerks).toEqual([]);
+    expect(parseSave(s)!.progress.pendingPerks).toEqual([]);
   });
 
   it("choices earned while settling quests at load are the same on every load", () => {

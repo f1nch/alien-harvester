@@ -26,7 +26,8 @@ describe("new upgrade tracks", () => {
     purchaseUpgrade(p, "maxHealth");
     purchaseUpgrade(p, "regeneration");
     purchaseUpgrade(p, "resourceYield");
-    expect(computeStats(p)).toMatchObject({ tentacles: 3, maxHealth: 120, regeneration: 3, yieldPercent: 110 });
+    // Regeneration is per 100 max health: 3 at 120 health heals 3.6/s.
+    expect(computeStats(p)).toMatchObject({ tentacles: 3, maxHealth: 120, regeneration: 3.6, yieldPercent: 110 });
     // Untouched stats unchanged.
     expect(computeStats(p).capturePower).toBe(base.capturePower);
   });
@@ -96,7 +97,7 @@ describe("new upgrade tracks", () => {
     const old = JSON.parse(JSON.stringify(toSaveFile(newProgress(FACILITY), defaultSettings())));
     for (const id of ["tentacles", "maxHealth", "regeneration", "resourceYield"]) delete old.progress.upgrades[id];
     old.progress.upgrades.capturePower = 3;
-    const parsed = parseSave(old, FACILITY)!;
+    const parsed = parseSave(old)!;
     expect(parsed.progress.upgrades).toMatchObject({ capturePower: 3, tentacles: 0, maxHealth: 0, regeneration: 0, resourceYield: 0 });
   });
 
@@ -197,7 +198,7 @@ describe("economy review regressions", () => {
     v4.progress.upgrades.tentacles = 1;
     delete v4.progress.upgradeSpent;
     delete v4.progress.mutationsBought;
-    const parsed = parseSave(v4, FACILITY)!;
+    const parsed = parseSave(v4)!;
     expect(parsed.progress.upgradeSpent.capturePower).toBe(15 + 35);
     expect(parsed.progress.upgradeSpent.tentacles).toBe(25);
     expect(parsed.progress.mutationsBought).toBe(3);

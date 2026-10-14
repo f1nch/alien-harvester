@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { EVOLUTIONS } from "../src/content/evolution";
 import { FACILITY } from "../src/content/map";
 import { UPGRADE_IDS, UPGRADES } from "../src/content/upgrades";
-import { cappedByEvolution, computeStats, maxLevel, nextCost, purchaseUpgrade } from "../src/domain/economy";
+import { capRaise, computeStats, maxLevel, nextCost, purchaseUpgrade } from "../src/domain/economy";
 import { evolutionRequirements, evolve } from "../src/domain/evolution";
 import { newProgress } from "../src/domain/progress";
 import { isDone } from "../src/domain/quests";
@@ -66,7 +66,7 @@ describe("evolution", () => {
   it("adds a tentacle and raises every cap", () => {
     const p = ready();
     p.upgrades.moveSpeed = 5;
-    expect(cappedByEvolution(p, "moveSpeed")).toBe(true);
+    expect(capRaise(p, "moveSpeed")).toBe("evolve");
     expect(nextCost(p, "moveSpeed")).toBeNull();
     const before = computeStats(p).tentacles;
     evolve(p);
@@ -101,7 +101,7 @@ describe("evolution saves", () => {
     const p = ready();
     evolve(p);
     p.upgrades.capturePower = 11;
-    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))), FACILITY)!;
+    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))))!;
     expect(parsed.progress.evolution).toBe(1);
     expect(parsed.progress.upgrades.capturePower).toBe(11);
   });
@@ -109,23 +109,23 @@ describe("evolution saves", () => {
   it("clamps upgrade levels to the saved tier's cap", () => {
     const p = ready();
     p.upgrades.capturePower = 11; // only legal after evolving
-    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))), FACILITY)!;
+    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))))!;
     expect(parsed.progress.upgrades.capturePower).toBe(8);
   });
 
   it("rejects malformed tiers and clamps tiers beyond the last form", () => {
     const bad = toSaveFile(ready(), defaultSettings()) as any;
     bad.progress.evolution = 1.5;
-    expect(parseSave(bad, FACILITY)).toBeNull();
+    expect(parseSave(bad)).toBeNull();
     bad.progress.evolution = 99;
-    expect(parseSave(bad, FACILITY)!.progress.evolution).toBe(EVOLUTIONS.length);
+    expect(parseSave(bad)!.progress.evolution).toBe(EVOLUTIONS.length);
   });
 
   it("migrates a v2 save to tier 0", () => {
     const v2 = JSON.parse(JSON.stringify(toSaveFile(ready(), defaultSettings())));
     v2.schemaVersion = 2;
     delete v2.progress.evolution;
-    const parsed = parseSave(v2, FACILITY)!;
+    const parsed = parseSave(v2)!;
     expect(parsed.schemaVersion).toBe(SCHEMA_VERSION);
     expect(parsed.progress.evolution).toBe(0);
     expect(parsed.progress.banked.genetic).toBe(30);

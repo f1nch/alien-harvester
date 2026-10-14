@@ -55,6 +55,11 @@ export interface ProgressState {
   reactorRepaired: boolean;
   /** Total simulated play time in seconds (never wall-clock), for the completion screen. */
   playSeconds: number;
+  /**
+   * Biomes cleared. Picks the current biome and its scaling; never goes down. Doors,
+   * quests, spawn timers and reactorRepaired belong to the current biome.
+   */
+  depth: number;
 }
 
 export function newProgress(map: MapDef): ProgressState {
@@ -84,6 +89,7 @@ export function newProgress(map: MapDef): ProgressState {
     structures: newStructures(map.base),
     reactorRepaired: false,
     playSeconds: 0,
+    depth: 0,
   };
 }
 

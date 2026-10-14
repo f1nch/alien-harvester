@@ -433,6 +433,8 @@ html, body {
 .boss-bar.stunned .boss-state { color: var(--accent); font-weight: 700; }
 .boss-bar.danger .boss-state { color: #ff8a6a; font-weight: 700; }
 .reactor-card { border-color: #ff6a3d; }
+.exit-card { border-color: #5ce1ff; }
+.exit-note { margin: 4px 0 6px; font-size: 13px; opacity: 0.9; }
 .completion { align-items: center; z-index: 8; }
 .completion h2 { margin: 0; font-size: 24px; }
 .completion-stats { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 12px 0 16px; }

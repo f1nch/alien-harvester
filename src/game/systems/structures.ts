@@ -38,7 +38,7 @@ function collectFromVat(w: World, dt: number): void {
     }
     w.vatCollectTimer -= VAT.collectInterval;
     v.stock -= 1;
-    w.progress.cargo.push(vatBatchDrop());
+    w.progress.cargo.push(vatBatchDrop(w.progress.depth));
   }
 }
 
@@ -127,7 +127,7 @@ function updateDrone(w: World, dt: number, playerAlive: boolean): void {
         while (vat.stock > 0 && w.droneBudget >= VAT.batch.weight && cargoWeight(d.cargo) + VAT.batch.weight <= droneCapacity(d)) {
           w.droneBudget -= VAT.batch.weight;
           vat.stock -= 1;
-          d.cargo.push(vatBatchDrop());
+          d.cargo.push(vatBatchDrop(w.progress.depth));
         }
       } else {
         moveDrone(w, d, VAT.site.x, VAT.site.z, dt);

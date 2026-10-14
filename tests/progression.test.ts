@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FACILITY, zoneAt } from "../src/content/map";
 import { goalTarget, QUESTS } from "../src/content/quests";
 import { doorRequirements, unlockDoor } from "../src/domain/doors";
-import { addXp, levelForXp } from "../src/domain/levels";
+import { addXp, levelForXp, levelProgress, xpForLevel } from "../src/domain/levels";
 import { newProgress } from "../src/domain/progress";
 import { activeQuests, applyQuestEvent, isDone } from "../src/domain/quests";
 import { buyUpgrade, openDoor } from "../src/game/actions";
@@ -20,7 +20,24 @@ describe("levels", () => {
     expect(addXp(p, 59)).toEqual([]);
     expect(addXp(p, 1)).toEqual([2]);
     expect(addXp(p, 1000)).toEqual([3, 4, 5]);
-    expect(levelForXp(1e9)).toBe(10);
+  });
+
+  it("never runs out of levels: past the table each span is 1.35x the last", () => {
+    expect(levelForXp(4999)).toBe(9);
+    expect(levelForXp(5000)).toBe(10);
+    // Level 10's span was 1400, so level 11 needs 1890 more.
+    expect(xpForLevel(11)).toBe(6890);
+    expect(xpForLevel(12)).toBe(6890 + 2552);
+    expect(levelForXp(6889)).toBe(10);
+    expect(levelForXp(6890)).toBe(11);
+    for (let l = 2; l < 60; l++) {
+      expect(xpForLevel(l + 1)).toBeGreaterThan(xpForLevel(l));
+      expect(levelForXp(xpForLevel(l))).toBe(l);
+      expect(levelForXp(xpForLevel(l) - 0.5)).toBe(l - 1);
+    }
+    expect(Number.isFinite(xpForLevel(1000))).toBe(true);
+    const lp = levelProgress(xpForLevel(30) + 10);
+    expect(lp).toEqual({ level: 30, into: 10, span: xpForLevel(31) - xpForLevel(30) });
   });
 });
 

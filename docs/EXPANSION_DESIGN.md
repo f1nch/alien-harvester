@@ -4,12 +4,27 @@ The plan for turning the single facility into the first of a chain of biomes, pl
 
 The spec's fairness rules still hold everywhere: nothing advances while the game isn't running, no real-world timers, no paid anything, no prestige reset (the creature never loses power when moving on).
 
+## The story
+
+You are a specimen. You wake in a containment pod in a deep research facility, break out, and start eating your way to freedom. The facility goes down floor after floor. Somewhere below is the ship they captured you in.
+
+| Act | Where | What you find |
+| --- | --- | --- |
+| **1. The facility** | Floors going down, each a biome: Research wing (B1, today's map) → Cryo labs (B2) → Specimen vaults (B3) → Hangar (B4) | Staff and security get tougher each floor. You discover other captured creatures: the facility's real experiments, some of them hostile. Each floor ends at an objective machine that powers the **freight elevator** down. |
+| **2. The hangar** | Your ship is there but gutted | Its drive core was pulled for the facility's **portal machines**. Repairing a portal is the end of act 1: you can't fly home yet, but you can go through. |
+| **3. Portal worlds** | Other planets, each a biome: jungle hive, desert ruins, ocean platforms and more | Alien species with their own defenders and bosses. Each world's objective machine charges the portal to the next world. Parts collected along the way slowly rebuild your ship. |
+| **Endless** | The portal network keeps going | Worlds repeat at greater depth (harder, richer), named by portal coordinates. The ship is a long-term goal: each rebuilt system unlocks a permanent bonus. |
+
+So every biome has: a place name, an **arrival line** (one sentence of story when you get there), an **objective machine**, and a **way on** (the freight elevator in the facility, a portal on the planets). The game always gives the next goal: the next door, the boss, the machine, the way on.
+
+Until Phase B adds Cryo labs, the elevator from B1 leads to a placeholder "Research wing II" (B1's layout at depth 1) so the loop works end to end.
+
 ## Phase order
 
 | Phase | Content | Saves |
 | --- | --- | --- |
 | **0. Biome framework** | Biomes as a sequence; clearing one opens the next; per-biome scaling; capture power and health keep scaling; endless XP levels | v9 |
-| **A. Loop feel** | Feeding frenzy, prized specimens, supply pods, contracts and data chips, bestiary | v10 |
+| **A. Loop feel** | Feeding frenzy, prized specimens, supply pods, cravings and mutagen, bestiary | v10 |
 | **B. Cryo labs** | Biome 2: cold and heat vents, new targets and enemy, cryo crystals, forward base, catcher helper, refinery | v11 |
 | **C. Endless** | Biome 3, then cycling biomes at rising depth; endless evolution tiers; new perks; objective machines that summon reward waves | v12 |
 
@@ -34,7 +49,7 @@ Each phase is committed and playable on its own, with a reviewer pass on the sav
 
 | Kept | Reset per biome |
 | --- | --- |
-| All currencies, mutations (upgrade levels), perks, evolution, XP and level, bestiary, data-chip upgrades, play time | Doors, quests, spawn timers, supply pods, the objective |
+| All currencies, mutations (upgrade levels), perks, evolution, XP and level, bestiary, mutagen mutations, play time | Doors, quests, spawn timers, supply pods, the objective |
 | Built structures (vat, drone, later catcher and refinery) at their levels, rebuilt automatically at the new biome's sites | Structure stock (banked on leaving) |
 
 The completion screen stays for the first reactor repair (it's a real milestone) and now ends with "the way on is open".
@@ -56,10 +71,10 @@ Weight (cargo units) doesn't scale, so cargo runs keep their length.
 
 | Track | Rule |
 | --- | --- |
-| **Capture power** | Keeps scaling. The current 12 levels (+3/s each) stay; past them, each level is ×1.08 and costs ×1.06 more. The cap grows by **+8 levels per depth** (8 levels of ×1.08 ≈ ×1.85, matching ×1.9 resistance; cost ×1.06⁸ ≈ ×1.6, matching income). |
+| **Capture power** | Keeps scaling. The current 12 levels (+3/s each) stay; past them, each level is ×1.083 and costs ×1.06 more. The cap grows by **+8 levels per depth** (8 levels of ×1.083 ≈ ×1.89, matching ×1.9 resistance; cost ×1.06⁸ ≈ ×1.6, matching income). |
 | **Max health** | Keeps scaling the same way: past the table ×1.07 per level, cost ×1.06, cap **+6 per depth** (≈ ×1.5, matching damage). |
-| **Regeneration** | Becomes a percentage of max health per second, so it scales with health. Same levels and caps. |
-| **Cargo capacity** | Capped as now, +2 levels per evolution tier past the table (×1.06 cost growth). |
+| **Regeneration** | Becomes a percentage of max health per second, so it scales with health. Same levels and caps. Healing at base is 35% of max health per second (35/s at 100, as before), never slower than regeneration. |
+| **Cargo capacity** | Capped as now. Phase C adds +2 levels per evolution tier past the table (×1.06 cost growth). |
 | **Speed, reach** | **Hard caps** at today's maximum (7 levels each). They never scale further, keeping the map readable. |
 | **Tentacles** | Hard cap 8 in total (base 2 + upgrades + evolution bonuses). |
 | **Yield** | Capped as now (it's a percentage). |
@@ -74,8 +89,9 @@ The XP table keeps its 10 hand-tuned levels. Past level 10, each level needs 1.3
 
 - `progress.depth` (number of biomes cleared; 0 for existing saves).
 - Per-biome state (`unlockedDoors`, `quests`, `spawnCooldowns`, `reactorRepaired`) keeps its fields but now means "in the current biome". Existing saves are depth 0, so every ID stays valid. New biomes use their own prefixed IDs (`cryo-…`).
-- `progress.biomesCleared` keeps lifetime stats per biome for the completion and transition screens.
-- Validation bounds the new numbers; levels past the table are bounded by the depth cap.
+- Validation bounds the new numbers; levels past the table are bounded by the depth cap. Saved amounts are bounded at 1e100 and depth at 300 (`MAX_DEPTH`), so amounts reachable at the deepest biome (~1e66) always save.
+- Players who were already past level 10 under the old cap get the perk choices for those levels once, on loading.
+- One-off perk grants (biomass cache, gene sample) scale with depth like other payouts.
 
 ### Steps
 
@@ -93,13 +109,13 @@ Until Cryo labs exists (Phase B), the only biome is the facility, so depth 1 is 
 ## Phase A: Loop feel
 
 1. **Feeding frenzy.** Each completed capture adds to a combo; it drops if nothing is captured for 4 s. A combo of 8 fills the meter and starts a **6 s frenzy**: capture power ×2 and +50% yield, with a pulse on the creature and a HUD meter. Transient (not saved).
-2. **Prized specimens.** About every 90 s of play, a prized version of a target in an unlocked zone appears: it glows, flees at 1.5× speed, and pays ×8 plus data chips. It leaves after 30 s if not caught. Transient.
+2. **Prized specimens.** About every 90 s of play, a prized version of a target in an unlocked zone appears: it glows, flees at 1.5× speed, and pays ×8 plus mutagen. It leaves after 30 s if not caught. Transient.
 3. **Supply pods.** Fixed pod sites in each zone (map data). A pod is captured like a weightless static target. It drops either a burst of currency into cargo or a 15 s power-up: magnet (+50% reach), haste (+30% speed) or double yield. Pods respawn after 120 s, using the existing spawn timers.
-4. **Contracts.** A terminal at the base shows 3 contracts drawn from templates: "catch N of a type", "catch N within T seconds", "bank N in one deposit", "trigger a frenzy", "catch a prized specimen", "clear a cargo run without being hit". Targets scale by depth. A finished contract pays **data chips** (a new currency) and is replaced immediately (seeded roll, saved). No timers.
-5. **Data-chip mutations** (a gene lab panel): longer frenzy, wider combo window, more prized specimens, better pod drops, a 4th contract slot. Small capped tracks.
-6. **Bestiary.** Lifetime capture counts per target type. Milestones at 10, 50 and 200 pay data chips and give +1% capture power each. It has its own panel with silhouettes for types not yet caught.
+4. **Cravings.** The creature always has 3 cravings, shown under the objectives: "catch N of a type", "catch N within T seconds", "bank N in one trip", "trigger a frenzy", "catch a prized specimen", "bank a full hold without being hit". Types come from rooms you can reach. A satisfied craving pays **mutagen** (a new currency) and a new one is rolled straight away (seeded, saved). No real-world timers.
+5. **Mutagen mutations** (a section of the mutations panel): longer frenzy, wider combo window, more prized specimens, better pod drops, a 4th craving. Small capped tracks; never refunded by respec.
+6. **Bestiary.** Lifetime capture counts per target type. Milestones at 10, 50 and 200 pay mutagen and give +1% capture power each. It has its own panel, with "???" for types not yet caught.
 
-Saves (v10): the `chips` currency, contracts, bestiary counts, chip mutation levels.
+Saves (v10): the `mutagen` currency, cravings, bestiary counts, mutagen mutation levels.
 
 ---
 
@@ -132,3 +148,5 @@ Saves (v11): crystals and alloy currencies, chill (transient), forward base, cat
 - **Saves** change in every phase. Each gets a schema bump, a migration, validation, migration tests and a reviewer pass. IDs of biome 1 never change.
 - **Economy runaway or grind:** the depth caps tie stat growth to progress, and the pacing simulation checks the curves before each phase ships.
 - **Rendering:** zone dressing is currently keyed to the four facility zone IDs. Phase 0 keeps it working for biome 1. Phase B makes dressing theme-driven.
+- **Facility content still hard-wired** (fine while every biome uses the facility map; Phase B must generalise it): the vat site (`VAT.site`), reactor and exit placement in `render/structures.ts`, and facility IDs inside shared content (gene sample's `requiresDoor: "door-service"`, evolution's `q-genetic`, the vat and drone's `q-open-service` gate). Phase B moves these into each biome's definition.
+- **State quests on repeat floors:** "Buy a mutation", "Build the biomass vat" and "Evolve" complete at once on a repeated floor (their state already holds) and pay their scaled reward. Small, and gone once repeats use their own quest chains (Phase C).

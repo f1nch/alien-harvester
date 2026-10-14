@@ -1,5 +1,6 @@
 import { CURRENCIES, roundCents, type Currency } from "../content/currencies";
-import { goalTarget, QUESTS, type QuestDef } from "../content/quests";
+import { goalTarget, type QuestDef } from "../content/quests";
+import { currentBiome } from "./biome";
 import type { TargetTypeId } from "../content/targets";
 import { addXp } from "./levels";
 import type { ProgressState } from "./progress";
@@ -27,7 +28,7 @@ export function isActive(p: ProgressState, q: QuestDef): boolean {
 }
 
 export function activeQuests(p: ProgressState): QuestDef[] {
-  return QUESTS.filter((q) => isActive(p, q));
+  return currentBiome(p).quests.filter((q) => isActive(p, q));
 }
 
 export function questCount(p: ProgressState, id: string): number {

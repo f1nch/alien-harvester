@@ -21,6 +21,12 @@ export interface UpgradeDef {
   costs: readonly number[];
   /** Level cap at each evolution tier (index = tier). Evolving raises the cap. */
   capByTier: readonly number[];
+  /**
+   * Tracks that keep scaling against tougher biomes. Past the cost table, each level
+   * multiplies the value by valueFactor and the price by costFactor, and every biome
+   * cleared adds capPerDepth levels to the cap. Tracks without it cap for good.
+   */
+  growth?: { valueFactor: number; costFactor: number; capPerDepth: number };
 }
 
 // Costs are provisional, aimed at an upgrade every 1–4 minutes early on
@@ -36,6 +42,9 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "biomass",
     costs: [15, 35, 65, 110, 170, 250, 350, 480, 650, 850, 1100, 1400],
     capByTier: [8, 12],
+    // 8 levels per biome: 1.083^8 ≈ 1.89x power for 1.06^8 ≈ 1.6x price, matching
+    // 1.9x resistance and 1.6x payouts per depth.
+    growth: { valueFactor: 1.083, costFactor: 1.06, capPerDepth: 8 },
   },
   cargoCapacity: {
     id: "cargoCapacity",
@@ -87,11 +96,14 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "biomass",
     costs: [40, 90, 160, 250, 360, 500, 680, 900],
     capByTier: [5, 8],
+    // 6 levels per biome: 1.07^6 ≈ 1.5x health, matching 1.5x enemy damage per depth.
+    growth: { valueFactor: 1.07, costFactor: 1.06, capPerDepth: 6 },
   },
+  // Percent of max health healed per second, so it keeps pace as health scales.
   regeneration: {
     id: "regeneration",
     name: "Regeneration",
-    unit: "/s",
+    unit: "%/s",
     base: 2,
     perLevel: 1,
     currency: "biomass",

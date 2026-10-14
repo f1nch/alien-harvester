@@ -4,7 +4,7 @@ import { TARGETS } from "../src/content/targets";
 import { newProgress } from "../src/domain/progress";
 import { applyQuestEvent, isDone } from "../src/domain/quests";
 import { stepWorld } from "../src/game/step";
-import { BASE_HEAL_PER_SEC, die, RESPAWN_INVULNERABLE } from "../src/game/systems/combat";
+import { BASE_HEAL_FRACTION, die, RESPAWN_INVULNERABLE } from "../src/game/systems/combat";
 import { SIM_DT, type World } from "../src/game/world";
 import { defaultSettings, parseSave, SCHEMA_VERSION, toSaveFile } from "../src/persistence/schema";
 import { testWorld } from "./helpers";
@@ -243,7 +243,7 @@ describe("healing", () => {
     w.player.x = w.map.base.x;
     w.player.z = w.map.base.z;
     run(w, 1);
-    expect(w.progress.player.health).toBeCloseTo(40 + BASE_HEAL_PER_SEC, 0);
+    expect(w.progress.player.health).toBeCloseTo(40 + BASE_HEAL_FRACTION * 100, 0);
 
     w.player.x = 10;
     w.player.z = 10;
@@ -272,7 +272,7 @@ describe("guard quest and saves", () => {
     const v3 = JSON.parse(JSON.stringify(toSaveFile(newProgress(FACILITY), defaultSettings())));
     v3.schemaVersion = 3;
     delete v3.progress.firstDeathForgiven;
-    const parsed = parseSave(v3, FACILITY)!;
+    const parsed = parseSave(v3)!;
     expect(parsed.schemaVersion).toBe(SCHEMA_VERSION);
     expect(parsed.progress.firstDeathForgiven).toBe(false);
   });
@@ -280,6 +280,6 @@ describe("guard quest and saves", () => {
   it("never loads a dead player", () => {
     const p = newProgress(FACILITY);
     p.player.health = 0;
-    expect(parseSave(toSaveFile(p, defaultSettings()), FACILITY)!.progress.player.health).toBe(100);
+    expect(parseSave(toSaveFile(p, defaultSettings()))!.progress.player.health).toBe(100);
   });
 });

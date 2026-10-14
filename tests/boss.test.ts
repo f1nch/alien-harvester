@@ -221,21 +221,21 @@ describe("play time and saves", () => {
     v7.schemaVersion = 7;
     delete v7.progress.reactorRepaired;
     delete v7.progress.playSeconds;
-    const parsed = parseSave(v7, FACILITY)!;
+    const parsed = parseSave(v7)!;
     expect(parsed.schemaVersion).toBe(SCHEMA_VERSION);
     expect(parsed.progress).toMatchObject({ reactorRepaired: false, playSeconds: 0 });
 
     const p = lateGame();
     p.reactorRepaired = true;
     p.playSeconds = 4321.5;
-    expect(parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))), FACILITY)!.progress)
+    expect(parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))))!.progress)
       .toMatchObject({ reactorRepaired: true, playSeconds: 4321.5 });
   });
 
   it("a boss drop in cargo survives save and reload", () => {
     const p = lateGame();
     p.cargo.push({ type: "boss", weight: 0, reward: { ...TARGETS.boss.reward } });
-    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))), FACILITY)!;
+    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))))!;
     expect(parsed.progress.cargo[0]).toMatchObject({ type: "boss", reward: { parts: 5 } });
   });
 });

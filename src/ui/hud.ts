@@ -8,7 +8,7 @@ import { DRONE, VAT } from "../content/structures";
 import { droneCapacity, nextStep, stepRequirements, vatLevel, type StructureKind } from "../domain/structures";
 import { describePerk, isLegal, perkStacks } from "../domain/perks";
 import { CURRENCY_LABEL, type Currency } from "../content/currencies";
-import { cappedByEvolution, maxLevel, nextCost, upgradeValue } from "../domain/economy";
+import { capRaise, maxLevel, nextCost, upgradeValue } from "../domain/economy";
 import { evolutionRequirements, nextEvolution } from "../domain/evolution";
 import type { Requirement } from "../domain/requirements";
 import { levelProgress } from "../domain/levels";
@@ -16,6 +16,7 @@ import { cargoWeight } from "../domain/progress";
 import { activeQuests, questCount } from "../domain/quests";
 import type { TargetEntity, World } from "../game/world";
 import { reactorRequirements } from "../domain/reactor";
+import { biomeAt, clearRequirements } from "../domain/biome";
 import { MAX_IMPORT_BYTES, type SaveSummary } from "../persistence/transfer";
 
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
@@ -55,6 +56,8 @@ export interface HudCallbacks {
   onRespec(): void;
   onBuildStructure(kind: StructureKind): void;
   onRepair(): void;
+  /** Take the way on (elevator or portal) to the next biome. */
+  onLeaveBiome(): void;
   onExportDownload(): void;
   onExportCopy(): void;
   /** Validate text (from a file or paste); the HUD then shows a preview or an error. */
@@ -90,9 +93,13 @@ export interface HudState {
   boss: TargetEntity | null;
   /** Standing at the reactor console. */
   atReactor: boolean;
+  /** Standing at the biome's way on (elevator or portal). */
+  atExit: boolean;
 }
 
 export interface CompletionStats {
+  title: string;
+  body: string;
   level: number;
   form: string;
   playSeconds: number;
@@ -147,6 +154,13 @@ export class Hud {
   private reactorCard: HTMLElement;
   private reactorList: HTMLElement;
   private reactorBtn: HTMLButtonElement;
+  private exitCard: HTMLElement;
+  private exitTitle: HTMLElement;
+  private exitNote: HTMLElement;
+  private exitList: HTMLElement;
+  private exitBtn: HTMLButtonElement;
+  private completionTitle: HTMLElement;
+  private completionBody: HTMLElement;
   private reactorTitle: HTMLElement;
   private completion: HTMLElement;
   private importPreview: HTMLElement;
@@ -249,12 +263,24 @@ export class Hud {
     this.reactorBtn.addEventListener("click", () => cb.onRepair());
     this.reactorCard.append(this.reactorTitle, this.reactorList, this.reactorBtn);
 
-    // Completion screen.
+    // The way on (elevator or portal): what's still needed, or where it leads.
+    this.exitCard = el("div", "door-card exit-card hidden");
+    this.exitCard.setAttribute("role", "region");
+    this.exitTitle = el("h3");
+    this.exitNote = el("p", "exit-note");
+    this.exitList = el("ul", "door-reqs");
+    this.exitBtn = el("button", "btn btn-buy");
+    this.exitBtn.addEventListener("click", () => cb.onLeaveBiome());
+    this.exitCard.append(this.exitTitle, this.exitNote, this.exitList, this.exitBtn);
+
+    // Objective-complete screen (the reactor in the facility).
     this.completion = el("div", "panel completion hidden");
     this.completion.setAttribute("role", "dialog");
-    this.completion.setAttribute("aria-label", "Facility harvested");
+    this.completion.setAttribute("aria-label", "Objective complete");
     const cc = el("div", "panel-card");
-    cc.append(el("h2", undefined, "Reactor repaired"), el("p", "panel-note", "The facility is yours. Everything you harvested is kept, and you can keep playing."));
+    this.completionTitle = el("h2");
+    this.completionBody = el("p", "panel-note");
+    cc.append(this.completionTitle, this.completionBody);
     this.completionStats = el("dl", "completion-stats");
     const keep = el("button", "btn btn-buy", "Keep playing");
     keep.addEventListener("click", () => cb.onCloseCompletion());
@@ -430,7 +456,7 @@ export class Hud {
     this.vignette = el("div", "vignette");
     this.vignette.setAttribute("aria-hidden", "true");
 
-    root.append(this.vignette, top, this.bossBar, this.reactorCard, this.completion, this.doorCard, this.upgradeBtn, this.perkBtn, this.perkPanel, this.panel, this.toastEl, this.overlay);
+    root.append(this.vignette, top, this.bossBar, this.reactorCard, this.exitCard, this.completion, this.doorCard, this.upgradeBtn, this.perkBtn, this.perkPanel, this.panel, this.toastEl, this.overlay);
   }
 
   setLeftHanded(left: boolean): void {
@@ -498,7 +524,7 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.banked.parts, p.xp, cargo, cap, s.atReactor, p.reactorRepaired,
+      p.banked.biomass, p.banked.genetic, p.banked.parts, p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired,
       s.boss ? `${Math.round(s.boss.progress * 100)}:${s.boss.boss?.state}` : "", s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
@@ -530,6 +556,7 @@ export class Hud {
     this.renderQuests(w);
     this.renderBoss(s.boss);
     this.renderReactor(w, s.atReactor);
+    this.renderExit(w, s.atExit);
     this.renderStructures(w);
     this.renderPerks(w);
     this.renderDoor(w, s.door);
@@ -555,7 +582,8 @@ export class Hud {
         ? `${fmt(cur)}${def.unit} (max)`
         : `${fmt(cur)}${def.unit} → ${fmt(next)}${def.unit}`;
       if (cost === null) {
-        row.buy.textContent = cappedByEvolution(p, id) ? "Evolve to raise cap" : "Maxed";
+        const raise = capRaise(p, id);
+        row.buy.textContent = raise === "evolve" ? "Evolve to raise cap" : raise === "nextBiome" ? "Go deeper to raise cap" : "Maxed";
         row.buy.disabled = true;
       } else {
         const can = p.banked[def.currency] >= cost;
@@ -574,10 +602,15 @@ export class Hud {
   }
 
   private renderQuests(w: World): void {
-    const active = activeQuests(w.progress).slice(0, 3);
-    this.quests.classList.toggle("hidden", active.length === 0);
+    const p = w.progress;
+    const active = activeQuests(p).slice(0, 3);
+    // Once the quest chain is done there is still always a next step.
+    const next = active.length > 0 ? null
+      : !p.reactorRepaired ? w.biome.objective.task
+      : w.biome.def.exit.action;
     this.quests.replaceChildren(
-      el("div", "quests-title", "Objectives"),
+      el("div", "quests-title", w.biome.name),
+      ...(next ? [el("div", "quest", next)] : []),
       ...active.map((q) => {
         const row = el("div", "quest");
         const target = goalTarget(q.goal);
@@ -607,6 +640,25 @@ export class Hud {
     this.bossState.textContent = label;
     this.bossBar.classList.toggle("stunned", state === "stunned");
     this.bossBar.classList.toggle("danger", state === "chargeWindup" || state === "slamWindup");
+  }
+
+  private renderExit(w: World, near: boolean): void {
+    this.exitCard.classList.toggle("hidden", !near);
+    if (!near) return;
+    const p = w.progress;
+    const exit = w.biome.def.exit;
+    const reqs = clearRequirements(p);
+    const open = reqs.every((r) => r.met);
+    const next = biomeAt(p.depth + 1);
+    this.exitCard.setAttribute("aria-label", exit.name);
+    this.exitTitle.textContent = open ? `${exit.name} — powered` : `${exit.name} — no power`;
+    this.exitNote.textContent = open
+      ? `Leads to ${next.name}. You keep everything you've harvested, your mutations, perks and form. Unbanked cargo is banked on the way.`
+      : "Clear this floor to use it:";
+    if (open) this.exitList.replaceChildren();
+    else requirementList(this.exitList, reqs);
+    this.exitBtn.disabled = !open;
+    this.exitBtn.textContent = open ? exit.action : "Not powered yet";
   }
 
   private renderReactor(w: World, near: boolean): void {
@@ -647,6 +699,7 @@ export class Hud {
       ["Biomass", String(s.biomass)],
       ["Genetic material", String(s.genetic)],
       ["Reactor parts", String(s.parts)],
+      ["Location", s.place],
       ["Doors open", String(s.doorsOpen)],
       ["Objectives done", String(s.questsDone)],
       ["Reactor repaired", s.reactorRepaired ? "Yes" : "No"],
@@ -666,6 +719,8 @@ export class Hud {
   showCompletion(stats: CompletionStats | null): void {
     this.completion.classList.toggle("hidden", stats === null);
     if (!stats) return;
+    this.completionTitle.textContent = stats.title;
+    this.completionBody.textContent = stats.body;
     const h = Math.floor(stats.playSeconds / 3600);
     const m = Math.floor((stats.playSeconds % 3600) / 60);
     const rows: Array<[string, string]> = [
@@ -747,10 +802,10 @@ export class Hud {
         card.append(
           el("span", "perk-icon", def.icon),
           el("span", "perk-name", def.name),
-          el("span", "perk-desc", legal ? describePerk(def, choice.level) : "Already at maximum"),
+          el("span", "perk-desc", legal ? describePerk(def, choice.level, p.depth) : "Already at maximum"),
           el("span", "perk-stacks", stacks),
         );
-        card.setAttribute("aria-label", `${def.name}: ${describePerk(def, choice.level)}${stacks ? `, taken ${stacks}` : ""}`);
+        card.setAttribute("aria-label", `${def.name}: ${describePerk(def, choice.level, p.depth)}${stacks ? `, taken ${stacks}` : ""}`);
         card.addEventListener("click", () => this.pick(i));
         return card;
       }),

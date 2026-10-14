@@ -1,5 +1,4 @@
 import Dexie, { type Table } from "dexie";
-import type { MapDef } from "../content/map";
 import { parseSave, SCHEMA_VERSION, type SaveFile } from "./schema";
 
 interface Slot {
@@ -34,7 +33,7 @@ export class SaveStore {
   private db = new SaveDB();
   private writing: Promise<void> = Promise.resolve();
 
-  constructor(private readonly room: MapDef) {}
+  constructor() {}
 
   async load(): Promise<LoadResult> {
     const [current, previous] = await Promise.all([
@@ -57,9 +56,9 @@ export class SaveStore {
       }
     }
 
-    const cur = current ? parseSave(current.data, this.room) : null;
+    const cur = current ? parseSave(current.data) : null;
     if (cur) return { status: "ok", save: cur, recovered: false };
-    const prev = previous ? parseSave(previous.data, this.room) : null;
+    const prev = previous ? parseSave(previous.data) : null;
 
     // Keep unreadable snapshots out of the rotation, append-only, so nothing is lost.
     // Best effort: a quota error here must not abort an otherwise good load.
@@ -92,13 +91,13 @@ export class SaveStore {
    */
   importSave(save: SaveFile): Promise<void> {
     const run = async () => {
-      if (!parseSave(save, this.room)) throw new Error("Refusing to import an invalid save");
+      if (!parseSave(save)) throw new Error("Refusing to import an invalid save");
       await this.db.transaction("rw", this.db.slots, async () => {
         const old = await this.db.slots.get("current");
         if (old) {
           // add(), not put(): a key clash aborts the whole import instead of overwriting a backup.
           await this.db.slots.add({ key: await this.nextKey("preimport:"), data: old.data });
-          if (parseSave(old.data, this.room)) await this.db.slots.put({ key: "previous", data: old.data });
+          if (parseSave(old.data)) await this.db.slots.put({ key: "previous", data: old.data });
         }
         await this.db.slots.put({ key: "current", data: save });
       });
@@ -116,10 +115,10 @@ export class SaveStore {
    */
   write(save: SaveFile): Promise<void> {
     const run = async () => {
-      if (!parseSave(save, this.room)) throw new Error("Refusing to write an invalid save");
+      if (!parseSave(save)) throw new Error("Refusing to write an invalid save");
       await this.db.transaction("rw", this.db.slots, async () => {
         const old = await this.db.slots.get("current");
-        if (old && parseSave(old.data, this.room)) await this.db.slots.put({ key: "previous", data: old.data });
+        if (old && parseSave(old.data)) await this.db.slots.put({ key: "previous", data: old.data });
         await this.db.slots.put({ key: "current", data: save });
       });
     };

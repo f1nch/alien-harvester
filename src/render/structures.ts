@@ -1,7 +1,9 @@
 import {
   Color3, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, TransformNode,
 } from "@babylonjs/core";
+import { BIOMES } from "../content/biomes";
 import { REACTOR } from "../content/reactor";
+import { isBiomeCleared } from "../domain/biome";
 import { VAT } from "../content/structures";
 import { cargoWeight } from "../domain/progress";
 import { droneCapacity, vatLevel } from "../domain/structures";
@@ -27,6 +29,9 @@ export class StructuresView {
   private time = 0;
   private coreMat: StandardMaterial;
   private reactorRing: Mesh;
+  private exitMat: StandardMaterial;
+  private exitRing: Mesh;
+  private exitBeam: Mesh;
 
   constructor(scene: Scene, shadows: ShadowGenerator | null) {
     const { x, z } = VAT.site;
@@ -89,6 +94,21 @@ export class StructuresView {
     this.reactorRing = MeshBuilder.CreateTorus("reactorRing", { diameter: 1.6, thickness: 0.08, tessellation: 32 }, scene);
     this.reactorRing.position.set(REACTOR.x, 1.9, REACTOR.z);
     this.reactorRing.material = this.coreMat;
+
+    // The way on (freight elevator): a platform that lights up once the floor is cleared.
+    // Every biome so far shares the facility's map, so its exit position is fixed here.
+    const exit = BIOMES[0]!.exit;
+    const platform = MeshBuilder.CreateCylinder("exitPlatform", { diameter: exit.radius * 2, height: 0.12, tessellation: 32 }, scene);
+    platform.position.set(exit.x, 0.06, exit.z);
+    platform.material = metal;
+    this.exitMat = material(scene, "exitMat", Color3.Black(), new Color3(0.15, 0.2, 0.25));
+    this.exitRing = MeshBuilder.CreateTorus("exitRing", { diameter: exit.radius * 2, thickness: 0.1, tessellation: 40 }, scene);
+    this.exitRing.position.set(exit.x, 0.14, exit.z);
+    this.exitRing.material = this.exitMat;
+    this.exitBeam = MeshBuilder.CreateCylinder("exitBeam", { diameter: exit.radius * 1.6, height: 4, tessellation: 24, cap: Mesh.NO_CAP }, scene);
+    this.exitBeam.position.set(exit.x, 2, exit.z);
+    this.exitBeam.material = material(scene, "exitBeamMat", Color3.Black(), new Color3(0.35, 0.9, 1), 0.18);
+    this.exitBeam.isPickable = false;
   }
 
   update(w: World, alpha: number, dt: number): void {
@@ -99,6 +119,15 @@ export class StructuresView {
     } else {
       const flicker = 0.5 + 0.5 * Math.abs(Math.sin(this.time * 7) * Math.sin(this.time * 2.3));
       this.coreMat.emissiveColor.set(flicker, 0.12 * flicker, 0.06);
+    }
+    const open = isBiomeCleared(w.progress);
+    this.exitBeam.setEnabled(open);
+    if (open) {
+      const pulse = 0.7 + 0.3 * Math.sin(this.time * 3);
+      this.exitMat.emissiveColor.set(0.35 * pulse, 0.9 * pulse, 1 * pulse);
+      this.exitRing.rotation.y += dt;
+    } else {
+      this.exitMat.emissiveColor.set(0.15, 0.2, 0.25);
     }
     const { vat, drone } = w.progress.structures;
 

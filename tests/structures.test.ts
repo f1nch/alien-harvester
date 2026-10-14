@@ -202,7 +202,7 @@ describe("structure saves", () => {
     p.structures.drone.cargo.push({ type: "vat", weight: 2, reward: { biomass: 5 } });
     p.structures.drone.x = 0;
     p.structures.drone.z = 20;
-    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))), FACILITY)!;
+    const parsed = parseSave(JSON.parse(JSON.stringify(toSaveFile(p, defaultSettings()))))!;
     expect(parsed.progress.structures).toEqual(p.structures);
   });
 
@@ -210,7 +210,7 @@ describe("structure saves", () => {
     const v6 = JSON.parse(JSON.stringify(toSaveFile(newProgress(FACILITY), defaultSettings())));
     v6.schemaVersion = 6;
     delete v6.progress.structures;
-    const parsed = parseSave(v6, FACILITY)!;
+    const parsed = parseSave(v6)!;
     expect(parsed.schemaVersion).toBe(SCHEMA_VERSION);
     expect(parsed.progress.structures.vat.built).toBe(false);
     expect(parsed.progress.structures.drone.built).toBe(false);
@@ -226,7 +226,7 @@ describe("structure saves", () => {
     s.progress.structures.drone.cargo = Array.from({ length: 30 }, () => ({ type: "worker" }));
     s.progress.structures.drone.x = 0;
     s.progress.structures.drone.z = 60; // security sector: door still locked
-    const parsed = parseSave(s, FACILITY)!.progress.structures;
+    const parsed = parseSave(s)!.progress.structures;
     expect(parsed.vat.stock).toBe(vatLevel(parsed.vat).storage);
     expect(parsed.vat.timer).toBe(vatLevel(parsed.vat).batchSeconds);
     expect(cargoWeight(parsed.drone.cargo)).toBeLessThanOrEqual(droneCapacity(parsed.drone));

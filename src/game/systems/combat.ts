@@ -4,7 +4,8 @@ import { inBase } from "./deposit";
 import { moveToward, pickGoal, wanderStep } from "./wander";
 
 /** Health restored per second while standing in the base. */
-export const BASE_HEAL_PER_SEC = 35;
+/** Base healing per second: 35% of max health (35/s at the starting 100). */
+export const BASE_HEAL_FRACTION = 0.35;
 /** Regeneration elsewhere (rate from the Regeneration track) starts after this long without being hit. */
 export const REGEN_DELAY = 4;
 /** Grace period after respawning, so the player can't be hit while getting their bearings. */
@@ -115,7 +116,7 @@ export function updatePlayerHealth(w: World, dt: number): void {
     return;
   }
   const max = w.stats.maxHealth;
-  if (inBase(w)) prog.health = Math.min(max, prog.health + BASE_HEAL_PER_SEC * dt);
+  if (inBase(w)) prog.health = Math.min(max, prog.health + Math.max(BASE_HEAL_FRACTION * max, w.stats.regeneration) * dt);
   else if (p.sinceHit >= REGEN_DELAY) prog.health = Math.min(max, prog.health + w.stats.regeneration * dt);
 }
 

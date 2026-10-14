@@ -1,12 +1,13 @@
 import { CURRENCIES, emptyWallet } from "../content/currencies";
-import { reachableZones, zoneAtOrDoorway, type MapDef } from "../content/map";
-import { goalTarget, QUEST_BY_ID } from "../content/quests";
-import { isTargetType, TARGETS } from "../content/targets";
-import { UPGRADE_IDS } from "../content/upgrades";
+import { reachableZones, zoneAtOrDoorway } from "../content/map";
+import { goalTarget } from "../content/quests";
+import { isTargetType } from "../content/targets";
+import { biomeAt, MAX_DEPTH, type ActiveBiome } from "../domain/biome";
+import { UPGRADE_IDS, UPGRADES } from "../content/upgrades";
 import { MAX_TIER } from "../content/evolution";
 import { MAX_LEVEL } from "../content/levels";
 import { CHOICES_PER_LEVEL, isPerkId, PERKS } from "../content/perks";
-import { capAtTier, computeStats, tableCostForLevels } from "../domain/economy";
+import { capAt, computeStats, tableCostForLevels } from "../domain/economy";
 import { levelForXp } from "../domain/levels";
 import { queuePerkChoices } from "../domain/perks";
 import { droneCapacity, vatBatchDrop, vatLevel } from "../domain/structures";
@@ -14,8 +15,11 @@ import { DRONE, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 export const CONTENT_VERSION = 1;
+
+/** The level cap before endless levels (v9). */
+const PRE_V9_MAX_LEVEL = 10;
 
 export interface Settings {
   leftHanded: boolean;
@@ -48,8 +52,11 @@ export function toSaveFile(progress: ProgressState, settings: Settings): SaveFil
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-/** Far beyond anything reachable in play, but small enough that sums can never overflow to Infinity. */
-const MAX_AMOUNT = 1e12;
+/**
+ * Bounds every saved amount. Amounts grow about 1.6x per biome, so this sits far above
+ * anything reachable at MAX_DEPTH (~1e66), yet sums of such values can't overflow to Infinity.
+ */
+export const MAX_AMOUNT = 1e100;
 const isNonNeg = (v: unknown): v is number => isNum(v) && v >= 0 && v <= MAX_AMOUNT;
 
 /**
@@ -81,7 +88,9 @@ function migrate(raw: Obj): Obj | null {
       const upgradeSpent: Record<string, number> = {};
       let bought = 0;
       for (const id of UPGRADE_IDS) {
-        const lvl = Number.isInteger(levels[id]) ? (levels[id] as number) : 0;
+        const raw = Number.isInteger(levels[id]) ? (levels[id] as number) : 0;
+        // v4 predates growth past the table, so no real v4 save holds more levels.
+        const lvl = Math.min(raw, UPGRADES[id].costs.length);
         upgradeSpent[id] = tableCostForLevels(id, Math.max(0, lvl));
         bought += Math.max(0, lvl);
       }
@@ -105,16 +114,25 @@ function migrate(raw: Obj): Obj | null {
     const progress = isObj(m.progress) ? { ...m.progress, reactorRepaired: false, playSeconds: 0 } : m.progress;
     m = { ...m, schemaVersion: 8, progress };
   }
+  if (m.schemaVersion === 8) {
+    // v9 adds biomes. Every earlier save is in the first one.
+    const progress = isObj(m.progress) ? { ...m.progress, depth: 0 } : m.progress;
+    m = { ...m, schemaVersion: 9, progress };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
 
-/** Rebuild a cargo drop from content definitions rather than trusting stored numbers. */
-function parseDrop(d: unknown): CargoDrop | null {
+/**
+ * Rebuild a cargo drop from content definitions rather than trusting stored numbers.
+ * Cargo never leaves its biome (it's banked on the way out), so the current depth's
+ * payouts are the right ones.
+ */
+function parseDrop(d: unknown, biome: ActiveBiome): CargoDrop | null {
   if (!isObj(d)) return null;
-  if (d.type === "vat") return vatBatchDrop();
+  if (d.type === "vat") return vatBatchDrop(biome.depth);
   if (!isTargetType(d.type)) return null;
-  const def = TARGETS[d.type];
+  const def = biome.targets[d.type];
   return { type: def.id, weight: def.weight, reward: { ...def.reward } };
 }
 
@@ -122,14 +140,19 @@ function parseDrop(d: unknown): CargoDrop | null {
  * Validate an untrusted save (from storage or an import). Returns null if it
  * can't be trusted, so the caller can fall back without overwriting anything.
  */
-export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
+export function parseSave(raw: unknown): SaveFile | null {
   if (!isObj(raw)) return null;
   const m = migrate(raw);
   if (!m) return null;
   const p = m.progress;
   if (!isObj(p)) return null;
 
+  // First: depth picks the biome, which every later check (map, quests, caps, cargo) uses.
+  if (!Number.isInteger(p.depth) || (p.depth as number) < 0 || (p.depth as number) > MAX_DEPTH) return null;
+  const biome = biomeAt(p.depth as number);
+  const room = biome.def.map;
   const progress = newProgress(room);
+  progress.depth = biome.depth;
 
   if (!isObj(p.banked)) return null;
   progress.banked = emptyWallet();
@@ -150,7 +173,7 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   for (const id of UPGRADE_IDS) {
     const lvl = p.upgrades[id] ?? 0;
     if (!Number.isInteger(lvl) || (lvl as number) < 0) return null;
-    progress.upgrades[id] = Math.min(lvl as number, capAtTier(id, progress.evolution));
+    progress.upgrades[id] = Math.min(lvl as number, capAt(id, progress.evolution, progress.depth));
   }
 
   // Perks before cargo and health: they change capacity and maximum health.
@@ -181,7 +204,7 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   const cargo: CargoDrop[] = [];
   let weight = 0;
   for (const d of p.cargo) {
-    const drop = parseDrop(d);
+    const drop = parseDrop(d, biome);
     if (!drop) return null;
     if (weight + drop.weight > capacity) break;
     weight += drop.weight;
@@ -205,7 +228,7 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   if (!isObj(p.quests)) return null;
   const quests: Record<string, QuestState> = {};
   for (const [id, q] of Object.entries(p.quests)) {
-    const def = QUEST_BY_ID.get(id);
+    const def = biome.questById.get(id);
     if (!def) continue; // quest removed from content: drop it
     if (!isObj(q) || !isNonNeg(q.count) || typeof q.done !== "boolean") return null;
     quests[id] = { count: Math.min(q.count, goalTarget(def.goal)), done: q.done };
@@ -251,7 +274,7 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
       const cap = droneCapacity(drone);
       let load = 0;
       for (const d of dr.cargo) {
-        const drop = parseDrop(d);
+        const drop = parseDrop(d, biome);
         if (!drop) return null;
         if (load + drop.weight > cap) break;
         load += drop.weight;
@@ -276,8 +299,8 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
   if (!Array.isArray(p.pendingPerks)) return null;
   for (const c of p.pendingPerks) {
     if (!isObj(c) || !Number.isInteger(c.level) || !Array.isArray(c.options)) return null;
-    // Grants scale with the level, so it must be a real one.
-    if ((c.level as number) < 2 || (c.level as number) > MAX_LEVEL) return null;
+    // Grants scale with the level, so it must be one the player has actually reached.
+    if ((c.level as number) < 2 || (c.level as number) > levelForXp(progress.xp)) return null;
     // Drop removed perks and duplicates; a choice left empty becomes a biomass cache.
     const options = [...new Set(c.options.filter(isPerkId))].slice(0, CHOICES_PER_LEVEL);
     progress.pendingPerks.push({ level: c.level as number, options: options.length ? options : ["biomassCache"] });
@@ -288,6 +311,12 @@ export function parseSave(raw: unknown, room: MapDef): SaveFile | null {
     const levels: number[] = [];
     for (let l = 2; l <= levelForXp(progress.xp); l++) levels.push(l);
     queuePerkChoices(progress, levels, mulberry32(0x9e3779b9 ^ Math.floor(progress.xp)));
+  } else if (typeof raw.schemaVersion === "number" && raw.schemaVersion < 9) {
+    // Before v9 levels stopped at 10, so XP past that earned nothing. Those levels now
+    // exist: queue their choices, rolled from the save so reloading can't reroll them.
+    const levels: number[] = [];
+    for (let l = PRE_V9_MAX_LEVEL + 1; l <= levelForXp(progress.xp); l++) levels.push(l);
+    if (levels.length) queuePerkChoices(progress, levels, mulberry32(0x7f4a7c15 ^ Math.floor(progress.xp)));
   }
 
   if (typeof p.reactorRepaired !== "boolean" || !isNonNeg(p.playSeconds)) return null;

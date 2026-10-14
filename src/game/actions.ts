@@ -4,12 +4,14 @@ import { unlockDoor, type UnlockResult } from "../domain/doors";
 import { purchaseUpgrade, respecUpgrades, type PurchaseResult, type RespecResult } from "../domain/economy";
 import { evolve, type EvolveResult } from "../domain/evolution";
 import { choosePerk, claimFallback, type ChooseResult } from "../domain/perks";
-import { REACTOR } from "../content/reactor";
+import { CURRENCIES, emptyWallet, roundCents, type Wallet } from "../content/currencies";
+import { isBiomeCleared, MAX_DEPTH } from "../domain/biome";
+import { enterNextBiome } from "../domain/travel";
 import { VAT } from "../content/structures";
 import { repairReactor, type RepairResult } from "../domain/reactor";
-import { advanceStructure, type StructureKind, type StructureResult } from "../domain/structures";
+import { advanceStructure, vatBatchDrop, type StructureKind, type StructureResult } from "../domain/structures";
 import { dist2, resolveCircle } from "./geometry";
-import { inBase } from "./systems/deposit";
+import { bankDrop, inBase } from "./systems/deposit";
 import { PLAYER_RADIUS, TARGET_RADIUS, questEvent, refreshObstacles, refreshStats, type World } from "./world";
 
 /** Player-initiated actions. Each applies its domain transaction, then quest and event bookkeeping. */
@@ -101,7 +103,44 @@ export function buildStructure(w: World, kind: StructureKind): StructureResult {
 }
 
 export function nearReactor(w: World): boolean {
-  return dist2(w.player.x, w.player.z, REACTOR.x, REACTOR.z) <= REACTOR.interactRadius ** 2;
+  const o = w.biome.objective;
+  return dist2(w.player.x, w.player.z, o.x, o.z) <= o.interactRadius ** 2;
+}
+
+/** The exit card shows within this distance of the exit: what's left to do, or where it leads. */
+export const EXIT_INTERACT_RADIUS = 3;
+
+export function nearExit(w: World): boolean {
+  const e = w.biome.def.exit;
+  return dist2(w.player.x, w.player.z, e.x, e.z) <= EXIT_INTERACT_RADIUS ** 2;
+}
+
+export type LeaveResult = { ok: true; banked: Wallet } | { ok: false; reason: "notAtExit" | "notCleared" | "deepest" };
+
+/**
+ * Moves on to the next biome in one synchronous step: every cargo drop, the drone's load
+ * and the vat's stock are banked through bankDrop, then per-biome state resets. The
+ * caller saves and rebuilds the world for the new map.
+ */
+export function leaveBiome(w: World): LeaveResult {
+  if (!nearExit(w)) return { ok: false, reason: "notAtExit" };
+  if (!isBiomeCleared(w.progress)) return { ok: false, reason: "notCleared" };
+  if (w.progress.depth >= MAX_DEPTH) return { ok: false, reason: "deepest" };
+  const p = w.progress;
+  const before = { ...p.banked };
+  const { vat, drone } = p.structures;
+  const drops = [...p.cargo, ...drone.cargo];
+  for (let i = 0; i < vat.stock; i++) drops.push(vatBatchDrop(p.depth));
+  p.cargo = [];
+  drone.cargo = [];
+  vat.stock = 0;
+  for (const t of w.tentacles) if (t) t.progress = 0;
+  for (const drop of drops) bankDrop(w, drop);
+  const banked = emptyWallet();
+  for (const c of CURRENCIES) banked[c] = roundCents(p.banked[c] - before[c]);
+  enterNextBiome(p);
+  w.events.push({ type: "biomeLeft", depth: p.depth });
+  return { ok: true, banked };
 }
 
 export function repair(w: World): RepairResult | { ok: false; reason: "notAtConsole" } {

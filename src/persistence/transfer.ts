@@ -1,5 +1,5 @@
 import { FORM_NAMES } from "../content/evolution";
-import type { MapDef } from "../content/map";
+import { biomeAt } from "../domain/biome";
 import { levelForXp } from "../domain/levels";
 import { parseSave, SCHEMA_VERSION, type SaveFile } from "./schema";
 
@@ -25,6 +25,8 @@ export function exportFileName(date = new Date()): string {
 }
 
 export interface SaveSummary {
+  /** Where the save is, e.g. "Research wing II": overwriting a deep save must be obvious. */
+  place: string;
   level: number;
   form: string;
   biomass: number;
@@ -38,6 +40,7 @@ export interface SaveSummary {
 export function summarize(save: SaveFile): SaveSummary {
   const p = save.progress;
   return {
+    place: biomeAt(p.depth).name,
     level: levelForXp(p.xp),
     form: FORM_NAMES[p.evolution] ?? "Unknown",
     biomass: Math.floor(p.banked.biomass),
@@ -67,7 +70,7 @@ export const IMPORT_ERRORS: Record<Exclude<ImportResult, { ok: true }>["reason"]
  * file, or a bare save object (as stored), and runs the same strict validation
  * (and migrations) used for saves loaded from storage.
  */
-export function parseImport(text: string, map: MapDef): ImportResult {
+export function parseImport(text: string): ImportResult {
   const trimmed = text.trim();
   if (!trimmed) return { ok: false, reason: "empty" };
   if (new Blob([trimmed]).size > MAX_IMPORT_BYTES) return { ok: false, reason: "tooLarge" };
@@ -83,7 +86,7 @@ export function parseImport(text: string, map: MapDef): ImportResult {
   if (candidate === null || typeof candidate !== "object") return { ok: false, reason: "wrongFormat" };
   const version = (candidate as Record<string, unknown>).schemaVersion;
   if (typeof version === "number" && version > SCHEMA_VERSION) return { ok: false, reason: "newer" };
-  const save = parseSave(candidate, map);
+  const save = parseSave(candidate);
   if (!save) return { ok: false, reason: "invalid" };
   return { ok: true, save, summary: summarize(save) };
 }

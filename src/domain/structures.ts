@@ -1,5 +1,6 @@
 import { DRONE, VAT } from "../content/structures";
 import type { CargoDrop, ProgressState } from "./progress";
+import { scaleAt, scaleReward, scaleRequirements } from "./biome";
 import { allMet, evaluate, payCost, type Requirement, type Requirements } from "./requirements";
 
 export interface VatState {
@@ -51,8 +52,8 @@ export function nextStep(p: ProgressState, kind: StructureKind): Requirements | 
   if (s.built && s.level >= levels.length) return null;
   if (!next) return null;
   const gate = kind === "vat" ? VAT.build : DRONE.build;
-  // Building has a gate; upgrades only cost resources.
-  return s.built ? { cost: next.cost } : { ...gate, cost: next.cost };
+  // Building has a gate; upgrades only cost resources. Prices grow with depth.
+  return scaleRequirements(s.built ? { cost: next.cost } : { ...gate, cost: next.cost }, p.depth);
 }
 
 export function stepRequirements(p: ProgressState, kind: StructureKind): Requirement[] {
@@ -102,6 +103,7 @@ export function tickVat(v: VatState, dt: number, rate = 1): void {
   }
 }
 
-export function vatBatchDrop(): CargoDrop {
-  return { type: "vat", weight: VAT.batch.weight, reward: { ...VAT.batch.reward } };
+/** One batch as cargo, worth what the current depth pays. */
+export function vatBatchDrop(depth: number): CargoDrop {
+  return { type: "vat", weight: VAT.batch.weight, reward: scaleReward(VAT.batch.reward, scaleAt(depth).reward) };
 }

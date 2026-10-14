@@ -50,7 +50,7 @@ export function updateBoss(w: World, t: TargetEntity, dt: number): void {
       b.timer -= dt;
       if (b.timer <= 0) {
         // Pillars and walls are real cover.
-        const hit = d2 <= WARDEN.slamRadius ** 2 && hasLineOfSight(t.x, t.z, p.x, p.z, w.obstacles) && damagePlayer(w, WARDEN.slamDamage, t);
+        const hit = d2 <= WARDEN.slamRadius ** 2 && hasLineOfSight(t.x, t.z, p.x, p.z, w.obstacles) && damagePlayer(w, Math.round(WARDEN.slamDamage * w.biome.scale.damage), t);
         w.events.push({ type: "strike", by: t, hit });
         enter(b, "recover", WARDEN.recover);
       }
@@ -77,7 +77,7 @@ export function updateBoss(w: World, t: TargetEntity, dt: number): void {
       b.travelled += step;
       if (!b.chargeHit && dist2(t.x, t.z, p.x, p.z) <= WARDEN.chargeHitRadius ** 2) {
         b.chargeHit = true;
-        const hit = damagePlayer(w, WARDEN.chargeDamage, t);
+        const hit = damagePlayer(w, Math.round(WARDEN.chargeDamage * w.biome.scale.damage), t);
         w.events.push({ type: "strike", by: t, hit });
       }
       if (blocked) {

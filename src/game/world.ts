@@ -5,7 +5,8 @@ import type { StructureKind } from "../domain/structures";
 import type { DroneMode } from "./systems/structures";
 import { newBossRuntime, type BossRuntime } from "./systems/boss";
 import type { QuestDef } from "../content/quests";
-import { TARGETS, type TargetDef } from "../content/targets";
+import type { TargetDef } from "../content/targets";
+import { biomeAt, type ActiveBiome } from "../domain/biome";
 import { computeStats, type PlayerStats } from "../domain/economy";
 import { addXp } from "../domain/levels";
 import { queuePerkChoices } from "../domain/perks";
@@ -70,12 +71,16 @@ export type GameEvent =
   | { type: "bossStunned" }
   | { type: "bossDefeated" }
   | { type: "reactorRepaired" }
+  /** Moved on; the world must be rebuilt for the new biome's map. */
+  | { type: "biomeLeft"; depth: number }
   | { type: "playerHit"; damage: number; by: TargetEntity }
   | { type: "strike"; by: TargetEntity; hit: boolean }
   | { type: "died"; lost: CargoDrop[]; forgiven: boolean };
 
 export interface World {
   map: MapDef;
+  /** The biome at the player's depth: scaled targets, quests and objective. */
+  biome: ActiveBiome;
   progress: ProgressState;
   stats: PlayerStats;
   /** Walls, props, locked doors, and built structures. Rebuilt when any of those change. */
@@ -114,6 +119,7 @@ export { mulberry32 } from "../domain/rng";
 export function createWorld(map: MapDef, progress: ProgressState, seed = 1): World {
   const w: World = {
     map,
+    biome: biomeAt(progress.depth),
     progress,
     stats: computeStats(progress),
     obstacles: [],
@@ -169,7 +175,7 @@ export function spawnTarget(w: World, spawnId: string): TargetEntity | null {
   if (!s) return null;
   const t: TargetEntity = {
     id: w.nextId++,
-    def: TARGETS[s.type],
+    def: w.biome.targets[s.type],
     spawnId,
     x: s.x, z: s.z, prevX: s.x, prevZ: s.z,
     heading: w.rng() * Math.PI * 2,
