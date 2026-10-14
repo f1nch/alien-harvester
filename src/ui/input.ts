@@ -1,11 +1,12 @@
-const DEAD_ZONE = 0.15;
-const MAX_RADIUS_PX = 56;
+import { joystickVector, JOYSTICK_RADIUS_PX as MAX_RADIUS_PX } from "./joystick";
 
 /**
  * Floating virtual joystick plus WASD / arrow keys. Produces a world-space
  * vector where screen-up is +Z and screen-right is +X.
  */
 export class InputController {
+  /** Most recent pointer sample, retained after release for dev diagnostics. */
+  lastPointerStrength = 0;
   private keys = new Set<string>();
   private pointerId: number | null = null;
   private origin = { x: 0, y: 0 };
@@ -66,6 +67,7 @@ export class InputController {
     if (this.pointerId !== null) return;
     e.preventDefault();
     this.pointerId = e.pointerId;
+    this.lastPointerStrength = 0;
     this.zone.setPointerCapture(e.pointerId);
     const r = this.zone.getBoundingClientRect();
     this.origin.x = e.clientX;
@@ -81,21 +83,16 @@ export class InputController {
     e.preventDefault();
     let dx = e.clientX - this.origin.x;
     let dy = e.clientY - this.origin.y;
+    const direction = joystickVector(dx, dy);
+    this.lastPointerStrength = Math.hypot(direction.x, direction.z);
     const len = Math.hypot(dx, dy);
     if (len > MAX_RADIUS_PX) {
       dx = (dx / len) * MAX_RADIUS_PX;
       dy = (dy / len) * MAX_RADIUS_PX;
     }
     this.updateKnob(dx, dy);
-    const mag = Math.min(len / MAX_RADIUS_PX, 1);
-    if (mag < DEAD_ZONE) {
-      this.stick.x = this.stick.y = 0;
-      return;
-    }
-    // Rescale past the dead zone so movement ramps smoothly from zero.
-    const scaled = (mag - DEAD_ZONE) / (1 - DEAD_ZONE);
-    this.stick.x = (dx / (len || 1)) * scaled;
-    this.stick.y = (-dy / (len || 1)) * scaled;
+    this.stick.x = direction.x;
+    this.stick.y = direction.z;
   };
 
   private onUp = (e: PointerEvent) => {

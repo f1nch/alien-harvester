@@ -1,0 +1,22 @@
+{
+  "triangles": 5143,
+  "bones": 27,
+  "materials": 5,
+  "unweighted_vertices": 0,
+  "animations": [
+    "idle",
+    "move",
+    "capture",
+    "gulp",
+    "hurt",
+    "evolve"
+  ],
+  "sockets": 8,
+  "rigged": true,
+  "stage": "juvenile",
+  "gait_speed_mps": 0.9913043353868567,
+  "stride_m": 0.3799999952316284,
+  "gait_duration_s": 0.7666666666666667,
+  "max_foot_target_error_m": 1.959941750461743e-07,
+  "tentacles": "Game procedural capture tubes; two authored resting capture limbs remain on body."
+}
