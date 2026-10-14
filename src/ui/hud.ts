@@ -393,13 +393,38 @@ export class Hud {
     this.panel = el("div", "panel hidden");
     this.panel.setAttribute("role", "dialog");
     this.panel.setAttribute("aria-label", "Upgrades");
-    const card = el("div", "panel-card");
+    const card = el("div", "panel-card upgrade-card");
     const head = el("div", "panel-head");
-    head.append(el("h2", undefined, "Mutations"));
+    const panelTitle = el("h2", undefined, "Mutations");
+    head.append(panelTitle);
     const close = el("button", "btn btn-close", "Close");
     close.addEventListener("click", () => cb.onCloseUpgrades());
     head.append(close);
     card.append(head, el("p", "panel-note", "Game paused. Spend banked resources; cargo must be deposited at base first."));
+    const navigation = el("nav", "panel-nav");
+    navigation.setAttribute("aria-label", "Upgrade categories");
+    const mutationsPage = el("div", "upgrade-page");
+    const structuresPage = el("div", "upgrade-page hidden");
+    const researchPage = el("div", "upgrade-page hidden");
+    const settingsPage = el("div", "upgrade-page hidden");
+    const pages = [mutationsPage, structuresPage, researchPage, settingsPage];
+    const categories = ["Mutations", "Structures", "Research", "Settings"];
+    const categoryButtons = categories.map((name, index) => {
+      const button = el("button", "btn category-btn", name);
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(index === 0));
+      button.addEventListener("click", () => {
+        pages.forEach((page, i) => {
+          page.classList.toggle("hidden", i !== index);
+          if (i === index) page.scrollTop = 0;
+        });
+        categoryButtons.forEach((item, i) => item.setAttribute("aria-pressed", String(i === index)));
+        panelTitle.textContent = name;
+      });
+      return button;
+    });
+    navigation.append(...categoryButtons);
+    card.append(navigation, ...pages);
     for (const id of UPGRADE_IDS) {
       const def = UPGRADES[id];
       const row = el("div", "up-row");
@@ -412,7 +437,7 @@ export class Hud {
       const buy = el("button", "btn btn-buy");
       buy.addEventListener("click", () => cb.onBuy(id));
       row.append(info, buy);
-      card.append(row);
+      mutationsPage.append(row);
       this.rows.set(id, { root: row, level, value, buy });
     }
     const evo = el("section", "evo");
@@ -427,7 +452,7 @@ export class Hud {
     this.evoBtn = el("button", "btn btn-evolve", "Evolve");
     this.evoBtn.addEventListener("click", () => cb.onEvolve());
     evo.append(evoHead, this.evoNext, this.evoDesc, this.evoList, this.evoBtn);
-    card.append(evo);
+    mutationsPage.append(evo);
 
     // Structures: build and upgrade the vat and the drone.
     const structures = el("section", "structures");
@@ -444,7 +469,7 @@ export class Hud {
       structures.append(row);
       this.structureRows.set(kind, { root: row, status, reqs, btn });
     }
-    card.append(structures);
+    structuresPage.append(structures);
 
     // Mutagen mutations: tune the loop (paid in mutagen from cravings, prized specimens, the bestiary).
     const mutagenSection = el("section", "structures mutagen");
@@ -464,7 +489,7 @@ export class Hud {
       mutagenSection.append(row);
       this.mutagenRows.set(id, { level, buy });
     }
-    card.append(mutagenSection);
+    researchPage.append(mutagenSection);
 
     // Bestiary: lifetime captures per creature, with milestones.
     const bestiary = el("section", "structures bestiary");
@@ -472,7 +497,7 @@ export class Hud {
     bestiary.append(el("h3", undefined, "Bestiary"), el("p", "panel-note", `Milestones at ${BESTIARY_MILESTONES.map((m) => m.count).join(", ")} captures pay mutagen and add 1% capture power each.`));
     this.bestiaryList = el("ul", "bestiary-list");
     bestiary.append(this.bestiaryList);
-    card.append(bestiary);
+    researchPage.append(bestiary);
 
     // Free respec, two-tap confirm, only at base.
     const respec = el("section", "respec");
@@ -495,7 +520,7 @@ export class Hud {
       this.renderRespec();
     });
     respec.append(this.respecBtn, this.respecNote);
-    card.append(respec);
+    mutationsPage.append(respec);
 
     // Save data: export (download or copy) and import (file or paste), with a preview before replacing.
     const data = el("section", "save-data");
@@ -553,13 +578,13 @@ export class Hud {
       }
     });
     data.append(exportRow, importRow, fileInput, this.importText, checkPaste, this.importPreview, this.importConfirm);
-    card.append(data);
+    settingsPage.append(data);
 
     const settings = el("div", "panel-settings");
     const hand = el("button", "btn btn-secondary", "Swap button side");
     hand.addEventListener("click", () => cb.onToggleHand());
     settings.append(hand);
-    card.append(settings);
+    settingsPage.append(settings);
     this.panel.append(card);
 
     this.toastEl = el("div", "toast hidden");

@@ -1,9 +1,9 @@
 :root {
   --bg: #07060c;
-  --panel: rgba(16, 13, 26, 0.94);
-  --line: rgba(160, 130, 255, 0.25);
+  --panel: rgba(13, 17, 27, 0.92);
+  --line: rgba(174, 188, 220, 0.18);
   --text: #ece8ff;
-  --muted: #a49cc4;
+  --muted: #a4afc7;
   --accent: #46f0c0;
   --violet: #9b6bff;
   --warn: #ffb347;
@@ -504,3 +504,117 @@ html, body {
   100% { opacity: 0; transform: translate(-50%, -260%) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { .floater { animation-duration: 0.01s; } }
+
+/* A compact instrument cluster leaves the playfield open on larger screens.
+   Mobile retains full-width meters and comfortable touch targets. */
+.chip, .cargo, .quests, .hint, .drone-status, .feed-meter, .door-card, .boss-bar {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
+  border-radius: 10px;
+}
+.chip-icon { font-size: 13px; }
+.chip-value { letter-spacing: -0.02em; }
+.cargo-bar { height: 5px; }
+.quest { gap: 12px; line-height: 1.5; }
+.quests-title { letter-spacing: 0.1em; font-size: 10px; }
+.hint { border-radius: 10px; font-size: 12px; line-height: 1.5; }
+.hud-sub { flex-wrap: wrap; }
+.drone-status { max-width: 100%; line-height: 1.5; }
+.btn {
+  border-radius: 9px;
+  background: #232b40;
+  font-size: 13px;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+.btn-buy { background: #1c4d43; }
+.btn-secondary { background: rgba(255, 255, 255, 0.035); }
+.btn-danger { background: #6b2a2a; }
+.btn-evolve { background: #4a2a8a; }
+.btn-perk { background: #4a2a8a; }
+.btn-upgrade {
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  background: linear-gradient(135deg, #354561, #262c45);
+  border-color: rgba(174, 188, 220, 0.35);
+}
+.btn-upgrade.ready { background: linear-gradient(135deg, #246b59, #1c453d); }
+.panel { background: rgba(4, 7, 14, 0.7); }
+.panel-card {
+  background: #101521;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  scrollbar-width: thin;
+  scrollbar-color: #39435a transparent;
+  overscroll-behavior: contain;
+}
+.panel-head { gap: 12px; }
+.upgrade-card { display: flex; flex-direction: column; overflow: hidden; }
+.upgrade-card > .panel-head, .upgrade-card > .panel-note, .panel-nav { flex-shrink: 0; }
+.upgrade-page { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #39435a transparent; padding-right: 4px; }
+.panel-head h2 { font-size: 19px; letter-spacing: -0.03em; }
+.panel-note { line-height: 1.55; }
+.panel-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin: 16px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #0b101a;
+}
+.category-btn { min-width: 0; padding: 0 6px; border-color: transparent; background: transparent; color: var(--muted); font-size: 12px; }
+.category-btn[aria-pressed="true"] { background: #253348; color: var(--accent); border-color: rgba(70, 240, 192, 0.2); }
+.upgrade-page > .structures:first-child, .upgrade-page > .save-data:first-child { margin-top: 0; padding-top: 8px; border-top: 0; }
+.up-row { padding: 12px 0; }
+.up-info { min-width: 0; }
+.up-name { font-size: 14px; }
+.up-value { margin-top: 3px; line-height: 1.5; }
+.structure-row { margin-top: 10px; padding: 12px; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--line); border-radius: 10px; gap: 6px; }
+.evo { padding: 14px; border: 1px solid rgba(155, 107, 255, 0.25); border-radius: 10px; background: rgba(155, 107, 255, 0.045); }
+.evo-head { flex-wrap: wrap; }
+.toast { font-size: 13px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4); }
+
+@media (hover: hover) {
+  .btn:not(:disabled):hover { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(70, 240, 192, 0.1); }
+  .category-btn:not([aria-pressed="true"]):hover { background: #1a2233; }
+  .perk-card:not(:disabled):hover { border-color: var(--accent); }
+}
+
+@media (min-width: 760px) {
+  .hud-top { top: 20px; left: 20px; right: auto; width: 360px; gap: 6px; }
+  .chip { min-height: 32px; padding: 5px 8px; font-size: 12px; gap: 5px; }
+  .chip-label { font-size: 11px; }
+  .level-chip { margin-left: auto; }
+  .level-col { min-width: 60px; }
+  .hud-bars { gap: 6px; }
+  .cargo { padding: 8px 10px; gap: 6px; }
+  .cargo-label { font-size: 11px; }
+  .hud-sub { flex-direction: column; align-items: stretch; gap: 6px; }
+  .quests { max-width: 100%; padding: 10px 12px; font-size: 12px; }
+  .hint { max-width: 100%; align-self: flex-start; padding: 7px 11px; text-align: left; }
+  .feed-meter { min-width: 0; padding: 7px 10px; font-size: 11px; }
+  .btn-upgrade { min-height: 40px; font-size: 13px; right: 20px; bottom: 20px; }
+  .btn-upgrade.left { left: 20px; }
+  .btn-perk { min-height: 40px; right: 20px; bottom: 70px; }
+  .btn-perk.left { left: 20px; }
+  .door-card { width: 320px; bottom: 76px; padding: 14px; }
+  .boss-bar { top: 20px; left: auto; right: 20px; transform: none; width: 300px; }
+  .panel { align-items: center; padding: 24px; }
+  .panel-card { width: min(520px, 100%); max-height: min(760px, 100%); }
+}
+
+@media (min-width: 760px) and (hover: hover) and (pointer: fine) {
+  .panel-card .btn { min-height: 36px; }
+}
+
+@media (max-width: 420px) {
+  .panel-card { padding: 14px; }
+  .panel-nav { gap: 2px; }
+  .category-btn { font-size: 11px; padding: 0 3px; }
+  .up-row { gap: 8px; }
+  .up-row .btn-buy { padding: 0 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+}
