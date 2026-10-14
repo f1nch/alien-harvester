@@ -6,7 +6,7 @@ import { TARGETS } from "./content/targets";
 import { describeCraving } from "./domain/cravings";
 import type { UpgradeId } from "./content/upgrades";
 import { newProgress } from "./domain/progress";
-import { CURRENCIES, CURRENCY_LABEL, emptyWallet } from "./content/currencies";
+import { CURRENCIES, CURRENCY_LABEL, emptyWallet, roundCents } from "./content/currencies";
 import { FORM_NAMES } from "./content/evolution";
 import { pointInRect } from "./game/geometry";
 import { levelForXp } from "./domain/levels";
@@ -43,7 +43,7 @@ function deathMessage(forgiven: boolean, lost: readonly CargoDrop[]): string {
   if (forgiven) return "You were overwhelmed — first defeat forgiven, your cargo was kept. Next time, unbanked cargo is lost.";
   if (lost.length === 0) return "You were overwhelmed and returned to base. Nothing was lost.";
   const totals = emptyWallet();
-  for (const d of lost) for (const c of CURRENCIES) totals[c] += d.reward[c] ?? 0;
+  for (const d of lost) for (const c of CURRENCIES) totals[c] = roundCents(totals[c] + (d.reward[c] ?? 0));
   const parts = CURRENCIES.filter((c) => totals[c] > 0).map((c) => `${totals[c]} ${CURRENCY_LABEL[c].toLowerCase()}`);
   return `You were overwhelmed and returned to base. Lost unbanked cargo: ${parts.join(", ")}.`;
 }
@@ -269,7 +269,7 @@ async function boot(): Promise<void> {
   const renderer = new GameRenderer(canvas, room, { reducedEffects: settings.reducedEffects, creatureModels: !forceProcedural });
   const input = new InputController(zone);
   const floaters = new Floaters(uiRoot, !settings.reducedEffects);
-  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰" } as const;
+  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈" } as const;
   const loop = new FixedLoop((dt) => stepWorld(world, dt), { hz: SIM_HZ, maxStepsPerFrame: 5 });
   renderer.snapCamera(world);
   let recordDevFrame: ((now: number, cpuMs: number, inputStrength: number, speed: number, lastDrag: number) => void) | undefined;

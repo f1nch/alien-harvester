@@ -12,7 +12,7 @@ export interface Rect {
 export type ZoneId = string;
 
 /** How a zone is dressed (light colour, machinery). Several maps can share a theme. */
-export type ZoneTheme = "containment" | "service" | "security" | "reactor" | "dock" | "cold" | "vault" | "lab" | "core";
+export type ZoneTheme = "containment" | "service" | "security" | "reactor" | "dock" | "cold" | "vault" | "lab" | "core" | "jungle" | "hive";
 
 export interface ZoneDef {
   id: ZoneId;
@@ -45,6 +45,27 @@ export interface SpawnPoint {
   wanderRadius: number;
 }
 
+/**
+ * Colours and style for an alien world. Facility maps leave it out and keep the steel
+ * walls, lamps and pipes; a "wild" look draws rock walls, trunks and flora instead.
+ */
+export interface MapLook {
+  kind: "wild";
+  /** Floor base colour and speckle colour, as CSS colours for the floor texture. */
+  floor: string;
+  speckle: string;
+  wall: [number, number, number];
+  /** Glowing trim along wall tops, props and the base. */
+  glow: [number, number, number];
+  prop: [number, number, number];
+  /** Locked doors: an organic membrane in this colour. */
+  door: [number, number, number];
+  sky: [number, number, number];
+  ambient: [number, number, number];
+  /** Flora on the walls: caps and stalks. */
+  flora: [number, number, number];
+}
+
 export interface MapDef {
   bounds: Rect;
   zones: ZoneDef[];
@@ -58,6 +79,10 @@ export interface MapDef {
   spawns: SpawnPoint[];
   /** Warm spots in cold zones: standing here clears chill. */
   heatVents?: Array<{ x: number; z: number; radius: number }>;
+  /** Sticky resin on the ground: moving through it is slow (game/systems/movement.ts). */
+  resin?: Array<{ x: number; z: number; radius: number }>;
+  /** How the map is drawn: facility rooms (the default) or an alien world outdoors. */
+  look?: MapLook;
 }
 
 export function box(x: number, z: number, w: number, d: number): Rect {
@@ -222,6 +247,12 @@ export function zoneAtOrDoorway(map: MapDef, x: number, z: number, unlockedDoors
     }
   }
   return null;
+}
+
+/** The creature is in sticky resin here. */
+export function inResin(map: MapDef, x: number, z: number): boolean {
+  for (const r of map.resin ?? []) if ((x - r.x) ** 2 + (z - r.z) ** 2 <= r.radius ** 2) return true;
+  return false;
 }
 
 export function zoneAt(map: MapDef, x: number, z: number): ZoneDef | null {

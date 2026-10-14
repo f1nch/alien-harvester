@@ -9,7 +9,8 @@ export type UpgradeId =
   | "maxHealth"
   | "regeneration"
   | "resourceYield"
-  | "thermalFat";
+  | "thermalFat"
+  | "chitin";
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -146,6 +147,18 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "crystals",
     costs: [20, 45, 80, 130],
     capByTier: [4, 4],
+  },
+  // Damage resistance against every hit. Paid in hive amber (content/vesh.ts); hidden
+  // until amber matters, like Thermal fat until the cold does.
+  chitin: {
+    id: "chitin",
+    name: "Chitin plating",
+    unit: "% damage resist",
+    base: 0,
+    perLevel: 6,
+    currency: "amber",
+    costs: [15, 35, 65, 105, 160],
+    capByTier: [5, 5],
   },
 };
 

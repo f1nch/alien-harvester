@@ -35,6 +35,7 @@ export interface SaveSummary {
   mutagen: number;
   crystals: number;
   alloy: number;
+  amber: number;
   doorsOpen: number;
   questsDone: number;
   reactorRepaired: boolean;
@@ -52,6 +53,7 @@ export function summarize(save: SaveFile): SaveSummary {
     mutagen: Math.floor(p.banked.mutagen),
     crystals: Math.floor(p.banked.crystals),
     alloy: Math.floor(p.banked.alloy),
+    amber: Math.floor(p.banked.amber),
     doorsOpen: p.unlockedDoors.length,
     questsDone: Object.values(p.quests).filter((q) => q.done).length,
     reactorRepaired: p.reactorRepaired,

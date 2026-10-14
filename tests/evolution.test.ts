@@ -144,7 +144,7 @@ describe("evolution review regressions", () => {
     // Pin every track: lowering a cap would silently remove purchased levels from saves.
     expect(Object.fromEntries(UPGRADE_IDS.map((id) => [id, UPGRADES[id].capByTier]))).toEqual({
       capturePower: [8, 12], cargoCapacity: [8, 12], captureRadius: [5, 7], moveSpeed: [5, 7],
-      tentacles: [1, 3], maxHealth: [5, 8], regeneration: [4, 6], resourceYield: [3, 5], thermalFat: [4, 4],
+      tentacles: [1, 3], maxHealth: [5, 8], regeneration: [4, 6], resourceYield: [3, 5], thermalFat: [4, 4], chitin: [5, 5],
     });
   });
 

@@ -367,6 +367,80 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     }
     // Hydraulic arms that swing as it stomps.
     pair("arm", 1.5, 0.28, dark, 1.05, 2.0);
+  } else if (type === "hiveForager" || type === "skitter" || type === "hiveWarrior") {
+    // Hive insects: segmented bodies on six thin legs. Foragers carry an amber blob,
+    // skitters are small and pale, warriors are plated with scything forelimbs.
+    const warrior = type === "hiveWarrior";
+    const skit = type === "skitter";
+    const shell = mat(scene, `${type}Shell`, warrior ? 0.25 : skit ? 0.65 : 0.45, warrior ? 0.3 : skit ? 0.7 : 0.42, warrior ? 0.12 : skit ? 0.45 : 0.16, 0.6);
+    const s = skit ? 0.6 : warrior ? 1.25 : 1;
+    const seg = (n: string, d: number, y: number, z: number) => {
+      const m = MeshBuilder.CreateSphere(n, { diameter: d * s, segments: 10 }, scene);
+      m.scaling.y = 0.75;
+      m.bakeCurrentTransformIntoVertices();
+      add(m, shell, y * s, 0, z * s);
+    };
+    seg(`${type}Abdomen`, 0.55, 0.55, -0.32);
+    seg(`${type}Thorax`, 0.38, 0.6, 0.05);
+    seg(`${type}Head`, 0.3, 0.66, 0.34);
+    const eye = mat(scene, `${type}Eye`, 0, 0, 0);
+    eye.emissiveColor = warrior ? new Color3(1, 0.3, 0.1) : new Color3(0.4, 1, 0.5);
+    for (const side of [-1, 1]) add(MeshBuilder.CreateSphere(`${type}EyeBall`, { diameter: 0.08 * s, segments: 6 }, scene), eye, 0.72 * s, side * 0.1 * s, 0.45 * s);
+    for (const side of [-1, 1]) {
+      for (const z of [-0.12, 0.05, 0.22]) {
+        const leg = MeshBuilder.CreateCylinder(`${type}Leg`, { diameter: 0.045 * s, height: 0.6 * s, tessellation: 5 }, scene);
+        leg.rotation.z = side * 0.9;
+        add(leg, shell, 0.38 * s, side * 0.26 * s, z * s);
+      }
+    }
+    if (type === "hiveForager") {
+      const amber = mat(scene, "foragerAmber", 0.8, 0.45, 0.05, 0.9);
+      amber.emissiveColor = new Color3(0.5, 0.25, 0.02);
+      add(MeshBuilder.CreateSphere("foragerLoad", { diameter: 0.32, segments: 8 }, scene), amber, 0.95, 0, -0.3);
+    }
+    if (warrior) {
+      const bladeMat = mat(scene, "warriorBlade", 0.85, 0.85, 0.7, 0.8);
+      for (const side of [-1, 1]) {
+        const blade = MeshBuilder.CreateCylinder("warriorScythe", { diameterTop: 0, diameterBottom: 0.1, height: 0.7, tessellation: 4 }, scene);
+        blade.rotation.x = 1.1;
+        add(blade, bladeMat, 0.95, side * 0.22, 0.6);
+      }
+    }
+  } else if (type === "broodSac") {
+    // Brood sac: a translucent, glowing egg cluster stuck to the floor.
+    const sac = mat(scene, "broodSacMat", 0.95, 0.6, 0.3, 0.6);
+    sac.alpha = 0.8;
+    sac.emissiveColor = new Color3(0.4, 0.2, 0.05);
+    for (const [x, z, d] of [[0, 0, 0.7], [0.32, 0.2, 0.45], [-0.3, 0.18, 0.4], [0.05, -0.32, 0.42]] as const) {
+      add(MeshBuilder.CreateSphere("broodEgg", { diameter: d, segments: 10 }, scene), sac, d * 0.45, x, z);
+    }
+  } else if (type === "hiveQueen") {
+    // The hive queen: a vast bloated abdomen behind a crowned, mandibled head.
+    const shell = mat(scene, "queenShell", 0.35, 0.22, 0.12, 0.6);
+    const belly = mat(scene, "queenBelly", 0.9, 0.55, 0.2, 0.4);
+    belly.emissiveColor = new Color3(0.35, 0.18, 0.04);
+    const glow = mat(scene, "queenGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.5, 1, 0.3);
+    const abdomen = MeshBuilder.CreateSphere("queenAbdomen", { diameter: 2.2, segments: 14 }, scene);
+    abdomen.scaling.set(1, 0.8, 1.4);
+    abdomen.bakeCurrentTransformIntoVertices();
+    add(abdomen, belly, 1.2, 0, -1.0);
+    add(MeshBuilder.CreateCapsule("queenBody", { height: 2.2, radius: 0.7, tessellation: 14 }, scene), shell, 1.15);
+    add(MeshBuilder.CreateSphere("queenHead", { diameter: 0.9, segments: 12 }, scene), shell, 2.3, 0, 0.35);
+    add(MeshBuilder.CreateBox("queenEyes", { width: 0.55, height: 0.1, depth: 0.12 }, scene), glow, 2.38, 0, 0.75);
+    for (let i = 0; i < 5; i++) {
+      const crown = MeshBuilder.CreateCylinder("queenCrown", { diameterTop: 0, diameterBottom: 0.18, height: 0.6, tessellation: 6 }, scene);
+      crown.rotation.z = (i - 2) * 0.35;
+      add(crown, glow, 2.85, (i - 2) * 0.18, 0.3);
+    }
+    for (const side of [-1, 1]) {
+      const mandible = MeshBuilder.CreateCylinder("queenMandible", { diameterTop: 0, diameterBottom: 0.16, height: 0.6, tessellation: 5 }, scene);
+      mandible.rotation.x = Math.PI / 2;
+      mandible.rotation.y = side * 0.4;
+      add(mandible, shell, 2.05, side * 0.2, 0.95);
+    }
+    // Heavy forelimbs that swing as it stomps.
+    pair("arm", 1.5, 0.26, shell, 1.0, 2.0);
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     const coat = mat(scene, "techCoat", 0.92, 0.95, 0.97);

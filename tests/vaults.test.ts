@@ -18,8 +18,9 @@ describe("Specimen vaults", () => {
     expect(biomeAt(2).name).toBe("Specimen vaults");
     expect(biomeAt(2).region).toBe("Facility floor B3");
     expect(biomeAt(3).name).toBe("Hangar");
-    expect(biomeAt(4).name).toBe("Research wing II");
-    expect(biomeAt(6).name).toBe("Specimen vaults II");
+    expect(biomeAt(4).name).toBe("Vesh");
+    expect(biomeAt(5).name).toBe("Research wing II");
+    expect(biomeAt(7).name).toBe("Specimen vaults II");
   });
 
   it("follows Cryo labs: moving on from depth 1 lands in the vaults, starting its quests", () => {

@@ -17,7 +17,7 @@ describe("Hangar", () => {
     expect(biomeAt(3).name).toBe("Hangar");
     expect(biomeAt(3).region).toBe("Facility floor B4");
     expect(HANGAR.exit.name).toBe("Portal");
-    expect(biomeAt(7).name).toBe("Hangar II");
+    expect(biomeAt(8).name).toBe("Hangar II");
   });
 
   it("follows the vaults: moving on from depth 2 lands in the hangar", () => {
@@ -82,7 +82,7 @@ describe("v15 saves: the floor is saved", () => {
     }
   });
 
-  it("then moves on in story order: facility, cryo, vaults, hangar, facility", () => {
+  it("then moves on in story order: facility, cryo, vaults, hangar, vesh, facility", () => {
     const p = parseSave(v14At(3))!.progress; // the facility at depth 3 (Research wing II)
     expect(biomeAt(p.depth, p.floor).name).toBe("Research wing II");
     const order: string[] = [];
@@ -91,7 +91,7 @@ describe("v15 saves: the floor is saved", () => {
       enterNextBiome(p);
       order.push(p.floor);
     }
-    expect(order).toEqual(["cryo", "vaults", "hangar", "facility", "cryo"]);
+    expect(order).toEqual(["cryo", "vaults", "hangar", "vesh", "facility"]);
     expect(p.depth).toBe(8);
   });
 
@@ -109,7 +109,8 @@ describe("v15 saves: the floor is saved", () => {
     expect(b.arrival).toBe(HANGAR.arrival);
     p.cargo = [];
     enterNextBiome(p);
-    expect(createWorld(biomeAt(7, "facility").def.map, p).biome.name).toBe("Research wing III");
+    // Then on through the portal to the first portal world, also a first visit.
+    expect(createWorld(biomeAt(7, "vesh").def.map, p).biome.name).toBe("Vesh");
   });
 
   it("rejects a floor at a depth a run can't reach it (depth 0 is always the first floor)", () => {

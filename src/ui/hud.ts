@@ -32,9 +32,23 @@ export function structureName(kind: StructureKind): string {
 }
 
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
-export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰" };
+export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈" };
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+/** Wallet chips stay narrow at any depth: 12345 → "12.3k", then M, B, T, then e-notation. */
+export function compact(n: number): string {
+  const v = Math.floor(n);
+  if (v < 10000) return String(v);
+  const units: Array<[number, string]> = [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "k"]];
+  if (v >= 1e15) return v.toExponential(1).replace("+", "");
+  for (const [size, unit] of units) {
+    if (v < size) continue;
+    const x = v / size;
+    return `${x < 100 ? Math.floor(x * 10) / 10 : Math.floor(x)}${unit}`;
+  }
+  return String(v);
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -99,6 +113,11 @@ export interface HudCallbacks {
   onPickPerk(level: number, option: number | "fallback"): void;
 }
 
+/** Creatures here pay hive amber (so the amber chip and Chitin plating are worth showing). */
+function worldHasAmber(w: World): boolean {
+  return w.map.spawns.some((s) => (w.biome.targets[s.type].reward.amber ?? 0) > 0);
+}
+
 function requirementList(list: HTMLElement, reqs: Requirement[]): void {
   list.replaceChildren(
     ...reqs.map((r) => {
@@ -144,6 +163,8 @@ export class Hud {
   private crystals: HTMLElement;
   private crystalsChip: HTMLElement;
   private mutagenChip: HTMLElement;
+  private amber: HTMLElement;
+  private amberChip: HTMLElement;
   private feedBox: HTMLElement;
   private feedText: HTMLElement;
   private feedFill: HTMLElement;
@@ -240,6 +261,9 @@ export class Hud {
     const mut = chip("✺", "mutagen", "Mutagen");
     this.mutagen = mut.value;
     this.mutagenChip = mut.root;
+    const amb = chip("◈", "amber", "Hive amber");
+    this.amber = amb.value;
+    this.amberChip = amb.root;
 
     const lvl = el("div", "chip level-chip");
     this.level = el("span", "chip-value", "Lv 1");
@@ -290,7 +314,7 @@ export class Hud {
     this.chillFill = el("div", "chill-fill");
     chillBar.append(this.chillFill);
     this.chillBox.append(this.chillText, chillBar);
-    top.append(bio.root, gen.root, cry.root, mut.root, lvl, bars, this.feedBox, this.chillBox);
+    top.append(bio.root, gen.root, cry.root, amb.root, mut.root, lvl, bars, this.feedBox, this.chillBox);
 
     // Objectives and hints flow under the HUD so they never overlap it as it wraps.
     const sub = el("div", "hud-sub");
@@ -662,21 +686,24 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, w.chillApplied, feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired, p.summon.left,
+      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, p.banked.amber, w.chillApplied, feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired, p.summon.left,
       s.boss ? `${Math.round(s.boss.progress * 100)}:${s.boss.boss?.state}` : "", s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
     if (key === this.last) return;
     this.last = key;
 
-    this.biomass.textContent = fmt(Math.floor(p.banked.biomass));
-    this.genetic.textContent = fmt(Math.floor(p.banked.genetic));
+    this.biomass.textContent = compact(p.banked.biomass);
+    this.genetic.textContent = compact(p.banked.genetic);
     // Genetic material appears once it matters, to keep the first minutes uncluttered.
     this.geneticChip.classList.toggle("hidden", p.banked.genetic === 0 && p.unlockedDoors.length === 0);
-    this.crystals.textContent = fmt(Math.floor(p.banked.crystals));
+    this.crystals.textContent = compact(p.banked.crystals);
     // Crystals appear on the first floor that has them, and stay once earned.
     this.crystalsChip.classList.toggle("hidden", p.banked.crystals === 0 && !w.map.zones.some((z) => z.cold));
-    this.mutagen.textContent = fmt(Math.floor(p.banked.mutagen));
+    this.mutagen.textContent = compact(p.banked.mutagen);
+    this.amber.textContent = compact(p.banked.amber);
+    // Amber appears on the first world that has it, and stays once earned.
+    this.amberChip.classList.toggle("hidden", p.banked.amber === 0 && !worldHasAmber(w));
     // Mutagen appears with the first one earned.
     this.mutagenChip.classList.toggle("hidden", p.banked.mutagen === 0 && Object.keys(p.mutagenLevels).length === 0);
     this.renderFeeding(w);
@@ -716,7 +743,7 @@ export class Hud {
     else if (prized) hint = prized.held ? `★ Prized ${prized.def.name.toLowerCase()} in your grip — hold on!` : `★ A prized ${prized.def.name.toLowerCase()} is loose! ${Math.ceil(w.feeding.prizedLeft)}s`;
     else if (boosts.length) hint = boosts.join(" · ");
     else if (s.inBase && cargo > 0) hint = "Depositing…";
-    else if (p.xp === 0) hint = "Move near workers to capture them";
+    else if (p.xp === 0) hint = "Move near creatures to capture them";
     this.hint.textContent = hint;
     this.hint.classList.toggle("hidden", hint === "");
     this.hint.classList.toggle("warn", w.cargoFull && !s.inBase);
@@ -726,7 +753,8 @@ export class Hud {
       const def = UPGRADES[id];
       const row = this.rows.get(id)!;
       const lvl = p.upgrades[id];
-      const hidden = id === "thermalFat" && lvl === 0 && !w.map.zones.some((z) => z.cold);
+      const hidden = lvl === 0 && ((id === "thermalFat" && !w.map.zones.some((z) => z.cold))
+        || (id === "chitin" && p.banked.amber === 0 && !worldHasAmber(w)));
       row.root.classList.toggle("hidden", hidden);
       const cost = nextCost(p, id);
       const cur = upgradeValue(p, id);
@@ -931,6 +959,7 @@ export class Hud {
       ["Mutagen", String(s.mutagen)],
       ["Cryo crystals", String(s.crystals)],
       ["Alloy", String(s.alloy)],
+      ["Hive amber", String(s.amber)],
       ["Location", s.place],
       ["Doors open", String(s.doorsOpen)],
       ["Objectives done", String(s.questsDone)],

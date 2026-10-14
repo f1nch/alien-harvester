@@ -68,8 +68,9 @@ export class GameRenderer {
     this.engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: false, powerPreference: "high-performance" }, false);
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 2));
     const scene = (this.scene = new Scene(this.engine));
-    scene.clearColor = new Color4(0.03, 0.025, 0.05, 1);
-    scene.ambientColor = new Color3(0.1, 0.08, 0.14);
+    // Alien worlds bring their own sky and ambient light.
+    scene.clearColor = map.look ? new Color4(...map.look.sky, 1) : new Color4(0.03, 0.025, 0.05, 1);
+    scene.ambientColor = map.look ? new Color3(...map.look.ambient) : new Color3(0.1, 0.08, 0.14);
     scene.skipPointerMovePicking = true;
 
     this.camera = new FreeCamera("camera", CAMERA_OFFSET.clone(), scene);
@@ -81,7 +82,7 @@ export class GameRenderer {
     const hemi = new HemisphericLight("hemi", new Vector3(0.2, 1, -0.3), scene);
     hemi.intensity = 0.55;
     hemi.diffuse = new Color3(0.75, 0.78, 0.95);
-    hemi.groundColor = new Color3(0.12, 0.06, 0.18);
+    hemi.groundColor = map.look ? new Color3(...map.look.ambient) : new Color3(0.12, 0.06, 0.18);
     const sun = new DirectionalLight("key", new Vector3(-0.45, -1, 0.55), scene);
     sun.position = new Vector3(10, 25, -12);
     sun.intensity = 0.95;

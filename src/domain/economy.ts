@@ -21,6 +21,8 @@ export interface PlayerStats {
   farmRate: number;
   /** Percent less chill built up in freezing rooms (Thermal fat). */
   chillResist: number;
+  /** Percent less damage taken from every hit (Chitin plating). */
+  damageResist: number;
 }
 
 /**
@@ -75,6 +77,8 @@ export function computeStats(p: ProgressState, boost: StatBoost = NO_BOOST): Pla
     yieldPercent: v("resourceYield") + perk.yieldPercent,
     farmRate: (100 + perk.farmPercent) / 100,
     chillResist: Math.min(90, v("thermalFat") + perk.loop.chillResist),
+    // Applied only in game/systems/combat#damagePlayer.
+    damageResist: Math.min(60, v("chitin")),
   };
 }
 

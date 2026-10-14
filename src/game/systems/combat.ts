@@ -101,10 +101,12 @@ function startReturn(t: TargetEntity): void {
 /** Returns true if damage was applied. */
 export function damagePlayer(w: World, amount: number, by: TargetEntity): boolean {
   if (w.player.invulnerable > 0) return false;
-  w.progress.player.health = Math.max(0, w.progress.player.health - amount);
+  // Chitin plating: whole points, and a hit always hurts a little.
+  const taken = Math.max(1, Math.round((amount * (100 - w.stats.damageResist)) / 100));
+  w.progress.player.health = Math.max(0, w.progress.player.health - taken);
   w.player.sinceHit = 0;
   onPlayerHit(w);
-  w.events.push({ type: "playerHit", damage: amount, by });
+  w.events.push({ type: "playerHit", damage: taken, by });
   return true;
 }
 
