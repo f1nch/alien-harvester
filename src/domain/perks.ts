@@ -16,7 +16,7 @@ export function perkStacks(p: ProgressState, id: PerkId): number {
 /** Whether a perk may be offered or taken right now. */
 export function isLegal(p: ProgressState, id: PerkId): boolean {
   const def = PERKS[id];
-  if (def.requiresDoor && !p.unlockedDoors.includes(def.requiresDoor)) return false;
+  if (def.requiresDoor && p.unlockedDoors.length === 0 && p.depth === 0) return false;
   if (def.requiresVat && !p.structures.vat.built) return false;
   return def.maxStacks === null || perkStacks(p, id) < def.maxStacks;
 }

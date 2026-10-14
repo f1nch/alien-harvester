@@ -13,7 +13,7 @@ import { testWorld } from "./helpers";
 
 const rich = () => {
   const p = newProgress(FACILITY);
-  p.banked = { biomass: 1e6, genetic: 1e6, parts: 0, mutagen: 0 };
+  p.banked = { biomass: 1e6, genetic: 1e6, parts: 0, mutagen: 0, crystals: 0, alloy: 0 };
   return p;
 };
 
@@ -114,10 +114,10 @@ describe("respec", () => {
     const p = rich();
     for (const id of ["capturePower", "capturePower", "tentacles", "maxHealth", "resourceYield"] as const) purchaseUpgrade(p, id);
     const spent = spentOnUpgrades(p);
-    expect(spent).toEqual({ biomass: 15 + 35 + 40, genetic: 25 + 20, parts: 0, mutagen: 0 });
+    expect(spent).toEqual({ biomass: 15 + 35 + 40, genetic: 25 + 20, parts: 0, mutagen: 0, crystals: 0, alloy: 0 });
     const r = respecUpgrades(p);
     expect(r).toEqual({ ok: true, refund: spent });
-    expect(p.banked).toEqual({ biomass: 1e6, genetic: 1e6, parts: 0, mutagen: 0 });
+    expect(p.banked).toEqual({ biomass: 1e6, genetic: 1e6, parts: 0, mutagen: 0, crystals: 0, alloy: 0 });
     expect(UPGRADE_IDS.every((id) => p.upgrades[id] === 0)).toBe(true);
   });
 

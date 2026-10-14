@@ -9,6 +9,7 @@ import type { TargetDef, TargetTypeId } from "../content/targets";
 import { biomeAt, type ActiveBiome } from "../domain/biome";
 import { computeStats, type PlayerStats, type StatBoost } from "../domain/economy";
 import { BOOSTS, FRENZY, type BoostId } from "../content/feeding";
+import { COLD } from "../content/cold";
 import type { Craving } from "../domain/cravings";
 import { feedingTuning } from "../domain/mutagen";
 import { fillCravings } from "../domain/cravings";
@@ -110,7 +111,7 @@ export type GameEvent =
   | { type: "droneLoaded" }
   | { type: "droneDeposited" }
   | { type: "bossStunned" }
-  | { type: "bossDefeated" }
+  | { type: "bossDefeated"; name: string }
   | { type: "reactorRepaired" }
   /** Moved on; the world must be rebuilt for the new biome's map. */
   | { type: "biomeLeft"; depth: number }
@@ -153,6 +154,10 @@ export interface World {
   input: { x: number; z: number };
   targets: TargetEntity[];
   feeding: FeedingState;
+  /** Chill 0..1 from freezing rooms (game/systems/cold.ts). Transient. */
+  chill: number;
+  /** The chill level the current stats were computed with (steps of COLD.statStep). */
+  chillApplied: number;
   /** One entry per tentacle; at most one target each. */
   tentacles: Array<TargetEntity | null>;
   hash: SpatialHash<TargetEntity>;
@@ -191,6 +196,8 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
       prizedTimer: feedingTuning(progress).prizedInterval, prizedLeft: 0,
       boosts: {}, recentCaptures: [], trip: newTrip(),
     },
+    chill: 0,
+    chillApplied: 0,
     hash: new SpatialHash<TargetEntity>(4),
     depositBudget: 0,
     cargoFull: false,
@@ -218,7 +225,7 @@ export function refreshObstacles(w: World): void {
   const lockedDoors = w.map.doors.filter((d) => !open.has(d.id)).map((d) => d.rect);
   const built: Rect[] = [];
   if (w.progress.structures.vat.built) {
-    const { x, z } = VAT.site;
+    const { x, z } = w.biome.def.sites.vat;
     const h = VAT.halfSize;
     built.push({ minX: x - h, maxX: x + h, minZ: z - h, maxZ: z + h });
   }
@@ -246,7 +253,7 @@ export function spawnTarget(w: World, spawnId: string): TargetEntity | null {
     zoneRect: zoneAt(w.map, s.x, s.z)?.rect ?? w.map.bounds,
     ai: "patrol",
     aiTimer: 0,
-    boss: s.type === "boss" ? newBossRuntime() : undefined,
+    boss: w.biome.targets[s.type].behavior === "boss" ? newBossRuntime() : undefined,
   };
   w.targets.push(t);
   w.progress.spawnCooldowns[spawnId] = 0;
@@ -262,6 +269,10 @@ export function refreshStats(w: World): void {
 export function activeBoost(w: World): StatBoost {
   const out: StatBoost = {};
   if (w.feeding.frenzy > 0) out.capturePower = FRENZY.powerPercent;
+  if (w.chillApplied > 0) {
+    out.moveSpeed = -COLD.speedPenalty * w.chillApplied;
+    out.capturePower = (out.capturePower ?? 0) - COLD.powerPenalty * w.chillApplied;
+  }
   for (const [id, left] of Object.entries(w.feeding.boosts) as Array<[BoostId, number]>) {
     if (left <= 0) continue;
     const b = BOOSTS[id];

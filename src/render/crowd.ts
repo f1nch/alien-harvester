@@ -1,7 +1,7 @@
 import {
   Color3, InstancedMesh, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3,
 } from "@babylonjs/core";
-import { WARDEN } from "../content/reactor";
+import { WARDEN, type BossTuning } from "../content/reactor";
 import { TARGETS, type TargetTypeId } from "../content/targets";
 import type { TargetEntity } from "../game/world";
 
@@ -146,6 +146,79 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     add(MeshBuilder.CreateBox("podLid", { width: 0.68, height: 0.08, depth: 0.68 }, scene), shell, 0.5);
     add(MeshBuilder.CreateBox("podSeamH", { width: 0.64, height: 0.05, depth: 0.64 }, scene), seam, 0.3);
     add(MeshBuilder.CreateBox("podLight", { width: 0.14, height: 0.06, depth: 0.14 }, scene), seam, 0.57);
+  } else if (type === "cryoScientist") {
+    // Cryo scientist: puffy insulated parka, fur-lined hood, and a glowing crystal canister on the back.
+    const parka = mat(scene, "cryoParka", 0.78, 0.88, 0.97);
+    const fur = mat(scene, "cryoFur", 0.96, 0.97, 1);
+    const crystal = mat(scene, "cryoCanisterGlow", 0, 0, 0);
+    crystal.emissiveColor = new Color3(0.2, 0.9, 1);
+    add(MeshBuilder.CreateCapsule("cryoSciBody", { height: 0.7, radius: 0.29, tessellation: 12 }, scene), parka, 0.76);
+    add(MeshBuilder.CreateTorus("cryoSciBelt", { diameter: 0.56, thickness: 0.06, tessellation: 14 }, scene), mat(scene, "cryoBelt", 0.25, 0.3, 0.4), 0.7);
+    add(MeshBuilder.CreateSphere("cryoSciHead", { diameter: 0.3, segments: 10 }, scene), skin, 1.15, 0, 0.02);
+    // Hood: a fur ring around the face and a puffy cowl behind it.
+    const ruff = MeshBuilder.CreateTorus("cryoSciRuff", { diameter: 0.4, thickness: 0.11, tessellation: 14 }, scene);
+    ruff.rotation.x = Math.PI / 2.3;
+    add(ruff, fur, 1.16, 0, 0.03);
+    add(MeshBuilder.CreateSphere("cryoSciHood", { diameter: 0.42, segments: 10, slice: 0.6 }, scene), parka, 1.2, 0, -0.04);
+    add(MeshBuilder.CreateCylinder("cryoCanister", { height: 0.5, diameter: 0.2, tessellation: 10 }, scene), crystal, 0.9, 0, -0.34);
+    add(MeshBuilder.CreateBox("cryoCanisterStrap", { width: 0.3, height: 0.06, depth: 0.1 }, scene), mat(scene, "cryoStrap", 0.25, 0.3, 0.4), 0.9, 0, -0.3);
+    pair("leg", 0.4, 0.1, mat(scene, "cryoSciBoots", 0.3, 0.38, 0.5), 0.12, 0.4);
+    pair("arm", 0.42, 0.095, parka, 0.34, 0.98);
+  } else if (type === "frostRunner") {
+    // Frost runner: lean thermal suit, trailing scarf and goggles; no pack, so it reads sleek and fast.
+    const suit = mat(scene, "frostSuit", 0.82, 0.93, 1);
+    const scarf = mat(scene, "frostScarf", 0.35, 0.7, 0.95);
+    add(MeshBuilder.CreateCapsule("frostBody", { height: 0.64, radius: 0.14, tessellation: 10 }, scene), suit, 0.84);
+    add(MeshBuilder.CreateSphere("frostHead", { diameter: 0.28, segments: 10 }, scene), skin, 1.22);
+    add(MeshBuilder.CreateTorus("frostCowl", { diameter: 0.22, thickness: 0.09, tessellation: 12 }, scene), scarf, 1.07);
+    add(MeshBuilder.CreateCapsule("frostScarfTail", { height: 0.5, radius: 0.045, tessellation: 6 }, scene), scarf, 0.98, 0.07, -0.14);
+    const goggles = MeshBuilder.CreateBox("frostGoggles", { width: 0.27, height: 0.07, depth: 0.1 }, scene);
+    add(goggles, mat(scene, "frostLens", 0.15, 0.6, 0.9, 0.8), 1.24, 0, 0.12);
+    pair("leg", 0.56, 0.065, mat(scene, "frostLegs", 0.55, 0.78, 0.95), 0.07, 0.56);
+    pair("arm", 0.46, 0.05, suit, 0.19, 1.04);
+  } else if (type === "patrolDrone") {
+    // Patrol drone: a hovering rounded body with a red sensor eye and side rotors; no limbs.
+    const hull = mat(scene, "droneHull", 0.55, 0.6, 0.66, 0.6);
+    const dark = mat(scene, "droneDark", 0.14, 0.15, 0.2, 0.4);
+    const eye = mat(scene, "droneEye", 0, 0, 0);
+    eye.emissiveColor = new Color3(1, 0.1, 0.08);
+    const body = MeshBuilder.CreateSphere("droneBody", { diameter: 0.7, segments: 12 }, scene);
+    // Flatten now: the generic bake below resets scaling to SCALE.
+    body.scaling.y = 0.6;
+    body.bakeCurrentTransformIntoVertices();
+    add(body, hull, 1.0);
+    add(MeshBuilder.CreateSphere("droneEye", { diameter: 0.2, segments: 8 }, scene), eye, 1.0, 0, 0.3);
+    add(MeshBuilder.CreateTorus("droneBelt", { diameter: 0.72, thickness: 0.05, tessellation: 16 }, scene), dark, 0.98);
+    add(MeshBuilder.CreateCylinder("droneSensor", { height: 0.14, diameterTop: 0.04, diameterBottom: 0.1, tessellation: 6 }, scene), dark, 1.3);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateBox("droneFin", { width: 0.34, height: 0.04, depth: 0.2 }, scene), dark, 1.0, side * 0.5);
+      add(MeshBuilder.CreateCylinder("droneRotor", { height: 0.02, diameter: 0.3, tessellation: 12 }, scene), hull, 1.08, side * 0.58);
+    }
+  } else if (type === "cryoSentinel") {
+    // The cryo sentinel: an icy warden-sized figure with crystal spikes and a glowing visor.
+    const plate = mat(scene, "sentinelPlate", 0.78, 0.92, 0.98, 0.8);
+    const dark = mat(scene, "sentinelDark", 0.3, 0.46, 0.58, 0.5);
+    const glow = mat(scene, "sentinelGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.25, 0.95, 1);
+    add(MeshBuilder.CreateCapsule("sentinelBody", { height: 2.2, radius: 0.75, tessellation: 14 }, scene), dark, 1.15);
+    add(MeshBuilder.CreateBox("sentinelChest", { width: 1.7, height: 1.1, depth: 1.1 }, scene), plate, 1.55);
+    add(MeshBuilder.CreateSphere("sentinelCore", { diameter: 0.45, segments: 10 }, scene), glow, 1.55, 0, 0.55);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateSphere("sentinelShoulder", { diameter: 0.85, segments: 10 }, scene), plate, 2.05, side * 0.95);
+      const spike = MeshBuilder.CreateCylinder("sentinelShoulderSpike", { diameterTop: 0, diameterBottom: 0.28, height: 0.9, tessellation: 6 }, scene);
+      spike.rotation.z = -side * 0.55;
+      add(spike, plate, 2.65, side * 1.15);
+      const back = MeshBuilder.CreateCylinder("sentinelBackSpike", { diameterTop: 0, diameterBottom: 0.24, height: 0.8, tessellation: 6 }, scene);
+      back.rotation.x = -0.5;
+      add(back, glow, 2.0, side * 0.35, -0.8);
+    }
+    const crest = MeshBuilder.CreateCylinder("sentinelCrest", { diameterTop: 0, diameterBottom: 0.3, height: 0.8, tessellation: 6 }, scene);
+    crest.rotation.x = -0.3;
+    add(crest, plate, 3.0, 0, -0.1);
+    add(MeshBuilder.CreateSphere("sentinelHelm", { diameter: 0.8, segments: 12 }, scene), plate, 2.5);
+    add(MeshBuilder.CreateBox("sentinelVisor", { width: 0.55, height: 0.1, depth: 0.12 }, scene), glow, 2.52, 0, 0.36);
+    // Heavy crystalline arms that swing as it stomps.
+    pair("arm", 1.5, 0.28, dark, 1.05, 2.0);
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     const coat = mat(scene, "techCoat", 0.92, 0.95, 0.97);
@@ -184,12 +257,12 @@ export class CrowdView {
   private fillMat: StandardMaterial | null = null;
 
   /** A ground strip the warden's charge will run along, filling as the windup completes. */
-  private makeLane(): { outline: Mesh; fill: Mesh } {
+  private makeLane(tuning: BossTuning): { outline: Mesh; fill: Mesh } {
     this.ensureTelegraphMaterials();
-    const width = WARDEN.chargeHitRadius * 2;
-    const outline = MeshBuilder.CreateGround("laneOutline", { width, height: WARDEN.chargeDistance }, this.scene);
+    const width = tuning.chargeHitRadius * 2;
+    const outline = MeshBuilder.CreateGround("laneOutline", { width, height: tuning.chargeDistance }, this.scene);
     outline.material = this.ringMat!;
-    const fill = MeshBuilder.CreateGround("laneFill", { width, height: WARDEN.chargeDistance }, this.scene);
+    const fill = MeshBuilder.CreateGround("laneFill", { width, height: tuning.chargeDistance }, this.scene);
     fill.material = this.fillMat!;
     outline.setEnabled(false);
     fill.setEnabled(false);
@@ -278,12 +351,13 @@ export class CrowdView {
       inst.position.copyFrom(l.pivot);
       return { inst, role: l.role };
     });
-    const isBoss = type === "boss";
-    const range = isBoss ? WARDEN.slamRadius : TARGETS[type].combat?.attackRange;
+    const isBoss = TARGETS[type].behavior === "boss";
+    const tuning = TARGETS[type].bossTuning ?? WARDEN;
+    const range = isBoss ? tuning.slamRadius : TARGETS[type].combat?.attackRange;
     return {
       type, node, parts, limbs, phase: Math.random() * 10,
       telegraph: range ? this.makeTelegraph(range) : undefined,
-      lane: isBoss ? this.makeLane() : undefined,
+      lane: isBoss ? this.makeLane(tuning) : undefined,
     };
   }
 
@@ -343,12 +417,13 @@ export class CrowdView {
       }
       if (t.boss && v.telegraph && v.lane) {
         const bs = t.boss;
+        const T = t.def.bossTuning ?? WARDEN;
         const slam = bs.state === "slamWindup";
         const charge = bs.state === "chargeWindup";
         v.telegraph.ring.setEnabled(slam);
         v.telegraph.fill.setEnabled(slam);
         if (slam) {
-          const k = 1 - Math.max(0, bs.timer) / WARDEN.slamWindup;
+          const k = 1 - Math.max(0, bs.timer) / T.slamWindup;
           v.telegraph.ring.position.set(x, 0.04, z);
           v.telegraph.fill.position.set(x, 0.035, z);
           v.telegraph.fill.scaling.set(Math.max(0.05, k), Math.max(0.05, k), 1);
@@ -357,9 +432,9 @@ export class CrowdView {
         v.lane.outline.setEnabled(charge);
         v.lane.fill.setEnabled(charge);
         if (charge) {
-          const k = 1 - Math.max(0, bs.timer) / WARDEN.chargeWindup;
+          const k = 1 - Math.max(0, bs.timer) / T.chargeWindup;
           const yaw = Math.atan2(bs.dirX, bs.dirZ);
-          const half = WARDEN.chargeDistance / 2;
+          const half = T.chargeDistance / 2;
           for (const m of [v.lane.outline, v.lane.fill]) {
             m.rotation.y = yaw;
             m.position.set(x + bs.dirX * half, m === v.lane.fill ? 0.035 : 0.03, z + bs.dirZ * half);

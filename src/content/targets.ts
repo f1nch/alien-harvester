@@ -1,6 +1,10 @@
+import { WARDEN, type BossTuning } from "./reactor";
 import type { Reward } from "./currencies";
 
-export type TargetTypeId = "worker" | "runner" | "technician" | "guard" | "armoredGuard" | "boss" | "pod";
+export type TargetTypeId =
+  | "worker" | "runner" | "technician" | "guard" | "armoredGuard" | "boss" | "pod"
+  // Cryo labs
+  | "cryoScientist" | "frostRunner" | "patrolDrone" | "cryoSentinel";
 
 /** "static": never moves (supply pods). */
 export type TargetBehavior = "wander" | "flee" | "guard" | "boss" | "static";
@@ -43,6 +47,8 @@ export interface TargetDef {
   /** Seconds for full capture progress to decay once out of reach (default 1). */
   captureDecaySeconds?: number;
   respawnSeconds: number;
+  /** Boss fight numbers; the reactor warden's when absent. */
+  bossTuning?: BossTuning;
 }
 
 export const TARGETS: Record<TargetTypeId, TargetDef> = {
@@ -137,6 +143,81 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
     multiGrab: true,
     captureDecaySeconds: 20,
     respawnSeconds: 180,
+  },
+  // --- Cryo labs (floor B2). Numbers are depth-0 equivalents; the floor's depth scales them.
+  // Cryo scientist: slow, padded against the cold, carrying crystal samples.
+  cryoScientist: {
+    id: "cryoScientist",
+    name: "Cryo scientist",
+    behavior: "wander",
+    resistance: 34,
+    weight: 3,
+    reward: { biomass: 3, crystals: 2 },
+    xp: 13,
+    speed: 0.7,
+    respawnSeconds: 12,
+  },
+  // Frost runner: quick and skittish, at home on the ice.
+  frostRunner: {
+    id: "frostRunner",
+    name: "Frost runner",
+    behavior: "flee",
+    resistance: 28,
+    weight: 2,
+    reward: { biomass: 7, crystals: 1 },
+    xp: 11,
+    speed: 1.2,
+    fleeSpeed: 2.9,
+    fleeRadius: 4.5,
+    respawnSeconds: 10,
+  },
+  // Patrol drone: a hovering security unit with a telegraphed shock jab.
+  patrolDrone: {
+    id: "patrolDrone",
+    name: "Patrol drone",
+    behavior: "guard",
+    resistance: 60,
+    weight: 3,
+    reward: { biomass: 8, parts: 1, crystals: 1 },
+    xp: 22,
+    speed: 1.2,
+    combat: {
+      detectRadius: 7,
+      leashRadius: 10,
+      chaseSpeed: 2.4,
+      attackRange: 1.8,
+      damage: 14,
+      windupSeconds: 0.5,
+      cooldownSeconds: 1.8,
+      heldCreepSpeed: 0.6,
+    },
+    respawnSeconds: 16,
+  },
+  // The cryo sentinel guards the frozen core. Its slam is a freezing pulse that chills.
+  cryoSentinel: {
+    id: "cryoSentinel",
+    name: "Cryo sentinel",
+    behavior: "boss",
+    resistance: 1100,
+    weight: 0,
+    reward: { crystals: 20, biomass: 140, genetic: 12, parts: 4 },
+    xp: 450,
+    speed: 1,
+    multiGrab: true,
+    captureDecaySeconds: 20,
+    respawnSeconds: 180,
+    bossTuning: {
+      ...WARDEN,
+      slamTrigger: 3.4,
+      slamRadius: 3.8,
+      slamDamage: 24,
+      slamWindup: 1.2,
+      slamChill: 0.6,
+      chargeWindup: 1.4,
+      chargeSpeed: 8,
+      chargeDamage: 30,
+      walkSpeed: 1,
+    },
   },
   // Supply pod: a crate of stolen stock. Quick to crack open, light, and it may hold a
   // short power-up (content/feeding.ts). Not a creature, so the bestiary ignores it.

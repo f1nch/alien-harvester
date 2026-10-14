@@ -260,7 +260,7 @@ async function boot(): Promise<void> {
   const renderer = new GameRenderer(canvas, room, { reducedEffects: settings.reducedEffects, creatureModels: !forceProcedural });
   const input = new InputController(zone);
   const floaters = new Floaters(uiRoot, !settings.reducedEffects);
-  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺" } as const;
+  const ICON = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰" } as const;
   const loop = new FixedLoop((dt) => stepWorld(world, dt), { hz: SIM_HZ, maxStepsPerFrame: 5 });
   renderer.snapCamera(world);
   if (import.meta.env.DEV) {
@@ -485,7 +485,7 @@ async function boot(): Promise<void> {
           hud.toast(`Evolved into ${FORM_NAMES[e.tier] ?? "a new form"}!`, 3.5);
           saveNow = true;
         } else if (e.type === "bossDefeated") {
-          hud.toast("The reactor warden is down! Bank its parts and repair the reactor.", 4);
+          hud.toast(`${e.name} is down! Bank its parts, then ${world.biome.objective.task.toLowerCase()}.`, 4);
           saveNow = true;
         } else if (e.type === "reactorRepaired") {
           showCompletion();

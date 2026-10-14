@@ -33,7 +33,10 @@ export const CRAVING_KINDS: readonly CravingKind[] = ["capture", "burst", "bankT
 const WEIGHTS: Record<CravingKind, number> = { capture: 4, burst: 2, bankTrip: 2, frenzy: 1, prized: 1, cleanTrip: 1 };
 
 /** Captures asked for, by type: fewer of the tougher ones. */
-const CAPTURE_GOAL: Partial<Record<TargetTypeId, number>> = { worker: 12, runner: 6, technician: 6, guard: 5, armoredGuard: 3 };
+const CAPTURE_GOAL: Partial<Record<TargetTypeId, number>> = {
+  worker: 12, runner: 6, technician: 6, guard: 5, armoredGuard: 3,
+  cryoScientist: 6, frostRunner: 6, patrolDrone: 5,
+};
 
 /** A full-enough hold for "bank a full hold": share of capacity. */
 export const FULL_HOLD = 0.8;

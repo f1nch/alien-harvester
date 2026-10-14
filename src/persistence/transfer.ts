@@ -33,6 +33,8 @@ export interface SaveSummary {
   genetic: number;
   parts: number;
   mutagen: number;
+  crystals: number;
+  alloy: number;
   doorsOpen: number;
   questsDone: number;
   reactorRepaired: boolean;
@@ -48,6 +50,8 @@ export function summarize(save: SaveFile): SaveSummary {
     genetic: Math.floor(p.banked.genetic),
     parts: Math.floor(p.banked.parts),
     mutagen: Math.floor(p.banked.mutagen),
+    crystals: Math.floor(p.banked.crystals),
+    alloy: Math.floor(p.banked.alloy),
     doorsOpen: p.unlockedDoors.length,
     questsDone: Object.values(p.quests).filter((q) => q.done).length,
     reactorRepaired: p.reactorRepaired,

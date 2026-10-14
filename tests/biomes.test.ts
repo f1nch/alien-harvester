@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BIOMES } from "../src/content/biomes";
 import { FACILITY } from "../src/content/map";
+import { CRYO_MAP } from "../src/content/cryo";
 import { TARGETS } from "../src/content/targets";
 import { UPGRADES } from "../src/content/upgrades";
 import { biomeAt, clearRequirements, isBiomeCleared, MAX_DEPTH, roman, scaleAt, tidy } from "../src/domain/biome";
@@ -58,28 +59,33 @@ describe("biome scaling", () => {
     expect(roman(14)).toBe("XIV");
   });
 
+  // The facility comes round again once every hand-made floor has been played.
+  const F = BIOMES.length;
+  const k = 1.6 ** F;
+
   it("scales bank goals, their titles and quest rewards", () => {
-    const q = biomeAt(1).questById.get("q-first-bank")!;
-    expect(q.goal).toEqual({ kind: "bank", currency: "biomass", count: 48 });
-    expect(q.title).toBe("Bank 48 biomass at the base");
-    expect(q.reward).toEqual({ biomass: 16, xp: 16 });
+    const q = biomeAt(F).questById.get("q-first-bank")!;
+    expect(q.goal).toEqual({ kind: "bank", currency: "biomass", count: tidy(30 * k) });
+    expect(q.title).toBe(`Bank ${tidy(30 * k)} biomass at the base`);
+    expect(q.reward).toEqual({ biomass: tidy(10 * k), xp: Math.round(10 * k) });
   });
 
   it("scales door, objective and structure prices, but not their gates", () => {
     const p = newProgress(FACILITY);
-    p.depth = 1;
+    p.depth = F;
+    const price = tidy(60 * k);
     const door = FACILITY.doors.find((d) => d.id === "door-service")!;
-    expect(doorRequirements(p, door).find((r) => r.label.startsWith("Pay"))!.label).toBe("Pay 96 biomass");
-    p.banked.biomass = 95;
+    expect(doorRequirements(p, door).find((r) => r.label.startsWith("Pay"))!.label).toBe(`Pay ${price} biomass`);
+    p.banked.biomass = price - 1;
     p.xp = 1000;
     p.quests["q-first-upgrade"] = { count: 1, done: true };
     expect(unlockDoor(p, door)).toEqual({ ok: false, reason: "requirements" });
-    p.banked.biomass = 96;
+    p.banked.biomass = price;
     expect(unlockDoor(p, door)).toEqual({ ok: true });
     expect(p.banked.biomass).toBe(0);
-    expect(biomeAt(1).objective.repair.cost).toEqual({ parts: 24, biomass: 480 });
+    expect(biomeAt(F).objective.repair.cost).toEqual({ parts: tidy(15 * k), biomass: tidy(300 * k) });
     p.quests["q-open-service"] = { count: 1, done: true };
-    expect(nextStep(p, "vat")!.cost).toEqual({ biomass: 200, genetic: 16 });
+    expect(nextStep(p, "vat")!.cost).toEqual({ biomass: tidy(120 * k), genetic: tidy(10 * k) });
     expect(vatBatchDrop(1).reward).toEqual({ biomass: 8 });
   });
 });
@@ -233,13 +239,13 @@ describe("moving on", () => {
     const p = w.progress;
     p.upgrades.capturePower = 10;
     p.perks.cargo = 1;
-    p.banked = { biomass: 100, genetic: 5, parts: 2, mutagen: 0 };
+    p.banked = { biomass: 100, genetic: 5, parts: 2, mutagen: 0, crystals: 0, alloy: 0 };
     p.cargo = [{ type: "worker", weight: 2, reward: { biomass: 3 } }, { type: "technician", weight: 3, reward: { biomass: 2, genetic: 2 } }];
     p.structures.drone = { built: true, level: 1, x: 5, z: 50, cargo: [{ type: "guard", weight: 3, reward: { biomass: 9, genetic: 1 } }] };
     p.structures.vat = { built: true, level: 1, stock: 2, timer: 3 };
     const r = leaveBiome(w);
-    expect(r).toEqual({ ok: true, banked: { biomass: 24, genetic: 3, parts: 0, mutagen: 0 } });
-    expect(p.banked).toEqual({ biomass: 124, genetic: 8, parts: 2, mutagen: 0 });
+    expect(r).toEqual({ ok: true, banked: { biomass: 24, genetic: 3, parts: 0, mutagen: 0, crystals: 0, alloy: 0 } });
+    expect(p.banked).toEqual({ biomass: 124, genetic: 8, parts: 2, mutagen: 0, crystals: 0, alloy: 0 });
     expect(p.depth).toBe(1);
     expect(p.cargo).toEqual([]);
     expect(p.structures.drone).toMatchObject({ built: true, level: 1, cargo: [], x: FACILITY.base.x, z: FACILITY.base.z });
@@ -256,13 +262,17 @@ describe("moving on", () => {
     expect(w.events.some((e) => e.type === "biomeLeft" && e.depth === 1)).toBe(true);
   });
 
-  it("the next biome starts its quest chain from the top, at the new depth", () => {
+  it("the next floor is Cryo labs, starting its own quest chain at the new depth", () => {
     const w = clearedWorld();
     leaveBiome(w);
+    expect(w.progress.player).toMatchObject(CRYO_MAP.playerSpawn);
     const next = createWorld(biomeAt(1).def.map, w.progress);
+    expect(next.biome.def.id).toBe("cryo");
+    expect(next.map).toBe(CRYO_MAP);
     expect(next.biome.depth).toBe(1);
     expect(next.targets.find((t) => t.def.id === "worker")!.def.resistance).toBeCloseTo(38);
-    expect(activeQuests(next.progress).map((q) => q.id)).toContain("q-first-catch");
+    expect(next.targets.some((t) => t.def.id === "cryoScientist")).toBe(true);
+    expect(activeQuests(next.progress).map((q) => q.id)).toEqual(["cryo-catch-crew"]);
     expect(isBiomeCleared(next.progress)).toBe(false);
   });
 });

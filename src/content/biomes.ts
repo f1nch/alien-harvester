@@ -1,6 +1,7 @@
 import type { Requirements } from "../domain/requirements";
 import { FACILITY, type MapDef } from "./map";
 import { QUESTS, type QuestDef } from "./quests";
+import { CRYO_LABS } from "./cryo";
 import { REACTOR } from "./reactor";
 
 /** The machine a biome's quest chain ends at (the reactor console in the facility). */
@@ -45,6 +46,10 @@ export interface BiomeDef {
   quests: readonly QuestDef[];
   objective: BiomeObjective;
   exit: BiomeExit;
+  /** Where structures stand on this floor. */
+  sites: { vat: { x: number; z: number } };
+  /** Quest that unlocks building structures here (they're carried over once built). */
+  structureGate: string;
 }
 
 /**
@@ -68,5 +73,8 @@ export const BIOMES: readonly BiomeDef[] = [
     },
     // Just inside the reactor hall door, clear of the pillars and the console.
     exit: { x: 0, z: 79.5, radius: 1.4, name: "Freight elevator", action: "Take the elevator down" },
+    sites: { vat: { x: 12.5, z: 25.5 } },
+    structureGate: "q-open-service",
   },
+  CRYO_LABS,
 ];

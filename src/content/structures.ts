@@ -1,5 +1,4 @@
 import type { Reward } from "./currencies";
-import type { Requirements } from "../domain/requirements";
 
 export interface VatLevel {
   /** Simulation seconds to produce one batch. */
@@ -14,14 +13,12 @@ export interface VatLevel {
 export const VAT = {
   id: "vat",
   name: "Biomass vat",
-  site: { x: 12.5, z: 25.5 },
   /** Solid footprint once built. */
   halfSize: 0.7,
   /** Player collects batches within this distance. */
   collectRadius: 2.2,
   /** Seconds per batch moved into the player's cargo while in range. */
   collectInterval: 0.25,
-  build: { quests: ["q-open-service"] } satisfies Requirements,
   levels: [
     { batchSeconds: 12, storage: 6, cost: { biomass: 120, genetic: 10 } },
     { batchSeconds: 9, storage: 8, cost: { biomass: 220 } },
@@ -40,7 +37,6 @@ export interface DroneLevel {
 export const DRONE = {
   id: "drone",
   name: "Delivery drone",
-  build: { quests: ["q-open-service"] } satisfies Requirements,
   speed: 3.6,
   radius: 0.4,
   /** Transfers happen within this distance of the player or the vat. */

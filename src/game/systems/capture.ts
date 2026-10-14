@@ -1,8 +1,7 @@
 import { cargoWeight } from "../../domain/progress";
 import { dist2, hasLineOfSight } from "../geometry";
-import { WARDEN } from "../../content/reactor";
 import { gainXp, questEvent, type TargetEntity, type World } from "../world";
-import { bossStunned } from "./boss";
+import { bossStunned, bossTuning } from "./boss";
 import { onCaptured } from "./feeding";
 
 /** Seconds a target may be out of reach before its progress starts to decay. */
@@ -73,7 +72,7 @@ export function updateCapture(w: World, dt: number): void {
     if (inReach(w, t)) {
       t.held = true;
       t.outOfReach = 0;
-      const bonus = bossStunned(t) ? WARDEN.stunnedCaptureBonus : 1;
+      const bonus = bossStunned(t) ? bossTuning(t).stunnedCaptureBonus : 1;
       t.progress += ((stats.capturePower * holderPower(count) * bonus) / t.def.resistance) * dt;
     } else {
       t.held = false;
@@ -152,7 +151,7 @@ function complete(w: World, t: TargetEntity): void {
   gainXp(w, t.def.xp);
   questEvent(w, { kind: "capture", target: t.def.id });
   if (t.def.behavior === "boss") {
-    w.events.push({ type: "bossDefeated" });
+    w.events.push({ type: "bossDefeated", name: t.def.name });
     questEvent(w, { kind: "defeatBoss" });
   }
 }

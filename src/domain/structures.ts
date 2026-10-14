@@ -1,6 +1,6 @@
 import { DRONE, VAT } from "../content/structures";
 import type { CargoDrop, ProgressState } from "./progress";
-import { scaleAt, scaleReward, scaleRequirements } from "./biome";
+import { currentBiome, scaleAt, scaleReward, scaleRequirements } from "./biome";
 import { allMet, evaluate, payCost, type Requirement, type Requirements } from "./requirements";
 
 export interface VatState {
@@ -51,8 +51,8 @@ export function nextStep(p: ProgressState, kind: StructureKind): Requirements | 
   const next = levels[s.built ? s.level : 0];
   if (s.built && s.level >= levels.length) return null;
   if (!next) return null;
-  const gate = kind === "vat" ? VAT.build : DRONE.build;
-  // Building has a gate; upgrades only cost resources. Prices grow with depth.
+  // Building needs the floor's structure quest; upgrades only cost resources. Prices grow with depth.
+  const gate: Requirements = { quests: [currentBiome(p).def.structureGate] };
   return scaleRequirements(s.built ? { cost: next.cost } : { ...gate, cost: next.cost }, p.depth);
 }
 

@@ -1,6 +1,6 @@
 import { dist2, hasLineOfSight, pointInRect } from "../geometry";
 import { onPlayerHit } from "./feeding";
-import { newTrip } from "../world";
+import { newTrip, refreshStats } from "../world";
 import type { TargetEntity, World } from "../world";
 import { inBase } from "./deposit";
 import { moveToward, pickGoal, wanderStep } from "./wander";
@@ -136,6 +136,12 @@ export function die(w: World): void {
   // A lost hold ends the trip and the combo.
   if (!forgiven) w.feeding.trip = newTrip();
   w.feeding.combo = 0;
+  // Respawning at base means warming up.
+  w.chill = 0;
+  if (w.chillApplied > 0) {
+    w.chillApplied = 0;
+    refreshStats(w);
+  }
 
   // Cancel all capture progress.
   for (let i = 0; i < w.tentacles.length; i++) {

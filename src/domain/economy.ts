@@ -19,6 +19,8 @@ export interface PlayerStats {
   yieldPercent: number;
   /** Vat production speed multiplier (1 = base). */
   farmRate: number;
+  /** Percent less chill built up in freezing rooms (Thermal fat). */
+  chillResist: number;
 }
 
 /**
@@ -67,6 +69,7 @@ export function computeStats(p: ProgressState, boost: StatBoost = NO_BOOST): Pla
     // Applied only in the deposit system.
     yieldPercent: v("resourceYield") + perk.yieldPercent,
     farmRate: (100 + perk.farmPercent) / 100,
+    chillResist: Math.min(90, v("thermalFat")),
   };
 }
 

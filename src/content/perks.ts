@@ -28,7 +28,8 @@ export interface PerkDef {
   /** Maximum times this perk can be taken; null for repeatable one-time grants. */
   maxStacks: number | null;
   /** Door that must be open before this perk can be offered. */
-  requiresDoor?: string;
+  /** Only offered once the current floor has an open door (genetic material matters by then). */
+  requiresDoor?: boolean;
   /** Only offered once the biomass vat is built. */
   requiresVat?: boolean;
 }
@@ -47,7 +48,7 @@ export const PERKS: Record<PerkId, PerkDef> = {
   geneSample: {
     id: "geneSample", name: "Gene sample", icon: "✦",
     effect: { kind: "grant", currency: "genetic", base: 5, perLevel: 3 }, maxStacks: null,
-    requiresDoor: "door-service",
+    requiresDoor: true,
   },
   farm: { id: "farm", name: "Fertile vats", icon: "⚗", effect: { kind: "flat", stat: "farmPercent", amount: 10 }, maxStacks: 3, requiresVat: true },
 };

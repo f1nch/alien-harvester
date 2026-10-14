@@ -8,7 +8,8 @@ export type UpgradeId =
   | "tentacles"
   | "maxHealth"
   | "regeneration"
-  | "resourceYield";
+  | "resourceYield"
+  | "thermalFat";
 
 export interface UpgradeDef {
   id: UpgradeId;
@@ -120,6 +121,17 @@ export const UPGRADES: Record<UpgradeId, UpgradeDef> = {
     currency: "genetic",
     costs: [20, 45, 80, 130, 200],
     capByTier: [3, 5],
+  },
+  // Cold resistance: slows chill in freezing rooms (content/cold.ts). Paid in cryo crystals.
+  thermalFat: {
+    id: "thermalFat",
+    name: "Thermal fat",
+    unit: "% chill resist",
+    base: 0,
+    perLevel: 20,
+    currency: "crystals",
+    costs: [20, 45, 80, 130],
+    capByTier: [4, 4],
   },
 };
 

@@ -1,4 +1,4 @@
-import type { DoorDef } from "../content/map";
+import { zoneAt, type DoorDef } from "../content/map";
 import { goalTarget } from "../content/quests";
 import { UPGRADES, UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 import { doorRequirements } from "../domain/doors";
@@ -18,6 +18,7 @@ import type { TargetEntity, World } from "../game/world";
 import { reactorRequirements } from "../domain/reactor";
 import { biomeAt, clearRequirements } from "../domain/biome";
 import { BOOSTS, FRENZY, type BoostId } from "../content/feeding";
+import { COLD } from "../content/cold";
 import { MUTAGEN, MUTAGEN_IDS, type MutagenId } from "../content/mutagen";
 import { TARGETS, type TargetTypeId } from "../content/targets";
 import { BESTIARY_MILESTONES, inBestiary, milestonesReached } from "../domain/bestiary";
@@ -26,7 +27,7 @@ import { mutagenLevel, nextMutagenCost } from "../domain/mutagen";
 import { MAX_IMPORT_BYTES, type SaveSummary } from "../persistence/transfer";
 
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
-export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺" };
+export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰" };
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
@@ -127,6 +128,8 @@ export class Hud {
   private genetic: HTMLElement;
   private geneticChip: HTMLElement;
   private mutagen: HTMLElement;
+  private crystals: HTMLElement;
+  private crystalsChip: HTMLElement;
   private mutagenChip: HTMLElement;
   private feedBox: HTMLElement;
   private feedText: HTMLElement;
@@ -161,7 +164,7 @@ export class Hud {
   private perkShownLevel = 0;
   private perkShownAt = 0;
   private panel: HTMLElement;
-  private rows = new Map<UpgradeId, { level: HTMLElement; value: HTMLElement; buy: HTMLButtonElement }>();
+  private rows = new Map<UpgradeId, { root: HTMLElement; level: HTMLElement; value: HTMLElement; buy: HTMLButtonElement }>();
   private evoForm: HTMLElement;
   private evoNext: HTMLElement;
   private evoDesc: HTMLElement;
@@ -172,6 +175,10 @@ export class Hud {
   private bossBar: HTMLElement;
   private bossFill: HTMLElement;
   private bossState: HTMLElement;
+  private bossName: HTMLElement;
+  private chillBox: HTMLElement;
+  private chillText: HTMLElement;
+  private chillFill: HTMLElement;
   private reactorCard: HTMLElement;
   private reactorList: HTMLElement;
   private reactorBtn: HTMLButtonElement;
@@ -207,6 +214,9 @@ export class Hud {
     const gen = chip("✦", "genetic", "Genetic");
     this.genetic = gen.value;
     this.geneticChip = gen.root;
+    const cry = chip("❄", "crystals", "Cryo crystals");
+    this.crystals = cry.value;
+    this.crystalsChip = cry.root;
     const mut = chip("✺", "mutagen", "Mutagen");
     this.mutagen = mut.value;
     this.mutagenChip = mut.root;
@@ -252,7 +262,15 @@ export class Hud {
     this.feedFill = el("div", "feed-fill");
     feedBar.append(this.feedFill);
     this.feedBox.append(this.feedText, feedBar);
-    top.append(bio.root, gen.root, mut.root, lvl, bars, this.feedBox);
+    // Chill in freezing rooms: how cold, and what it's costing.
+    this.chillBox = el("div", "feed-meter chill-meter hidden");
+    this.chillBox.setAttribute("role", "status");
+    this.chillText = el("span", "feed-text");
+    const chillBar = el("div", "cargo-bar");
+    this.chillFill = el("div", "chill-fill");
+    chillBar.append(this.chillFill);
+    this.chillBox.append(this.chillText, chillBar);
+    top.append(bio.root, gen.root, cry.root, mut.root, lvl, bars, this.feedBox, this.chillBox);
 
     // Objectives and hints flow under the HUD so they never overlap it as it wraps.
     const sub = el("div", "hud-sub");
@@ -280,7 +298,8 @@ export class Hud {
     this.bossBar = el("div", "boss-bar hidden");
     this.bossBar.setAttribute("role", "status");
     const bossHead = el("div", "boss-head");
-    bossHead.append(el("span", "boss-name", "Reactor warden"));
+    this.bossName = el("span", "boss-name");
+    bossHead.append(this.bossName);
     this.bossState = el("span", "boss-state");
     bossHead.append(this.bossState);
     const bossTrack = el("div", "cargo-bar");
@@ -362,7 +381,7 @@ export class Hud {
       buy.addEventListener("click", () => cb.onBuy(id));
       row.append(info, buy);
       card.append(row);
-      this.rows.set(id, { level, value, buy });
+      this.rows.set(id, { root: row, level, value, buy });
     }
     const evo = el("section", "evo");
     evo.setAttribute("aria-label", "Evolution");
@@ -585,7 +604,7 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired,
+      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, w.chillApplied, feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired,
       s.boss ? `${Math.round(s.boss.progress * 100)}:${s.boss.boss?.state}` : "", s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
@@ -596,10 +615,14 @@ export class Hud {
     this.genetic.textContent = fmt(Math.floor(p.banked.genetic));
     // Genetic material appears once it matters, to keep the first minutes uncluttered.
     this.geneticChip.classList.toggle("hidden", p.banked.genetic === 0 && p.unlockedDoors.length === 0);
+    this.crystals.textContent = fmt(Math.floor(p.banked.crystals));
+    // Crystals appear on the first floor that has them, and stay once earned.
+    this.crystalsChip.classList.toggle("hidden", p.banked.crystals === 0 && !w.map.zones.some((z) => z.cold));
     this.mutagen.textContent = fmt(Math.floor(p.banked.mutagen));
     // Mutagen appears with the first one earned.
     this.mutagenChip.classList.toggle("hidden", p.banked.mutagen === 0 && Object.keys(p.mutagenLevels).length === 0);
     this.renderFeeding(w);
+    this.renderChill(w);
     this.renderMutagen(w);
     this.renderBestiary(w);
 
@@ -645,6 +668,8 @@ export class Hud {
       const def = UPGRADES[id];
       const row = this.rows.get(id)!;
       const lvl = p.upgrades[id];
+      const hidden = id === "thermalFat" && lvl === 0 && !w.map.zones.some((z) => z.cold);
+      row.root.classList.toggle("hidden", hidden);
       const cost = nextCost(p, id);
       const cur = upgradeValue(p, id);
       const next = upgradeValue(p, id, lvl + 1);
@@ -658,7 +683,7 @@ export class Hud {
         row.buy.disabled = true;
       } else {
         const can = p.banked[def.currency] >= cost;
-        affordable ||= can;
+        affordable ||= can && !hidden;
         row.buy.textContent = `Buy · ${cost} ${CURRENCY_ICON[def.currency]}`;
         row.buy.disabled = !can;
         row.buy.setAttribute("aria-label", `Buy ${def.name} for ${cost} ${CURRENCY_LABEL[def.currency].toLowerCase()}`);
@@ -709,6 +734,7 @@ export class Hud {
   private renderBoss(boss: TargetEntity | null): void {
     this.bossBar.classList.toggle("hidden", boss === null);
     if (!boss) return;
+    this.bossName.textContent = boss.def.name;
     const pct = Math.round(Math.max(0, Math.min(1, boss.progress)) * 100);
     this.bossFill.style.width = `${pct}%`;
     const state = boss.boss?.state;
@@ -728,6 +754,16 @@ export class Hud {
     this.feedBox.classList.toggle("frenzy", frenzy);
     this.feedText.textContent = frenzy ? `FEEDING FRENZY · capture ×2 · ${Math.ceil(f.frenzy)}s` : `Combo ${f.combo} / ${FRENZY.combo}`;
     this.feedFill.style.width = frenzy ? "100%" : `${(f.combo / FRENZY.combo) * 100}%`;
+  }
+
+  private renderChill(w: World): void {
+    const chill = w.chillApplied;
+    this.chillBox.classList.toggle("hidden", chill <= 0);
+    this.vignette.classList.toggle("cold", chill >= 0.5);
+    if (chill <= 0) return;
+    const pct = Math.round(chill * 100);
+    this.chillText.textContent = `❄ Chill ${pct}% · speed −${Math.round(COLD.speedPenalty * chill)}%, capture −${Math.round(COLD.powerPenalty * chill)}%${chill >= 1 ? " · find a heat vent" : ""}`;
+    this.chillFill.style.width = `${pct}%`;
   }
 
   private renderMutagen(w: World): void {
@@ -782,18 +818,18 @@ export class Hud {
     if (!near) return;
     const p = w.progress;
     if (p.reactorRepaired) {
-      this.reactorTitle.textContent = "Reactor online";
+      this.reactorTitle.textContent = w.biome.objective.doneTitle;
       this.reactorList.replaceChildren();
       this.reactorBtn.classList.add("hidden");
       return;
     }
-    this.reactorTitle.textContent = "Reactor console — damaged";
+    this.reactorTitle.textContent = `${w.biome.objective.name} — damaged`;
     const reqs = reactorRequirements(p);
     requirementList(this.reactorList, reqs);
     const ok = reqs.every((r) => r.met);
     this.reactorBtn.classList.remove("hidden");
     this.reactorBtn.disabled = !ok;
-    this.reactorBtn.textContent = ok ? "Repair the reactor" : "Requirements not met";
+    this.reactorBtn.textContent = ok ? w.biome.objective.task : "Requirements not met";
   }
 
   /** Show the result of checking an import: a summary to confirm, or why it was rejected. */
@@ -814,12 +850,14 @@ export class Hud {
       ["Form", s.form],
       ["Biomass", String(s.biomass)],
       ["Genetic material", String(s.genetic)],
-      ["Reactor parts", String(s.parts)],
+      ["Machine parts", String(s.parts)],
       ["Mutagen", String(s.mutagen)],
+      ["Cryo crystals", String(s.crystals)],
+      ["Alloy", String(s.alloy)],
       ["Location", s.place],
       ["Doors open", String(s.doorsOpen)],
       ["Objectives done", String(s.questsDone)],
-      ["Reactor repaired", s.reactorRepaired ? "Yes" : "No"],
+      ["Floor objective done", s.reactorRepaired ? "Yes" : "No"],
     ];
     const dl = el("dl", "completion-stats");
     dl.append(...rows.flatMap(([k, v]) => [el("dt", undefined, k), el("dd", undefined, v)]));
@@ -860,7 +898,7 @@ export class Hud {
         const lvl = vatLevel(v);
         row.status.textContent = v.built
           ? `Level ${v.level} · ${v.stock}/${lvl.storage} batches · one every ${fmt(lvl.batchSeconds / w.stats.farmRate)}s`
-          : "Not built. Produces biomass batches in the service wing while you play.";
+          : `Not built. Produces biomass batches in the ${(zoneAt(w.map, w.biome.def.sites.vat.x, w.biome.def.sites.vat.z)?.name ?? "facility").toLowerCase()} while you play.`;
       } else {
         const d = p.structures.drone;
         row.status.textContent = d.built

@@ -1,7 +1,7 @@
 import { CURRENCIES, emptyWallet } from "../content/currencies";
-import { reachableZones, zoneAtOrDoorway } from "../content/map";
+import { reachableZones, zoneAtOrDoorway, type MapDef } from "../content/map";
 import { goalTarget } from "../content/quests";
-import { isTargetType } from "../content/targets";
+import { isTargetType, TARGETS } from "../content/targets";
 import { isMutagenId, MUTAGEN } from "../content/mutagen";
 import { inBestiary } from "../domain/bestiary";
 import { CRAVING_KINDS, type Craving, type CravingKind } from "../domain/cravings";
@@ -19,7 +19,7 @@ import { DRONE, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 export const CONTENT_VERSION = 1;
 
 /** The level cap before endless levels (v9). */
@@ -129,6 +129,17 @@ function migrate(raw: Obj): Obj | null {
     const progress = isObj(m.progress) ? { ...m.progress, cravings: [], cravingRolls: 0, mutagenLevels: {}, bestiary: {} } : m.progress;
     m = { ...m, schemaVersion: 10, progress };
   }
+  if (m.schemaVersion === 10) {
+    // v11 adds the cryo crystals and alloy currencies and the Thermal fat track; both parse
+    // as 0 when absent. The bump stops older builds loading saves that hold them.
+    // Before v11 every depth was the facility; odd depths are now Cryo labs, so that
+    // floor's progress (facility doors, quests, objective, cravings) starts over there.
+    let progress = m.progress;
+    if (isObj(progress) && Number.isInteger(progress.depth) && (progress.depth as number) % 2 === 1) {
+      progress = { ...progress, unlockedDoors: [], quests: {}, reactorRepaired: false, cravings: [], spawnCooldowns: {} };
+    }
+    m = { ...m, schemaVersion: 11, progress };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
@@ -146,13 +157,15 @@ function parseDrop(d: unknown, biome: ActiveBiome): CargoDrop | null {
   return { type: def.id, weight: def.weight, reward: { ...def.reward } };
 }
 
-function parseCraving(c: unknown, playSeconds: number): Craving | null {
+function parseCraving(c: unknown, playSeconds: number, room: MapDef): Craving | null {
   if (!isObj(c) || typeof c.kind !== "string" || !(CRAVING_KINDS as readonly string[]).includes(c.kind)) return null;
   if (!isNonNeg(c.goal) || c.goal < 1 || !isNonNeg(c.progress) || !isNonNeg(c.reward) || c.reward > 1000) return null;
   const kind = c.kind as CravingKind;
   const out: Craving = { kind, goal: c.goal, progress: Math.min(c.progress, c.goal), reward: c.reward };
   if (kind === "capture") {
-    if (!isTargetType(c.target) || !inBestiary(c.target) || c.target === "boss") return null;
+    if (!isTargetType(c.target) || !inBestiary(c.target) || TARGETS[c.target].behavior === "boss") return null;
+    // A creature that doesn't live on this floor could never be caught: the craving re-rolls.
+    if (!room.spawns.some((s) => s.type === c.target)) return null;
     out.target = c.target;
   }
   if (kind === "burst") {
@@ -371,7 +384,7 @@ export function parseSave(raw: unknown): SaveFile | null {
   progress.cravingRolls = p.cravingRolls as number;
   // Cravings are rebuilt field by field; anything odd is dropped (a fresh one rolls on load).
   for (const c of p.cravings) {
-    const craving = parseCraving(c, progress.playSeconds);
+    const craving = parseCraving(c, progress.playSeconds, room);
     if (craving) progress.cravings.push(craving);
   }
   progress.cravings = progress.cravings.slice(0, feedingTuning(progress).cravingSlots);

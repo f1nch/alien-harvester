@@ -153,7 +153,7 @@ describe("guards", () => {
 
   it("guards notice a player standing in the doorway just outside their zone", () => {
     const zone = { minX: -20, maxX: 20, minZ: 0, maxZ: 20 };
-    const w = testWorld([[0, 2]], [], "guard", { zones: [{ id: "security", name: "S", rect: zone, tint: [1, 1, 1] }] });
+    const w = testWorld([[0, 2]], [], "guard", { zones: [{ id: "security", name: "S", theme: "containment", rect: zone, tint: [1, 1, 1] }] });
     const g = w.targets[0]!;
     g.zoneRect = zone;
     g.idle = 0;

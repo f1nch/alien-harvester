@@ -1,6 +1,7 @@
 import { DRONE, VAT } from "../../content/structures";
 import { cargoWeight, type CargoDrop } from "../../domain/progress";
 import { droneCapacity, tickVat, vatBatchDrop, type DroneState } from "../../domain/structures";
+import { reachableZones, zoneAt } from "../../content/map";
 import { dist2, resolveCircle } from "../geometry";
 import { nextWaypoint } from "../nav";
 import { committedCargo } from "./capture";
@@ -20,7 +21,8 @@ export function updateStructures(w: World, dt: number): void {
 
 export function nearVat(w: World): boolean {
   const v = w.progress.structures.vat;
-  return v.built && dist2(w.player.x, w.player.z, VAT.site.x, VAT.site.z) <= VAT.collectRadius ** 2;
+  const site = w.biome.def.sites.vat;
+  return v.built && dist2(w.player.x, w.player.z, site.x, site.z) <= VAT.collectRadius ** 2;
 }
 
 /** Batches load into the player's cargo while in range, if they fit alongside reserved captures. */
@@ -88,7 +90,9 @@ function chooseMode(w: World, d: DroneState): DroneMode {
   const lightest = playerCargo.reduce((m, x) => Math.min(m, x.weight), Infinity);
   const playerNeeds = playerCargo.length > 0 && !inBase(w) && lightest <= free;
   const vat = w.progress.structures.vat;
-  const vatReady = vat.built && vat.stock > 0 && VAT.batch.weight <= free;
+  const site = w.biome.def.sites.vat;
+  const vatZone = zoneAt(w.map, site.x, site.z);
+  const vatReady = vat.built && vat.stock > 0 && VAT.batch.weight <= free && vatZone !== null && reachableZones(w.map, w.progress.unlockedDoors).has(vatZone.id);
   // Once heading home with cargo, finish the delivery: otherwise each new vat batch
   // would turn it around and it would never bank anything.
   if (w.droneMode === "toBase" && d.cargo.length > 0) return "toBase";
@@ -122,7 +126,8 @@ function updateDrone(w: World, dt: number, playerAlive: boolean): void {
     }
     case "toVat": {
       const vat = w.progress.structures.vat;
-      if (dist2(d.x, d.z, VAT.site.x, VAT.site.z) <= DRONE.reach ** 2) {
+      const site = w.biome.def.sites.vat;
+      if (dist2(d.x, d.z, site.x, site.z) <= DRONE.reach ** 2) {
         w.droneBudget += DRONE.transferRate * dt;
         while (vat.stock > 0 && w.droneBudget >= VAT.batch.weight && cargoWeight(d.cargo) + VAT.batch.weight <= droneCapacity(d)) {
           w.droneBudget -= VAT.batch.weight;
@@ -130,7 +135,7 @@ function updateDrone(w: World, dt: number, playerAlive: boolean): void {
           d.cargo.push(vatBatchDrop(w.progress.depth));
         }
       } else {
-        moveDrone(w, d, VAT.site.x, VAT.site.z, dt);
+        moveDrone(w, d, site.x, site.z, dt);
       }
       return;
     }

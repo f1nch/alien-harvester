@@ -1,10 +1,7 @@
 import {
   Color3, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, TransformNode,
 } from "@babylonjs/core";
-import { BIOMES } from "../content/biomes";
-import { REACTOR } from "../content/reactor";
 import { isBiomeCleared } from "../domain/biome";
-import { VAT } from "../content/structures";
 import { cargoWeight } from "../domain/progress";
 import { droneCapacity, vatLevel } from "../domain/structures";
 import type { World } from "../game/world";
@@ -30,13 +27,15 @@ export class StructuresView {
   private coreMat: StandardMaterial;
   private reactorRing: Mesh;
   private exitMat: StandardMaterial;
+  /** Objective console and exit meshes, placed from the current biome on the first update. */
+  private consoleParts: Mesh[];
+  private exitParts: Mesh[];
+  private placed = false;
   private exitRing: Mesh;
   private exitBeam: Mesh;
 
   constructor(scene: Scene, shadows: ShadowGenerator | null) {
-    const { x, z } = VAT.site;
     this.vatRoot = new TransformNode("vat", scene);
-    this.vatRoot.position.set(x, 0, z);
 
     // Marked site, visible before building so the next objective is findable.
     this.sitePad = MeshBuilder.CreateDisc("vatSite", { radius: 1.1, tessellation: 32 }, scene);
@@ -84,34 +83,48 @@ export class StructuresView {
 
     // Reactor console: flickers red while broken, steady teal once repaired.
     const consoleBase = MeshBuilder.CreateBox("reactorBase", { width: 1.8, depth: 1.8, height: 1.1 }, scene);
-    consoleBase.position.set(REACTOR.x, 0.55, REACTOR.z);
+    consoleBase.position.y = 0.55;
     consoleBase.material = metal;
     shadows?.addShadowCaster(consoleBase);
     this.coreMat = material(scene, "reactorCoreMat", Color3.Black(), new Color3(1, 0.2, 0.1));
     const core = MeshBuilder.CreateCylinder("reactorCore", { diameter: 0.9, height: 1.6, tessellation: 16 }, scene);
-    core.position.set(REACTOR.x, 1.9, REACTOR.z);
+    core.position.y = 1.9;
     core.material = this.coreMat;
     this.reactorRing = MeshBuilder.CreateTorus("reactorRing", { diameter: 1.6, thickness: 0.08, tessellation: 32 }, scene);
-    this.reactorRing.position.set(REACTOR.x, 1.9, REACTOR.z);
+    this.reactorRing.position.y = 1.9;
     this.reactorRing.material = this.coreMat;
+    this.consoleParts = [consoleBase, core, this.reactorRing];
 
     // The way on (freight elevator): a platform that lights up once the floor is cleared.
-    // Every biome so far shares the facility's map, so its exit position is fixed here.
-    const exit = BIOMES[0]!.exit;
-    const platform = MeshBuilder.CreateCylinder("exitPlatform", { diameter: exit.radius * 2, height: 0.12, tessellation: 32 }, scene);
-    platform.position.set(exit.x, 0.06, exit.z);
+    // Built at unit radius and scaled to the biome's exit when placed.
+    const platform = MeshBuilder.CreateCylinder("exitPlatform", { diameter: 2, height: 0.12, tessellation: 32 }, scene);
+    platform.position.y = 0.06;
     platform.material = metal;
     this.exitMat = material(scene, "exitMat", Color3.Black(), new Color3(0.15, 0.2, 0.25));
-    this.exitRing = MeshBuilder.CreateTorus("exitRing", { diameter: exit.radius * 2, thickness: 0.1, tessellation: 40 }, scene);
-    this.exitRing.position.set(exit.x, 0.14, exit.z);
+    this.exitRing = MeshBuilder.CreateTorus("exitRing", { diameter: 2, thickness: 0.07, tessellation: 40 }, scene);
+    this.exitRing.position.y = 0.14;
     this.exitRing.material = this.exitMat;
-    this.exitBeam = MeshBuilder.CreateCylinder("exitBeam", { diameter: exit.radius * 1.6, height: 4, tessellation: 24, cap: Mesh.NO_CAP }, scene);
-    this.exitBeam.position.set(exit.x, 2, exit.z);
+    this.exitBeam = MeshBuilder.CreateCylinder("exitBeam", { diameter: 1.6, height: 4, tessellation: 24, cap: Mesh.NO_CAP }, scene);
+    this.exitBeam.position.y = 2;
     this.exitBeam.material = material(scene, "exitBeamMat", Color3.Black(), new Color3(0.35, 0.9, 1), 0.18);
     this.exitBeam.isPickable = false;
+    this.exitParts = [platform, this.exitRing, this.exitBeam];
+  }
+
+  /** The vat site, objective console and exit belong to the biome; a biome change reloads the page. */
+  private place(w: World): void {
+    const b = w.biome.def;
+    this.vatRoot.position.set(b.sites.vat.x, 0, b.sites.vat.z);
+    for (const m of this.consoleParts) m.position.set(b.objective.x, m.position.y, b.objective.z);
+    for (const m of this.exitParts) {
+      m.position.set(b.exit.x, m.position.y, b.exit.z);
+      m.scaling.set(b.exit.radius, 1, b.exit.radius);
+    }
+    this.placed = true;
   }
 
   update(w: World, alpha: number, dt: number): void {
+    if (!this.placed) this.place(w);
     this.time += dt;
     if (w.progress.reactorRepaired) {
       this.coreMat.emissiveColor.set(0.2, 1, 0.85);
@@ -132,7 +145,7 @@ export class StructuresView {
     const { vat, drone } = w.progress.structures;
 
     this.vatBuilt.setEnabled(vat.built);
-    this.sitePad.setEnabled(!vat.built && w.progress.unlockedDoors.includes("door-service"));
+    this.sitePad.setEnabled(!vat.built && w.progress.quests[w.biome.def.structureGate]?.done === true);
     if (vat.built) {
       const fill = Math.max(0.04, vat.stock / vatLevel(vat).storage);
       this.liquid.scaling.y = 1.4 * fill;
