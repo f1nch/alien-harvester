@@ -184,13 +184,13 @@ export function buildEnvironment(scene: Scene, map: MapDef, shadows: ShadowGener
     map.props.forEach((r, i) => {
       const w = r.maxX - r.minX;
       const d = r.maxZ - r.minZ;
-      const trunk = MeshBuilder.CreateCylinder(`trunk${i}`, { diameterTop: Math.min(w, d) * 0.7, diameterBottom: Math.min(w, d), height: 2.2, tessellation: 9 }, scene);
+      const trunk = MeshBuilder.CreateCylinder(`trunk${i}`, { diameterTop: Math.min(w, d) * 0.7, diameterBottom: Math.min(w, d), height: 2.2, tessellation: 18 }, scene);
       trunk.scaling.set(w / Math.min(w, d), 1, d / Math.min(w, d));
       trunk.position.set((r.minX + r.maxX) / 2, 1.1, (r.minZ + r.maxZ) / 2);
       trunk.material = podMat;
       trunk.freezeWorldMatrix();
       shadows?.addShadowCaster(trunk);
-      const cap = MeshBuilder.CreateSphere(`trunkCap${i}`, { diameter: Math.max(w, d) * 1.1, segments: 8, slice: 0.5 }, scene);
+      const cap = MeshBuilder.CreateSphere(`trunkCap${i}`, { diameter: Math.max(w, d) * 1.1, segments: 16, slice: 0.5 }, scene);
       cap.scaling.y = 0.45;
       cap.position.set(trunk.position.x, 2.15, trunk.position.z);
       cap.material = capMat;
@@ -200,6 +200,23 @@ export function buildEnvironment(scene: Scene, map: MapDef, shadows: ShadowGener
     map.props.forEach((r, i) => {
       const m = block(scene, `prop${i}`, r, 1.3, podMat, podTrim);
       shadows?.addShadowCaster(m);
+      // Recessed service panels and cooling fins make scenery read as machinery.
+      const width = r.maxX - r.minX;
+      const depth = r.maxZ - r.minZ;
+      const cx = (r.minX + r.maxX) / 2;
+      const cz = (r.minZ + r.maxZ) / 2;
+      const panel = MeshBuilder.CreateBox(`prop${i}ServicePanel`, { width: width * 0.64, depth: depth * 0.64, height: 0.04 }, scene);
+      panel.position.set(cx, 1.32, cz);
+      panel.material = wallMat;
+      panel.freezeWorldMatrix();
+      const fins: Mesh[] = [];
+      for (let slot = 0; slot < 4; slot++) {
+        const fin = MeshBuilder.CreateBox(`prop${i}CoolingFin${slot}`, { width: width * 0.45, depth: depth * 0.045, height: 0.025 }, scene);
+        fin.position.set(cx, 1.35, cz + (slot - 1.5) * depth * 0.12);
+        fin.material = podMat;
+        fins.push(fin);
+      }
+      Mesh.MergeMeshes(fins, true, true)!.freezeWorldMatrix();
     });
   }
 
@@ -263,10 +280,10 @@ export function buildEnvironment(scene: Scene, map: MapDef, shadows: ShadowGener
 
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    const pylon = MeshBuilder.CreateCylinder(`pylon${i}`, { diameterTop: 0.12, diameterBottom: 0.3, height: 1.2, tessellation: 8 }, scene);
+    const pylon = MeshBuilder.CreateCylinder(`pylon${i}`, { diameterTop: 0.12, diameterBottom: 0.3, height: 1.2, tessellation: 16 }, scene);
     pylon.position.set(map.base.x + Math.cos(a) * (map.base.radius + 0.3), 0.6, map.base.z + Math.sin(a) * (map.base.radius + 0.3));
     pylon.material = wallMat;
-    const cap = MeshBuilder.CreateSphere(`pylonCap${i}`, { diameter: 0.22, segments: 8 }, scene);
+    const cap = MeshBuilder.CreateSphere(`pylonCap${i}`, { diameter: 0.22, segments: 16 }, scene);
     cap.position.set(pylon.position.x, 1.25, pylon.position.z);
     cap.material = ringMat;
   }
@@ -278,7 +295,7 @@ export function buildEnvironment(scene: Scene, map: MapDef, shadows: ShadowGener
 export function updateDoors(env: Environment, unlocked: readonly string[], dt: number, snap = false): void {
   for (const d of env.doors) {
     const target = unlocked.includes(d.id) ? 1 : 0;
-    d.open = snap ? target : d.open + (target - d.open) * Math.min(1, dt * 3);
+    d.open = snap ? target : d.open + (target - d.open) * (1 - Math.exp(-dt * 3));
     d.panel.position.y = DOOR_HEIGHT / 2 - d.open * (DOOR_HEIGHT + 0.05);
     d.panel.setEnabled(d.open < 0.999);
   }

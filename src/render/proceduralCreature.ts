@@ -4,7 +4,7 @@ import {
 import type { CreatureLook } from "./creatureLook";
 import { armControls, curvePoint, stepExtension, type CurveControls } from "./tentacleCurve";
 
-const SEGMENTS = 14;
+const SEGMENTS = 20;
 const BODY_Y = 0.85;
 const MAX_LEGS = 8;
 
@@ -54,7 +54,7 @@ class Tube {
     this.radiusFn = (i) => rootRadius + (tipRadius - rootRadius) * (i / (SEGMENTS - 1));
     for (let i = 0; i < SEGMENTS; i++) this.path[i]!.set(0, i * 0.01, 0);
     this.mesh = MeshBuilder.CreateTube(name, {
-      path: this.path, radiusFunction: this.radiusFn, tessellation: 8, updatable: true, cap: Mesh.CAP_START,
+      path: this.path, radiusFunction: this.radiusFn, tessellation: 12, updatable: true, cap: Mesh.CAP_START,
     }, scene);
     this.mesh.material = mat;
     this.mesh.alwaysSelectAsActiveMesh = true;
@@ -86,6 +86,8 @@ export class ProceduralCreature implements CreatureLook {
   private arms: ArmState[] = [];
   private heading = 0;
   private time = 0;
+  private gaitPhase = 0;
+  private movement = 0;
   private pulse = 0;
   private skin: StandardMaterial;
   private tipMat: StandardMaterial;
@@ -119,6 +121,16 @@ export class ProceduralCreature implements CreatureLook {
     this.mantle.material = skin;
     this.mantle.parent = this.body;
 
+    // Overlapping shell plates catch the light and break up the smooth egg silhouette.
+    for (let i = 0; i < 4; i++) {
+      const plate = MeshBuilder.CreateSphere(`carapacePlate${i}`, { diameter: 1, segments: 20 }, scene);
+      plate.scaling.set(0.8 - i * 0.09, 0.16, 0.32);
+      plate.position.set(0, 0.6 - i * 0.04, 0.2 - i * 0.28);
+      plate.rotation.x = -0.15;
+      plate.material = skin;
+      plate.parent = this.body;
+    }
+
     const eyeMat = new StandardMaterial("eyeMat", scene);
     eyeMat.diffuseColor = Color3.Black();
     eyeMat.emissiveColor = new Color3(0.75, 1, 0.3);
@@ -127,12 +139,12 @@ export class ProceduralCreature implements CreatureLook {
     pupilMat.diffuseColor = Color3.Black();
     pupilMat.specularColor = new Color3(1, 1, 1);
     const makeEye = (x: number, y: number, z: number, size: number): Mesh => {
-      const eye = MeshBuilder.CreateSphere("eye", { diameter: 0.3 * size, segments: 12 }, scene);
+      const eye = MeshBuilder.CreateSphere("eye", { diameter: 0.3 * size, segments: 18 }, scene);
       eye.position.set(x, y, z);
       eye.scaling.set(1, 0.75, 0.6);
       eye.material = eyeMat;
       eye.parent = this.body;
-      const pupil = MeshBuilder.CreateSphere("pupil", { diameter: 0.14 * size, segments: 8 }, scene);
+      const pupil = MeshBuilder.CreateSphere("pupil", { diameter: 0.14 * size, segments: 12 }, scene);
       pupil.position.set(0, 0, 0.11 * size);
       pupil.scaling.set(0.5, 1.2, 0.5);
       pupil.material = pupilMat;
@@ -149,7 +161,7 @@ export class ProceduralCreature implements CreatureLook {
     spineMat.emissiveColor = new Color3(0.04, 0.16, 0.2);
     // A crest of spines rising clear of the mantle, so the silhouette changes from above.
     for (let i = 0; i < 5; i++) {
-      const spine = MeshBuilder.CreateCylinder(`spine${i}`, { diameterTop: 0, diameterBottom: 0.2, height: 0.75 - i * 0.07, tessellation: 8 }, scene);
+      const spine = MeshBuilder.CreateCylinder(`spine${i}`, { diameterTop: 0, diameterBottom: 0.2, height: 0.75 - i * 0.07, tessellation: 12 }, scene);
       spine.position.set(0, 0.78 - i * 0.04, 0.12 - i * 0.24);
       spine.rotation.x = -0.45 - i * 0.12;
       spine.material = spineMat;
@@ -157,7 +169,7 @@ export class ProceduralCreature implements CreatureLook {
       this.spines.push(spine);
     }
     for (const side of [-1, 1]) {
-      const spine = MeshBuilder.CreateCylinder("spineSide", { diameterTop: 0, diameterBottom: 0.16, height: 0.55, tessellation: 8 }, scene);
+      const spine = MeshBuilder.CreateCylinder("spineSide", { diameterTop: 0, diameterBottom: 0.16, height: 0.55, tessellation: 12 }, scene);
       spine.position.set(side * 0.62, 0.3, -0.15);
       spine.rotation.z = -side * 1.0;
       spine.rotation.x = -0.4;
@@ -184,7 +196,7 @@ export class ProceduralCreature implements CreatureLook {
     for (let i = 0; i < 8; i++) {
       const tube = new Tube(scene, `arm${i}`, 0.16, 0.06, armSkin);
       tube.mesh.setEnabled(false);
-      const tip = MeshBuilder.CreateSphere(`armTip${i}`, { diameter: 0.22, segments: 8 }, scene);
+      const tip = MeshBuilder.CreateSphere(`armTip${i}`, { diameter: 0.22, segments: 12 }, scene);
       tip.material = tipMat;
       tip.setEnabled(false);
       this.arms.push({ tube, tip, ext: 0, goal: new Vector3(), attached: false });
@@ -253,11 +265,14 @@ export class ProceduralCreature implements CreatureLook {
   update(dt: number, x: number, z: number, vx: number, vz: number, goals: Array<Vector3 | null>): void {
     this.time += dt;
     const speed = Math.hypot(vx, vz);
+    this.movement += (Math.min(1, speed / 1.5) - this.movement) * (1 - Math.exp(-dt * 9));
+    // Integrating phase avoids the gait jumping whenever speed changes.
+    this.gaitPhase += dt * speed * 3.2;
     if (speed > 0.05) {
       const target = Math.atan2(vx, vz);
       let diff = target - this.heading;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      this.heading += diff * Math.min(1, dt * 10);
+      this.heading += diff * (1 - Math.exp(-dt * 10));
     }
     this.pulse = Math.max(0, this.pulse - dt * 4);
     const style = FORMS[Math.min(this.form, FORMS.length - 1)]!;
@@ -274,15 +289,17 @@ export class ProceduralCreature implements CreatureLook {
     const s = this.size;
     this.root.scaling.setAll(s);
     const bodyY = BODY_Y * s;
-    const bob = Math.sin(this.time * 3.2) * 0.05;
+    const bob = Math.sin(this.time * 2.4) * 0.025 + Math.sin(this.gaitPhase * 2) * this.movement * 0.025;
     const lean = Math.min(speed / 4, 1) * 0.18;
 
     this.root.position.set(x, 0, z);
     this.root.rotation.y = this.heading;
     this.body.position.y = BODY_Y + bob / s;
     this.body.rotation.x = lean;
+    this.body.rotation.z = Math.sin(this.gaitPhase) * this.movement * 0.035;
     const squash = 1 + this.pulse * 0.12;
-    this.body.scaling.set(squash, 0.82 / squash, 1.05 * squash);
+    const breath = Math.sin(this.time * 2.4) * 0.012;
+    this.body.scaling.set(squash + breath, 0.82 / squash + breath, 1.05 * squash);
 
     const k = this.curve;
     const { a, b, c, d, wiggle: w } = k;
@@ -297,11 +314,12 @@ export class ProceduralCreature implements CreatureLook {
       const lx = Math.sin(ang), lz = Math.cos(ang);
       const wx = lx * cosH + lz * sinH;
       const wz = -lx * sinH + lz * cosH;
-      const gait = Math.sin(this.time * (4 + speed * 2.5) + i * 1.7);
+      const gait = Math.sin(this.gaitPhase + (i % 2) * Math.PI);
       a.set(x + wx * 0.35 * s, bodyY + bob - 0.2 * s, z + wz * 0.35 * s);
       b.set(x + wx * 0.8 * s, 0.55 * s, z + wz * 0.8 * s);
-      const reach = (1.15 + gait * 0.08) * s;
-      d.set(x + wx * reach - vx * 0.08, 0.04, z + wz * reach - vz * 0.08);
+      const reach = 1.15 * s;
+      const sweep = gait * this.movement * 0.24 * s;
+      d.set(x + wx * reach + sinH * sweep - vx * 0.05, 0.04 + Math.max(0, Math.cos(this.gaitPhase + (i % 2) * Math.PI)) * this.movement * 0.18, z + wz * reach + cosH * sweep - vz * 0.05);
       c.set((b.x + d.x) / 2, (0.35 + Math.max(0, gait) * 0.15) * s, (b.z + d.z) / 2);
       w.set(-wz * 0.06, 0.04, wx * 0.06);
       k.phase = this.time * 2 + i;

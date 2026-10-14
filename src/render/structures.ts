@@ -24,6 +24,8 @@ export class StructuresView {
   private drone: TransformNode;
   private payload: Mesh;
   private droneRing: Mesh;
+  private rotors: Mesh[] = [];
+  private bubbles: Mesh[] = [];
   private time = 0;
   private coreMat: StandardMaterial;
   private reactorRing: Mesh;
@@ -79,18 +81,34 @@ export class StructuresView {
     this.liquid = MeshBuilder.CreateCylinder("vatLiquid", { diameter: 1.1, height: 1, tessellation: 20 }, scene);
     this.liquid.material = material(scene, "vatLiquidMat", new Color3(0.1, 0.4, 0.1), new Color3(0.2, 0.75, 0.2));
     this.liquid.parent = this.vatBuilt;
+    for (let i = 0; i < 6; i++) {
+      const bubble = MeshBuilder.CreateSphere(`vatBubble${i}`, { diameter: 0.08 + (i % 3) * 0.025, segments: 12 }, scene);
+      bubble.material = this.liquid.material;
+      bubble.parent = this.vatBuilt;
+      this.bubbles.push(bubble);
+    }
+    for (const side of [-1, 1]) {
+      const pipe = MeshBuilder.CreateCylinder("vatFeedPipe", { height: 1.5, diameter: 0.1, tessellation: 16 }, scene);
+      pipe.position.set(side * 0.75, 0.85, 0);
+      pipe.material = metal;
+      pipe.parent = this.vatBuilt;
+      const coupling = MeshBuilder.CreateTorus("vatCoupling", { diameter: 0.14, thickness: 0.045, tessellation: 20 }, scene);
+      coupling.position.set(side * 0.75, 1.45, 0);
+      coupling.material = metal;
+      coupling.parent = this.vatBuilt;
+    }
     shadows?.addShadowCaster(base);
 
     // Drone: saucer with a glowing ring and a payload blob that grows with its load.
     this.drone = new TransformNode("drone", scene);
-    const hull = MeshBuilder.CreateSphere("droneHull", { diameter: 0.8, segments: 12 }, scene);
+    const hull = MeshBuilder.CreateSphere("droneHull", { diameter: 0.8, segments: 18 }, scene);
     hull.scaling.set(1, 0.35, 1);
     hull.material = material(scene, "droneHullMat", new Color3(0.12, 0.08, 0.18), new Color3(0.05, 0.03, 0.08));
     hull.parent = this.drone;
     this.droneRing = MeshBuilder.CreateTorus("droneRing", { diameter: 0.85, thickness: 0.06, tessellation: 24 }, scene);
     this.droneRing.material = material(scene, "droneRingMat", Color3.Black(), new Color3(0.2, 1, 0.75));
     this.droneRing.parent = this.drone;
-    this.payload = MeshBuilder.CreateSphere("dronePayload", { diameter: 0.45, segments: 10 }, scene);
+    this.payload = MeshBuilder.CreateSphere("dronePayload", { diameter: 0.45, segments: 16 }, scene);
     this.payload.position.y = -0.35;
     this.payload.material = material(scene, "dronePayloadMat", new Color3(0.3, 0.6, 0.2), new Color3(0.25, 0.6, 0.15));
     this.payload.parent = this.drone;
@@ -146,7 +164,7 @@ export class StructuresView {
     mouth.material = this.refineryGlow;
     mouth.parent = this.refineryBuilt;
     for (const [x, h] of [[-0.45, 1.3], [0.45, 1]] as const) {
-      const stack = MeshBuilder.CreateCylinder("refineryStack", { diameter: 0.32, height: h, tessellation: 12 }, scene);
+      const stack = MeshBuilder.CreateCylinder("refineryStack", { diameter: 0.32, height: h, tessellation: 18 }, scene);
       stack.position.set(x, 1.1 + h / 2, 0.35);
       stack.material = metal;
       stack.parent = this.refineryBuilt;
@@ -182,18 +200,18 @@ export class StructuresView {
     this.outpostRing.position.y = 0.1;
     this.outpostRing.material = material(scene, "outpostRingMat", Color3.Black(), new Color3(1, 0.55, 0.2));
     this.outpostRing.parent = this.outpostBuilt;
-    const beacon = MeshBuilder.CreateCylinder("outpostBeacon", { diameterTop: 0.08, diameterBottom: 0.2, height: 1.6, tessellation: 10 }, scene);
+    const beacon = MeshBuilder.CreateCylinder("outpostBeacon", { diameterTop: 0.08, diameterBottom: 0.2, height: 1.6, tessellation: 16 }, scene);
     beacon.position.set(OUTPOST.radius - 0.3, 0.8, 0);
     beacon.material = metal;
     beacon.parent = this.outpostBuilt;
-    const lamp = MeshBuilder.CreateSphere("outpostLamp", { diameter: 0.22, segments: 8 }, scene);
+    const lamp = MeshBuilder.CreateSphere("outpostLamp", { diameter: 0.22, segments: 12 }, scene);
     lamp.position.set(OUTPOST.radius - 0.3, 1.65, 0);
     lamp.material = this.outpostRing.material;
     lamp.parent = this.outpostBuilt;
 
     // Catcher: a small hovering hunter with a magenta ring; a tether reaches its prey.
     this.catcher = new TransformNode("catcher", scene);
-    const chull = MeshBuilder.CreateSphere("catcherHull", { diameter: 0.6, segments: 10 }, scene);
+    const chull = MeshBuilder.CreateSphere("catcherHull", { diameter: 0.6, segments: 16 }, scene);
     chull.scaling.set(1, 0.6, 1);
     chull.material = material(scene, "catcherHullMat", new Color3(0.16, 0.06, 0.16), new Color3(0.08, 0.02, 0.08));
     chull.parent = this.catcher;
@@ -201,13 +219,37 @@ export class StructuresView {
     const tetherMat = material(scene, "catcherGlow", Color3.Black(), new Color3(1, 0.35, 0.85));
     cring.material = tetherMat;
     cring.parent = this.catcher;
-    this.catcherPayload = MeshBuilder.CreateSphere("catcherPayload", { diameter: 0.35, segments: 8 }, scene);
+    // Small shrouded fans and panel ribs give both helper drones a mechanical silhouette.
+    for (const machine of [this.drone, this.catcher]) {
+      for (const side of [-1, 1]) {
+        const fan = MeshBuilder.CreateTorus(`${machine.name}FanShroud`, { diameter: 0.3, thickness: 0.045, tessellation: 24 }, scene);
+        fan.position.set(side * 0.5, 0.05, 0);
+        fan.material = metal;
+        fan.parent = machine;
+        const rotor = MeshBuilder.CreateBox(`${machine.name}FanBlade`, { width: 0.25, height: 0.025, depth: 0.05 }, scene);
+        rotor.position.copyFrom(fan.position);
+        rotor.material = metal;
+        rotor.parent = machine;
+        this.rotors.push(rotor);
+      }
+      const lens = MeshBuilder.CreateSphere(`${machine.name}Sensor`, { diameter: 0.12, segments: 16 }, scene);
+      lens.position.set(0, 0.02, 0.3);
+      lens.material = machine === this.drone ? this.droneRing.material : tetherMat;
+      lens.parent = machine;
+    }
+    for (let i = 0; i < 5; i++) {
+      const rib = MeshBuilder.CreateBox("refineryCoolingRib", { width: 0.1, height: 0.8, depth: 1.65 }, scene);
+      rib.position.set(-0.6 + i * 0.3, 0.5, 0);
+      rib.material = metal;
+      rib.parent = this.refineryBuilt;
+    }
+    this.catcherPayload = MeshBuilder.CreateSphere("catcherPayload", { diameter: 0.35, segments: 12 }, scene);
     this.catcherPayload.position.y = -0.3;
     this.catcherPayload.material = this.payload.material;
     this.catcherPayload.parent = this.catcher;
     shadows?.addShadowCaster(chull);
     this.tetherPivot = new TransformNode("catcherTetherPivot", scene);
-    this.tether = MeshBuilder.CreateCylinder("catcherTether", { diameter: 0.07, height: 1, tessellation: 6 }, scene);
+    this.tether = MeshBuilder.CreateCylinder("catcherTether", { diameter: 0.07, height: 1, tessellation: 10 }, scene);
     this.tether.rotation.x = Math.PI / 2;
     this.tether.material = tetherMat;
     this.tether.isPickable = false;
@@ -231,6 +273,7 @@ export class StructuresView {
   update(w: World, alpha: number, dt: number): void {
     if (!this.placed) this.place(w);
     this.time += dt;
+    for (const rotor of this.rotors) rotor.rotation.y += dt * 32;
     if (w.progress.reactorRepaired) {
       this.coreMat.emissiveColor.set(0.2, 1, 0.85);
       this.reactorRing.rotation.x += dt * 1.5;
@@ -256,6 +299,11 @@ export class StructuresView {
       const fill = Math.max(0.04, vat.stock / vatLevel(vat).storage);
       this.liquid.scaling.y = 1.4 * fill;
       this.liquid.position.y = 0.25 + (1.4 * fill) / 2;
+      this.bubbles.forEach((bubble, i) => {
+        const rise = (this.time * 0.28 + i / this.bubbles.length) % 1;
+        bubble.position.set(Math.sin(i * 2.4) * 0.38, 0.3 + rise * 1.4 * fill, Math.cos(i * 2.4) * 0.38);
+        bubble.scaling.setAll(Math.sin(rise * Math.PI) * 0.8);
+      });
     }
 
     this.refineryBuilt.setEnabled(refinery.built);
@@ -278,9 +326,11 @@ export class StructuresView {
       const z = w.catcherPrev.z + (catcher.z - w.catcherPrev.z) * alpha;
       const y = 1.5 + Math.sin(this.time * 4 + 1) * 0.1;
       this.catcher.position.set(x, y, z);
+      this.flightPose(this.catcher, catcher.x - w.catcherPrev.x, catcher.z - w.catcherPrev.z, dt);
       const load = cargoWeight(catcher.cargo) / catcherLevel(catcher).capacity;
       this.catcherPayload.setEnabled(load > 0);
       this.catcherPayload.scaling.setAll(0.5 + load);
+      this.catcherPayload.rotation.z = Math.sin(this.time * 3.7) * 0.13;
       if (prey && w.catcher.progress > 0) {
         const tx = prey.prevX + (prey.x - prey.prevX) * alpha;
         const tz = prey.prevZ + (prey.z - prey.prevZ) * alpha;
@@ -299,10 +349,23 @@ export class StructuresView {
       const x = w.dronePrev.x + (drone.x - w.dronePrev.x) * alpha;
       const z = w.dronePrev.z + (drone.z - w.dronePrev.z) * alpha;
       this.drone.position.set(x, 2 + Math.sin(this.time * 3) * 0.12, z);
+      this.flightPose(this.drone, drone.x - w.dronePrev.x, drone.z - w.dronePrev.z, dt);
       this.droneRing.rotation.y += dt * 2;
       const load = cargoWeight(drone.cargo) / droneCapacity(drone);
       this.payload.setEnabled(load > 0);
       this.payload.scaling.setAll(0.5 + load);
+      this.payload.rotation.z = Math.sin(this.time * 3) * 0.12;
     }
+  }
+
+  private flightPose(node: TransformNode, dx: number, dz: number, dt: number): void {
+    const blend = 1 - Math.exp(-dt * 8);
+    const speed = Math.hypot(dx, dz) * 30;
+    if (speed > 0.05) {
+      const turn = Math.atan2(dx, dz) - node.rotation.y;
+      node.rotation.y += Math.atan2(Math.sin(turn), Math.cos(turn)) * blend;
+    }
+    node.rotation.x += (Math.min(0.2, speed * 0.035) - node.rotation.x) * blend;
+    node.rotation.z = Math.sin(this.time * 2.1) * 0.025;
   }
 }

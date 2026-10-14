@@ -26,6 +26,8 @@ describe("authored Stalker hatchling", () => {
       const fallback = new ProceduralCreature(scene, null);
       const creature = new GltfCreature(scene, fallback, null);
       creature.addForm("larval", source);
+      const relief = scene.textures.filter((texture) => /MicroRelief$/.test(texture.name));
+      expect(relief).toHaveLength(2);
       creature.update(1 / 30, 4, 6, 1, 0, [new Vector3(5, 0.9, 6)]);
       expect(fallback.root.isEnabled()).toBe(false);
       expect(creature.root.position.asArray()).toEqual([4, 0, 6]);
@@ -44,6 +46,7 @@ describe("authored Stalker hatchling", () => {
       creature.setForm(0, false);
       expect(fallback.root.isEnabled()).toBe(false);
       creature.dispose(); source.container.dispose();
+      expect(scene.textures.filter((texture) => /MicroRelief$/.test(texture.name))).toHaveLength(0);
     } finally { scene.dispose(); engine.dispose(); }
   }, 20000);
 });
