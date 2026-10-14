@@ -25,8 +25,8 @@ Until Phase B adds Cryo labs, the elevator from B1 leads to a placeholder "Resea
 | --- | --- | --- |
 | **0. Biome framework** | Biomes as a sequence; clearing one opens the next; per-biome scaling; capture power and health keep scaling; endless XP levels | v9 |
 | **A. Loop feel** | Feeding frenzy, prized specimens, supply pods, cravings and mutagen, bestiary | v10 |
-| **B. Cryo labs** | Biome 2: cold and heat vents, new targets and enemy, cryo crystals, forward base, catcher helper, refinery | v11 |
-| **C. Endless** | Biome 3, then cycling biomes at rising depth; endless evolution tiers; new perks; objective machines that summon reward waves | v12 |
+| **B. Cryo labs** | Biome 2: cold and heat vents, new targets and enemy, cryo crystals (B1); forward base, catcher helper, refinery (B2) | v11, v12 |
+| **C. Endless** | Biome 3, then cycling biomes at rising depth; endless evolution tiers; new perks; objective machines that summon reward waves | v13 |
 
 Each phase is committed and playable on its own, with a reviewer pass on the save and economy changes.
 
@@ -125,11 +125,11 @@ Saves (v10): the `mutagen` currency, cravings, bestiary counts, mutagen mutation
 - **Cold:** cold rooms build a **chill** meter. At full chill, movement is −30% and capture power −25%. **Heat vents** (map points) clear it, so routes matter. The **Thermal fat** mutation (paid in crystals) slows chill.
 - **Targets:** cryo scientist (wanders, pays crystals), frost runner (fast flee), **patrol drone** (new enemy: telegraphed dash), **cryo sentinel** boss (multi-grab, telegraphed freezing pulse that fills chill).
 - **Cryo crystals:** the biome's currency, for doors, Thermal fat and the refinery.
-- **Forward base:** a second deposit pad halfway through the map, built for crystals.
-- **Catcher helper:** a built helper that slowly captures targets near you (30% of your capture power) and carries them to the nearest base. It moves resources; it never creates them.
-- **Refinery:** turns biomass + reactor parts into **alloy** over play time (stock capped, like the vat). Alloy pays for evolution tiers 2 and up and capture-power levels past 24.
+- **Forward base:** a second deposit pad halfway through each floor (security sector; cryo vaults), built once per floor after that room opens and lost when you move on. It is heated, so it doubles as a warm spot in a cold room. Helpers deliver to whichever pad is nearer.
+- **Catcher helper:** a built helper that slowly captures targets near you (30% of your capture power) and carries them to the nearest pad. Its catches count for XP, quests and the bestiary, but not for combos, frenzies or cravings (those are about your own hunting). It skips bosses, supply pods and prized specimens, and anything you are already holding.
+- **Refinery:** turns biomass + machine parts into **alloy** over play time (stock capped, like the vat). Each batch pays its input from the bank when it starts and waits if the bank can't cover it; a batch in progress survives reloads and moving on. The drone collects alloy too. Alloy pays for evolution tiers 2 and up and capture-power levels past 24.
 
-Saves (v11): crystals and alloy currencies, chill (transient), forward base, catcher and refinery state.
+Saves: v11 adds the crystals and alloy currencies and Thermal fat (chill is transient). v12 adds refinery, catcher and forward base state. Alloy sinks arrive in Phase C.
 
 ---
 

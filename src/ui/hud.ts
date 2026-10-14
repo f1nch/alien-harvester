@@ -4,8 +4,9 @@ import { UPGRADES, UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 import { doorRequirements } from "../domain/doors";
 import { FORM_NAMES } from "../content/evolution";
 import { CHOICES_PER_LEVEL, PERKS } from "../content/perks";
-import { DRONE, VAT } from "../content/structures";
-import { droneCapacity, nextStep, stepRequirements, vatLevel, type StructureKind } from "../domain/structures";
+import { CATCHER, DRONE, OUTPOST, REFINERY, VAT } from "../content/structures";
+
+import { catcherLevel, droneCapacity, nextStep, refineryIdle, refineryInput, refineryLevel, stepRequirements, STRUCTURE_KINDS, vatLevel, type StructureKind } from "../domain/structures";
 import { describePerk, isLegal, perkStacks } from "../domain/perks";
 import { CURRENCY_LABEL, type Currency } from "../content/currencies";
 import { capRaise, maxLevel, nextCost, upgradeValue } from "../domain/economy";
@@ -26,6 +27,10 @@ import { describeCraving } from "../domain/cravings";
 import { mutagenLevel, nextMutagenCost } from "../domain/mutagen";
 import { MAX_IMPORT_BYTES, type SaveSummary } from "../persistence/transfer";
 
+export function structureName(kind: StructureKind): string {
+  return { vat: VAT.name, drone: DRONE.name, refinery: REFINERY.name, catcher: CATCHER.name, outpost: OUTPOST.name }[kind];
+}
+
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
 export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰" };
 
@@ -40,8 +45,13 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 
 /** Only values the structures UI shows; never the vat timer or drone position, which change every tick. */
 function structureKey(w: World): string {
-  const { vat, drone } = w.progress.structures;
-  return [vat.built, vat.level, vat.stock, drone.built, drone.level, cargoWeight(drone.cargo), w.droneMode, w.stats.farmRate].join(",");
+  const { vat, drone, refinery, catcher, outpost } = w.progress.structures;
+  const k = w.catcher;
+  return [
+    vat.built, vat.level, vat.stock, drone.built, drone.level, cargoWeight(drone.cargo), w.droneMode, w.stats.farmRate,
+    refinery.built, refinery.level, refinery.stock, refinery.running,
+    catcher.built, catcher.level, cargoWeight(catcher.cargo), k.mode, outpost.built,
+  ].join(",");
 }
 
 function chip(icon: string, iconCls: string, label: string): { root: HTMLElement; value: HTMLElement } {
@@ -99,6 +109,7 @@ function requirementList(list: HTMLElement, reqs: Requirement[]): void {
 }
 
 export interface HudState {
+  /** On a pad (the base or a forward base): the hold banks here. */
   inBase: boolean;
   /** Locked door the player is standing next to. */
   door: DoorDef | null;
@@ -170,8 +181,10 @@ export class Hud {
   private evoDesc: HTMLElement;
   private evoList: HTMLElement;
   private evoBtn: HTMLButtonElement;
-  private structureRows = new Map<StructureKind, { status: HTMLElement; reqs: HTMLElement; btn: HTMLButtonElement }>();
+  private structureRows = new Map<StructureKind, { root: HTMLElement; status: HTMLElement; reqs: HTMLElement; btn: HTMLButtonElement }>();
   private droneStatus: HTMLElement;
+  private catcherStatus: HTMLElement;
+  private catcherText = "";
   private bossBar: HTMLElement;
   private bossFill: HTMLElement;
   private bossState: HTMLElement;
@@ -278,7 +291,8 @@ export class Hud {
     this.quests.setAttribute("aria-live", "polite");
     this.hint = el("div", "hint");
     this.droneStatus = el("div", "drone-status hidden");
-    sub.append(this.quests, this.hint, this.droneStatus);
+    this.catcherStatus = el("div", "drone-status hidden");
+    sub.append(this.quests, this.hint, this.droneStatus, this.catcherStatus);
     top.append(sub);
 
     this.doorCard = el("div", "door-card hidden");
@@ -401,16 +415,16 @@ export class Hud {
     const structures = el("section", "structures");
     structures.setAttribute("aria-label", "Structures");
     structures.append(el("h3", undefined, "Structures"));
-    for (const kind of ["vat", "drone"] as const) {
+    for (const kind of STRUCTURE_KINDS) {
       const row = el("div", "structure-row");
-      const name = el("div", "up-name", kind === "vat" ? VAT.name : DRONE.name);
+      const name = el("div", "up-name", structureName(kind));
       const status = el("div", "up-value");
       const reqs = el("ul", "door-reqs");
       const btn = el("button", "btn btn-buy");
       btn.addEventListener("click", () => cb.onBuildStructure(kind));
       row.append(name, status, reqs, btn);
       structures.append(row);
-      this.structureRows.set(kind, { status, reqs, btn });
+      this.structureRows.set(kind, { root: row, status, reqs, btn });
     }
     card.append(structures);
 
@@ -601,6 +615,7 @@ export class Hud {
 
   update(w: World, s: HudState): void {
     const p = w.progress;
+    this.renderCatcher(w);
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
@@ -890,16 +905,40 @@ export class Hud {
 
   private renderStructures(w: World): void {
     const p = w.progress;
-    for (const kind of ["vat", "drone"] as const) {
+    for (const kind of STRUCTURE_KINDS) {
       const row = this.structureRows.get(kind)!;
       const s = p.structures[kind];
-      if (kind === "vat") {
+      // Crystal-built helpers stay out of the way until you've seen a crystal.
+      const hidden = (kind === "refinery" || kind === "catcher") && !s.built && p.banked.crystals <= 0;
+      row.root.classList.toggle("hidden", hidden);
+      if (hidden) continue;
+      const zoneName = (site: { x: number; z: number }) => (zoneAt(w.map, site.x, site.z)?.name ?? "facility").toLowerCase();
+      if (kind === "refinery") {
+        const r = p.structures.refinery;
+        const lvl = refineryLevel(r);
+        const input = refineryInput(p.depth);
+        const uses = `${fmt(input.biomass)} biomass + ${fmt(input.parts)} parts`;
+        const idle = refineryIdle(p);
+        row.status.textContent = r.built
+          ? `Level ${r.level} · ${r.stock}/${lvl.storage} alloy batches · ${idle === "full" ? "full: collect it" : idle === "input" ? `waiting for ${uses}` : "refining"}`
+          : `Not built. Turns ${uses} from your bank into alloy, in the ${zoneName(w.biome.def.sites.refinery)}.`;
+      } else if (kind === "catcher") {
+        const c = p.structures.catcher;
+        const lvl = catcherLevel(c);
+        row.status.textContent = c.built
+          ? `Level ${c.level} · grip ${lvl.powerPercent}% of yours · carries ${lvl.capacity}`
+          : "Not built. Hunts creatures near you and flies them to the nearest pad.";
+      } else if (kind === "outpost") {
+        row.status.textContent = p.structures.outpost.built
+          ? `Built in the ${zoneName(w.biome.def.sites.outpost)}. Bank here; it's heated, too.`
+          : `Not built. A second pad to bank at, in the ${zoneName(w.biome.def.sites.outpost)}. One per floor.`;
+      } else if (kind === "vat") {
         const v = p.structures.vat;
         const lvl = vatLevel(v);
         row.status.textContent = v.built
           ? `Level ${v.level} · ${v.stock}/${lvl.storage} batches · one every ${fmt(lvl.batchSeconds / w.stats.farmRate)}s`
           : `Not built. Produces biomass batches in the ${(zoneAt(w.map, w.biome.def.sites.vat.x, w.biome.def.sites.vat.z)?.name ?? "facility").toLowerCase()} while you play.`;
-      } else {
+      } else if (kind === "drone") {
         const d = p.structures.drone;
         row.status.textContent = d.built
           ? `Level ${d.level} · carries ${droneCapacity(d)}`
@@ -908,7 +947,7 @@ export class Hud {
       const next = nextStep(p, kind);
       if (!next) {
         row.reqs.replaceChildren();
-        row.btn.textContent = "Max level";
+        row.btn.textContent = kind === "outpost" ? "Built" : "Max level";
         row.btn.disabled = true;
         continue;
       }
@@ -917,7 +956,7 @@ export class Hud {
       const ok = reqs.every((r) => r.met);
       row.btn.disabled = !ok;
       row.btn.textContent = s.built ? `Upgrade to level ${s.level + 1}` : "Build";
-      const name = kind === "vat" ? VAT.name : DRONE.name;
+      const name = structureName(kind);
       row.btn.setAttribute("aria-label", s.built ? `Upgrade ${name} to level ${s.level + 1}` : `Build ${name}`);
     }
 
@@ -925,9 +964,25 @@ export class Hud {
     this.droneStatus.classList.toggle("hidden", !d.built);
     if (d.built) {
       const load = `${fmt(cargoWeight(d.cargo))}/${droneCapacity(d)}`;
-      const label = { idle: "waiting at base", toPlayer: "coming to you", toVat: "collecting from the vat", toBase: "delivering" }[w.droneMode];
+      const label = { idle: "waiting at base", toPlayer: "coming to you", toVat: "collecting from the vat", toRefinery: "collecting alloy", toBase: "delivering" }[w.droneMode];
       this.droneStatus.textContent = `Drone: ${label} (${load})`;
     }
+  }
+
+  /** Every frame, but only touches the DOM when its text changes (the grip moves each tick). */
+  private renderCatcher(w: World): void {
+    const c = w.progress.structures.catcher;
+    let text = "";
+    if (c.built) {
+      const load = `${fmt(cargoWeight(c.cargo))}/${catcherLevel(c).capacity}`;
+      const prey = w.catcher.target;
+      const label = w.catcher.mode === "hunting" && prey ? `catching a ${prey.def.name.toLowerCase()} (${Math.round(w.catcher.progress * 10) * 10}%)` : w.catcher.mode === "toPad" ? "delivering" : "following you";
+      text = `Catcher: ${label} (${load})`;
+    }
+    if (text === this.catcherText) return;
+    this.catcherText = text;
+    this.catcherStatus.classList.toggle("hidden", text === "");
+    this.catcherStatus.textContent = text;
   }
 
   private renderPerks(w: World): void {

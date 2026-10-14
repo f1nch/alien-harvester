@@ -71,7 +71,6 @@ export const CRYO_MAP: MapDef = {
     { x: 0, z: 38, radius: 1.6 },
     { x: 0, z: 44, radius: 1.6 },
     { x: -9.5, z: 53, radius: 1.6 },
-    { x: 9.5, z: 53, radius: 1.6 },
     { x: 0, z: 63.5, radius: 1.6 },
     { x: -7, z: 93, radius: 1.6 },
     { x: 7, z: 93, radius: 1.6 },
@@ -228,6 +227,8 @@ export const CRYO_LABS: BiomeDef = {
     repair: { quests: ["cryo-boss"], cost: { crystals: 30, parts: 10, biomass: 300 } },
   },
   exit: { x: 0, z: 95.5, radius: 1.4, name: "Freight elevator", action: "Take the elevator down" },
-  sites: { vat: { x: -11.5, z: 37 } },
+  sites: { vat: { x: -11.5, z: 37 }, refinery: { x: -9, z: -12 }, outpost: { x: 9.5, z: 53 } },
+  // In the vaults, where the east vent would be: built, it warms that side of the room.
+  outpost: { gate: "cryo-open-vaults", cost: { crystals: 30, biomass: 200 } },
   structureGate: "cryo-open-cold",
 };

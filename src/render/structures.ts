@@ -1,9 +1,10 @@
 import {
-  Color3, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, TransformNode,
+  Color3, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3,
 } from "@babylonjs/core";
 import { isBiomeCleared } from "../domain/biome";
 import { cargoWeight } from "../domain/progress";
-import { droneCapacity, vatLevel } from "../domain/structures";
+import { OUTPOST } from "../content/structures";
+import { catcherLevel, droneCapacity, refineryLevel, vatLevel } from "../domain/structures";
 import type { World } from "../game/world";
 
 function material(scene: Scene, name: string, diffuse: Color3, emissive = Color3.Black(), alpha = 1): StandardMaterial {
@@ -33,6 +34,20 @@ export class StructuresView {
   private placed = false;
   private exitRing: Mesh;
   private exitBeam: Mesh;
+  private refineryRoot: TransformNode;
+  private refineryBuilt: TransformNode;
+  private refinerySite: Mesh;
+  private refineryGlow: StandardMaterial;
+  private ingots: Mesh[] = [];
+  private outpostRoot: TransformNode;
+  private outpostBuilt: TransformNode;
+  private outpostSite: Mesh;
+  private outpostRing: Mesh;
+  private catcher: TransformNode;
+  private catcherPayload: Mesh;
+  private tetherPivot: TransformNode;
+  private tether: Mesh;
+  private aim = new Vector3();
 
   constructor(scene: Scene, shadows: ShadowGenerator | null) {
     this.vatRoot = new TransformNode("vat", scene);
@@ -109,12 +124,102 @@ export class StructuresView {
     this.exitBeam.material = material(scene, "exitBeamMat", Color3.Black(), new Color3(0.35, 0.9, 1), 0.18);
     this.exitBeam.isPickable = false;
     this.exitParts = [platform, this.exitRing, this.exitBeam];
+
+    // Refinery: a squat furnace with two stacks; it glows while a batch runs, and
+    // finished alloy stacks up as ingots beside it.
+    this.refineryRoot = new TransformNode("refinery", scene);
+    this.refinerySite = MeshBuilder.CreateDisc("refinerySite", { radius: 1.2, tessellation: 32 }, scene);
+    this.refinerySite.rotation.x = Math.PI / 2;
+    this.refinerySite.position.y = 0.02;
+    this.refinerySite.material = material(scene, "refinerySiteMat", Color3.Black(), new Color3(0.45, 0.3, 0.1), 0.6);
+    this.refinerySite.parent = this.refineryRoot;
+    this.refineryBuilt = new TransformNode("refineryBuilt", scene);
+    this.refineryBuilt.parent = this.refineryRoot;
+    const furnace = MeshBuilder.CreateBox("refineryBody", { width: 1.6, depth: 1.6, height: 1.1 }, scene);
+    furnace.position.y = 0.55;
+    furnace.material = metal;
+    furnace.parent = this.refineryBuilt;
+    shadows?.addShadowCaster(furnace);
+    this.refineryGlow = material(scene, "refineryGlow", Color3.Black(), new Color3(0.3, 0.12, 0.04));
+    const mouth = MeshBuilder.CreateBox("refineryMouth", { width: 0.9, depth: 0.05, height: 0.45 }, scene);
+    mouth.position.set(0, 0.5, -0.81);
+    mouth.material = this.refineryGlow;
+    mouth.parent = this.refineryBuilt;
+    for (const [x, h] of [[-0.45, 1.3], [0.45, 1]] as const) {
+      const stack = MeshBuilder.CreateCylinder("refineryStack", { diameter: 0.32, height: h, tessellation: 12 }, scene);
+      stack.position.set(x, 1.1 + h / 2, 0.35);
+      stack.material = metal;
+      stack.parent = this.refineryBuilt;
+      const rim = MeshBuilder.CreateTorus("refineryRim", { diameter: 0.34, thickness: 0.05, tessellation: 16 }, scene);
+      rim.position.set(x, 1.1 + h, 0.35);
+      rim.material = this.refineryGlow;
+      rim.parent = this.refineryBuilt;
+    }
+    const ingotMat = material(scene, "ingotMat", new Color3(0.55, 0.6, 0.7), new Color3(0.2, 0.25, 0.35));
+    ingotMat.specularColor = new Color3(0.9, 0.9, 1);
+    for (let i = 0; i < 8; i++) {
+      const ingot = MeshBuilder.CreateBox("ingot", { width: 0.42, depth: 0.2, height: 0.12 }, scene);
+      ingot.position.set(1.05, 0.06 + Math.floor(i / 2) * 0.13, -0.4 + (i % 2) * 0.24);
+      ingot.material = ingotMat;
+      ingot.parent = this.refineryBuilt;
+      this.ingots.push(ingot);
+    }
+
+    // Forward base: a smaller twin of the base pad, with a warm ring (it is heated).
+    this.outpostRoot = new TransformNode("outpost", scene);
+    this.outpostSite = MeshBuilder.CreateDisc("outpostSite", { radius: OUTPOST.radius, tessellation: 40 }, scene);
+    this.outpostSite.rotation.x = Math.PI / 2;
+    this.outpostSite.position.y = 0.02;
+    this.outpostSite.material = material(scene, "outpostSiteMat", Color3.Black(), new Color3(0.1, 0.3, 0.35), 0.35);
+    this.outpostSite.parent = this.outpostRoot;
+    this.outpostBuilt = new TransformNode("outpostBuilt", scene);
+    this.outpostBuilt.parent = this.outpostRoot;
+    const pad = MeshBuilder.CreateCylinder("outpostPad", { diameter: OUTPOST.radius * 2, height: 0.08, tessellation: 40 }, scene);
+    pad.position.y = 0.04;
+    pad.material = material(scene, "outpostPadMat", new Color3(0.12, 0.2, 0.22), new Color3(0.05, 0.16, 0.18));
+    pad.parent = this.outpostBuilt;
+    this.outpostRing = MeshBuilder.CreateTorus("outpostRing", { diameter: OUTPOST.radius * 2 - 0.2, thickness: 0.08, tessellation: 48 }, scene);
+    this.outpostRing.position.y = 0.1;
+    this.outpostRing.material = material(scene, "outpostRingMat", Color3.Black(), new Color3(1, 0.55, 0.2));
+    this.outpostRing.parent = this.outpostBuilt;
+    const beacon = MeshBuilder.CreateCylinder("outpostBeacon", { diameterTop: 0.08, diameterBottom: 0.2, height: 1.6, tessellation: 10 }, scene);
+    beacon.position.set(OUTPOST.radius - 0.3, 0.8, 0);
+    beacon.material = metal;
+    beacon.parent = this.outpostBuilt;
+    const lamp = MeshBuilder.CreateSphere("outpostLamp", { diameter: 0.22, segments: 8 }, scene);
+    lamp.position.set(OUTPOST.radius - 0.3, 1.65, 0);
+    lamp.material = this.outpostRing.material;
+    lamp.parent = this.outpostBuilt;
+
+    // Catcher: a small hovering hunter with a magenta ring; a tether reaches its prey.
+    this.catcher = new TransformNode("catcher", scene);
+    const chull = MeshBuilder.CreateSphere("catcherHull", { diameter: 0.6, segments: 10 }, scene);
+    chull.scaling.set(1, 0.6, 1);
+    chull.material = material(scene, "catcherHullMat", new Color3(0.16, 0.06, 0.16), new Color3(0.08, 0.02, 0.08));
+    chull.parent = this.catcher;
+    const cring = MeshBuilder.CreateTorus("catcherRing", { diameter: 0.7, thickness: 0.05, tessellation: 20 }, scene);
+    const tetherMat = material(scene, "catcherGlow", Color3.Black(), new Color3(1, 0.35, 0.85));
+    cring.material = tetherMat;
+    cring.parent = this.catcher;
+    this.catcherPayload = MeshBuilder.CreateSphere("catcherPayload", { diameter: 0.35, segments: 8 }, scene);
+    this.catcherPayload.position.y = -0.3;
+    this.catcherPayload.material = this.payload.material;
+    this.catcherPayload.parent = this.catcher;
+    shadows?.addShadowCaster(chull);
+    this.tetherPivot = new TransformNode("catcherTetherPivot", scene);
+    this.tether = MeshBuilder.CreateCylinder("catcherTether", { diameter: 0.07, height: 1, tessellation: 6 }, scene);
+    this.tether.rotation.x = Math.PI / 2;
+    this.tether.material = tetherMat;
+    this.tether.isPickable = false;
+    this.tether.parent = this.tetherPivot;
   }
 
   /** The vat site, objective console and exit belong to the biome; a biome change reloads the page. */
   private place(w: World): void {
     const b = w.biome.def;
     this.vatRoot.position.set(b.sites.vat.x, 0, b.sites.vat.z);
+    this.refineryRoot.position.set(b.sites.refinery.x, 0, b.sites.refinery.z);
+    this.outpostRoot.position.set(b.sites.outpost.x, 0, b.sites.outpost.z);
     for (const m of this.consoleParts) m.position.set(b.objective.x, m.position.y, b.objective.z);
     for (const m of this.exitParts) {
       m.position.set(b.exit.x, m.position.y, b.exit.z);
@@ -142,7 +247,8 @@ export class StructuresView {
     } else {
       this.exitMat.emissiveColor.set(0.15, 0.2, 0.25);
     }
-    const { vat, drone } = w.progress.structures;
+    const { vat, drone, refinery, outpost, catcher } = w.progress.structures;
+    const quests = w.progress.quests;
 
     this.vatBuilt.setEnabled(vat.built);
     this.sitePad.setEnabled(!vat.built && w.progress.quests[w.biome.def.structureGate]?.done === true);
@@ -151,6 +257,42 @@ export class StructuresView {
       this.liquid.scaling.y = 1.4 * fill;
       this.liquid.position.y = 0.25 + (1.4 * fill) / 2;
     }
+
+    this.refineryBuilt.setEnabled(refinery.built);
+    this.refinerySite.setEnabled(!refinery.built && quests[w.biome.def.structureGate]?.done === true && w.progress.banked.crystals > 0);
+    if (refinery.built) {
+      const heat = refinery.running ? 0.75 + 0.25 * Math.sin(this.time * 5) : 0.25;
+      this.refineryGlow.emissiveColor.set(1 * heat, 0.45 * heat, 0.12 * heat);
+      const shown = Math.min(this.ingots.length, Math.round((refinery.stock / refineryLevel(refinery).storage) * this.ingots.length));
+      for (let i = 0; i < this.ingots.length; i++) this.ingots[i]!.setEnabled(i < shown);
+    }
+
+    this.outpostBuilt.setEnabled(outpost.built);
+    this.outpostSite.setEnabled(!outpost.built && quests[w.biome.def.outpost.gate]?.done === true);
+    if (outpost.built) this.outpostRing.rotation.y += dt * 0.6;
+
+    this.catcher.setEnabled(catcher.built);
+    const prey = catcher.built && w.catcher.mode === "hunting" ? w.catcher.target : null;
+    if (catcher.built) {
+      const x = w.catcherPrev.x + (catcher.x - w.catcherPrev.x) * alpha;
+      const z = w.catcherPrev.z + (catcher.z - w.catcherPrev.z) * alpha;
+      const y = 1.5 + Math.sin(this.time * 4 + 1) * 0.1;
+      this.catcher.position.set(x, y, z);
+      const load = cargoWeight(catcher.cargo) / catcherLevel(catcher).capacity;
+      this.catcherPayload.setEnabled(load > 0);
+      this.catcherPayload.scaling.setAll(0.5 + load);
+      if (prey && w.catcher.progress > 0) {
+        const tx = prey.prevX + (prey.x - prey.prevX) * alpha;
+        const tz = prey.prevZ + (prey.z - prey.prevZ) * alpha;
+        this.aim.set(tx - x, 0.6 - y, tz - z);
+        const len = this.aim.length();
+        this.tetherPivot.position.set(x, y, z);
+        this.tetherPivot.lookAt(this.aim.addInPlace(this.tetherPivot.position));
+        this.tether.position.z = len / 2;
+        this.tether.scaling.y = len;
+      }
+    }
+    this.tetherPivot.setEnabled(prey !== null && w.catcher.progress > 0);
 
     this.drone.setEnabled(drone.built);
     if (drone.built) {

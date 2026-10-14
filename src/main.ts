@@ -17,7 +17,8 @@ import { devCompleteActive } from "./domain/quests";
 import { buildStructure, buyMutagenMutation, leaveBiome, nearExit, nearReactor, repair, buyUpgrade, evolveCreature, nearbyLockedDoor, openDoor, pickPerk, respec, respecBlocker } from "./game/actions";
 import { FixedLoop } from "./game/loop";
 import { stepWorld } from "./game/step";
-import { inBase } from "./game/systems/deposit";
+import { atPad } from "./game/systems/deposit";
+import { structureName } from "./ui/hud";
 import { createWorld, gainXp, pushQuestOutcome, refreshObstacles, refreshStats, SIM_HZ, type TargetEntity, type World } from "./game/world";
 import { defaultSettings, toSaveFile, type SaveFile, type Settings } from "./persistence/schema";
 import { exportFileName, exportText, IMPORT_ERRORS, parseImport } from "./persistence/transfer";
@@ -331,7 +332,7 @@ async function boot(): Promise<void> {
 
   function refreshHud(): void {
     hud.update(world, {
-      inBase: inBase(world),
+      inBase: atPad(world),
       door: nearbyLockedDoor(world),
       respecBlocker: respecBlocker(world),
       boss: engagedBoss(world),
@@ -453,11 +454,13 @@ async function boot(): Promise<void> {
       // Total this frame's deposits into one floater per currency over the base.
       const deposited = emptyWallet();
       let leveled = 0;
+      let pad: { x: number; z: number } = room.base;
       for (const e of events) {
+        if (e.type === "deposited") pad = e.pad;
         if (e.type === "deposited") for (const c of CURRENCIES) deposited[c] += (e.drop.reward[c] ?? 0) * world.stats.yieldPercent / 100;
         if (e.type === "levelUp") leveled = e.level;
       }
-      const basePt = renderer.worldToScreen(room.base.x, 1.2, room.base.z);
+      const basePt = renderer.worldToScreen(pad.x, 1.2, pad.z);
       if (basePt) {
         CURRENCIES.filter((c) => deposited[c] > 0).forEach((c, i) => {
           floaters.spawn(`+${Math.round(deposited[c] * 10) / 10} ${ICON[c]}`, basePt.x + i * 46 - 23, basePt.y);
@@ -509,10 +512,10 @@ async function boot(): Promise<void> {
           hud.toast(`Bestiary: ${e.count} ${TARGETS[e.target].name.toLowerCase()}s · +${e.mutagen} ✺, +1% capture power`, 4);
           saveNow = true;
         } else if (e.type === "structureBuilt") {
-          const name = e.kind === "vat" ? "Biomass vat" : "Delivery drone";
+          const name = structureName(e.kind);
           hud.toast(e.level === 1 ? `${name} built` : `${name} upgraded to level ${e.level}`);
           saveNow = true;
-        } else if (e.type === "droneDeposited") {
+        } else if (e.type === "droneDeposited" || e.type === "catcherDeposited") {
           // The drone banked cargo: persist it like a player deposit.
           saveNow = true;
         } else if (e.type === "doorUnlocked" || e.type === "purchased") saveNow = true;
@@ -525,7 +528,7 @@ async function boot(): Promise<void> {
       }
     }
     // Also save if the player walks off the base part-way through a deposit.
-    if (depositUnsaved && !inBase(world)) {
+    if (depositUnsaved && !atPad(world)) {
       depositUnsaved = false;
       lastSaveTick = world.tick;
       void save();

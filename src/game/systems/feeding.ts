@@ -5,7 +5,7 @@ import { scaleReward } from "../../domain/biome";
 import { applyCravingEvents, FULL_HOLD, type CravingEvent } from "../../domain/cravings";
 import { roundCents } from "../../content/currencies";
 import { cargoWeight } from "../../domain/progress";
-import { inBase } from "./deposit";
+import { atPad } from "./deposit";
 import { feedingTuning } from "../../domain/mutagen";
 import { bankDrop } from "./deposit";
 import { newTrip, refreshStats, type TargetEntity, type World } from "../world";
@@ -50,7 +50,7 @@ export function updateFeeding(w: World, dt: number): void {
   // empties away from base (the drone took it). Base deposits are judged in onTripBanked.
   const held = cargoWeight(w.progress.cargo);
   if (held > f.trip.peak) f.trip.peak = held;
-  else if (held === 0 && f.trip.peak > 0 && !inBase(w)) f.trip = newTrip();
+  else if (held === 0 && f.trip.peak > 0 && !atPad(w)) f.trip = newTrip();
 
   const prized = w.targets.find((t) => t.prized);
   if (prized) {
@@ -81,7 +81,7 @@ export function updateFeeding(w: World, dt: number): void {
 function pickPrized(w: World): TargetEntity | null {
   const zones = reachableZones(w.map, w.progress.unlockedDoors);
   const options = w.targets.filter((t) => {
-    if (t.held || (t.def.behavior !== "wander" && t.def.behavior !== "flee")) return false;
+    if (t.held || t === w.catcher.target || (t.def.behavior !== "wander" && t.def.behavior !== "flee")) return false;
     const zone = zoneAt(w.map, t.x, t.z);
     return zone !== null && zones.has(zone.id);
   });
@@ -145,6 +145,21 @@ export function onCaptured(w: World, t: TargetEntity): void {
   }
   // Judged together, so this capture can't also pay a craving rolled because of it.
   cravings(w, events);
+}
+
+/** A helper's catch: the bestiary counts it; combos, frenzies and cravings don't. */
+export function onHelperCaptured(w: World, t: TargetEntity): void {
+  const milestone = recordCapture(w.progress, t.def.id);
+  if (milestone) {
+    refreshStats(w);
+    w.events.push({ type: "bestiaryMilestone", target: t.def.id, count: milestone.count, mutagen: milestone.mutagen });
+  }
+  if (t.prized) {
+    // The prized bonus is for catching it yourself; it just stops being prized.
+    t.prized = false;
+    w.feeding.prizedLeft = 0;
+    w.feeding.prizedTimer = feedingTuning(w.progress).prizedInterval;
+  }
 }
 
 /** Biomass banked from the hold at base this trip (drone deliveries don't count). */

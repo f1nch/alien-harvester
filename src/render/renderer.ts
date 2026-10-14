@@ -2,7 +2,7 @@ import {
   Camera, Color3, Color4, DefaultRenderingPipeline, DirectionalLight, Engine, FreeCamera, GlowLayer, HemisphericLight, ImageProcessingConfiguration, Matrix, Mesh, MeshBuilder, Scene, ShadowGenerator, StandardMaterial, Vector3,
 } from "@babylonjs/core";
 import { zoneAt, type MapDef, type Rect } from "../content/map";
-import { inBase } from "../game/systems/deposit";
+import { atPad, nearestPad } from "../game/systems/deposit";
 import type { GameEvent, World } from "../game/world";
 import type { LoadedCreatureSource } from "./creatureAssets";
 import { CREATURE_FORMS, creatureModelPath, describeSource, isGlb, logSource, type CreatureForm } from "./creatureContract";
@@ -212,13 +212,16 @@ export class GameRenderer {
 
   handleEvents(events: readonly GameEvent[]): void {
     for (const e of events) {
-      if (e.type === "captured") {
+      if (e.type === "catcherCaught") {
+        this.crowd.captured(e.target);
+        this.effects.burst("capture", e.target.x, 0.9, e.target.z, 12);
+      } else if (e.type === "captured") {
         this.crowd.captured(e.target);
         this.creature.gulp();
         this.effects.burst("capture", e.target.x, 0.9, e.target.z, e.target.def.behavior === "boss" ? 120 : 18);
       } else if (e.type === "deposited") {
         this.depositPulse = 1;
-        this.effects.burst("deposit", this.map.base.x, 0.2, this.map.base.z, 6);
+        this.effects.burst("deposit", e.pad.x, 0.2, e.pad.z, 6);
       } else if (e.type === "playerHit") {
         this.creature.hurt();
         this.effects.burst("hit", this.creaturePos.x, 0.9, this.creaturePos.z, 22);
@@ -280,11 +283,12 @@ export class GameRenderer {
     this.radiusRing.position.set(x, 0.04, z);
     this.radiusRing.scaling.set(r, 1, r);
 
-    const showArrow = w.cargoFull && !inBase(w);
+    const showArrow = w.cargoFull && !atPad(w);
     this.arrow.setEnabled(showArrow);
     if (showArrow) {
-      const dx = this.map.base.x - x;
-      const dz = this.map.base.z - z;
+      const pad = nearestPad(w, x, z);
+      const dx = pad.x - x;
+      const dz = pad.z - z;
       const len = Math.hypot(dx, dz) || 1;
       const off = 1.5 + Math.sin(this.time * 6) * 0.12;
       this.arrow.position.set(x + (dx / len) * off, 0.08, z + (dz / len) * off);

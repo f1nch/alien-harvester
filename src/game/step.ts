@@ -1,4 +1,5 @@
 import { updateCapture } from "./systems/capture";
+import { updateCatcher } from "./systems/catcher";
 import { updatePlayerHealth } from "./systems/combat";
 import { updateCold } from "./systems/cold";
 import { updateDeposit } from "./systems/deposit";
@@ -20,6 +21,7 @@ export function stepWorld(w: World, dt = SIM_DT): void {
   updateFeeding(w, dt);
   updateDeposit(w, dt);
   updateStructures(w, dt);
+  updateCatcher(w, dt);
   // Last, so a lethal hit this tick resolves before anything else sees the state.
   updatePlayerHealth(w, dt);
 }

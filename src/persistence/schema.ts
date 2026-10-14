@@ -14,12 +14,12 @@ import { CHOICES_PER_LEVEL, isPerkId, PERKS } from "../content/perks";
 import { capAt, computeStats, tableCostForLevels } from "../domain/economy";
 import { levelForXp } from "../domain/levels";
 import { queuePerkChoices } from "../domain/perks";
-import { droneCapacity, vatBatchDrop, vatLevel } from "../domain/structures";
-import { DRONE, VAT } from "../content/structures";
+import { catcherLevel, droneCapacity, refineryBatchDrop, refineryLevel, vatBatchDrop, vatLevel, type DroneState } from "../domain/structures";
+import { CATCHER, DRONE, REFINERY, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 export const CONTENT_VERSION = 1;
 
 /** The level cap before endless levels (v9). */
@@ -140,6 +140,20 @@ function migrate(raw: Obj): Obj | null {
     }
     m = { ...m, schemaVersion: 11, progress };
   }
+  if (m.schemaVersion === 11) {
+    // v12 adds the refinery, the catcher and the forward base; none is built yet.
+    const st = isObj(m.progress) ? m.progress.structures : null;
+    const structures = isObj(st)
+      ? {
+          ...st,
+          refinery: { built: false, level: 0, stock: 0, timer: 0, running: false },
+          catcher: { built: false, level: 0, x: 0, z: 0, cargo: [] },
+          outpost: { built: false, level: 0 },
+        }
+      : st;
+    const progress = isObj(m.progress) ? { ...m.progress, structures } : m.progress;
+    m = { ...m, schemaVersion: 12, progress };
+  }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }
 
@@ -152,6 +166,7 @@ function migrate(raw: Obj): Obj | null {
 function parseDrop(d: unknown, biome: ActiveBiome): CargoDrop | null {
   if (!isObj(d)) return null;
   if (d.type === "vat") return vatBatchDrop(biome.depth);
+  if (d.type === "refinery") return refineryBatchDrop(biome.depth);
   if (!isTargetType(d.type)) return null;
   const def = biome.targets[d.type];
   return { type: def.id, weight: def.weight, reward: { ...def.reward } };
@@ -295,6 +310,7 @@ export function parseSave(raw: unknown): SaveFile | null {
   // Structures. A null value (fresh from the v6 migration) means nothing is built.
   if (p.structures !== null) {
     if (!isObj(p.structures) || !isObj(p.structures.vat) || !isObj(p.structures.drone)) return null;
+    if (!isObj(p.structures.refinery) || !isObj(p.structures.catcher) || !isObj(p.structures.outpost)) return null;
     const v = p.structures.vat;
     if (typeof v.built !== "boolean" || !Number.isInteger(v.level) || !isNonNeg(v.stock) || !isNonNeg(v.timer)) return null;
     const vat = progress.structures.vat;
@@ -306,28 +322,48 @@ export function parseSave(raw: unknown): SaveFile | null {
       vat.timer = Math.min(v.timer as number, lvl.batchSeconds);
     }
 
-    const dr = p.structures.drone;
-    if (typeof dr.built !== "boolean" || !Number.isInteger(dr.level) || !isNum(dr.x) || !isNum(dr.z) || !Array.isArray(dr.cargo)) return null;
-    const drone = progress.structures.drone;
-    drone.built = dr.built;
-    drone.level = dr.built ? Math.min(Math.max(1, dr.level as number), DRONE.levels.length) : 0;
-    // Cargo in transit is kept (rebuilt from content), up to the drone's capacity.
-    if (drone.built) {
-      const cap = droneCapacity(drone);
+    // Helpers: cargo in transit is kept (rebuilt from content), up to capacity.
+    const helper = (raw: Obj, out: DroneState, maxLevel: number, capacity: (s: DroneState) => number): boolean => {
+      if (typeof raw.built !== "boolean" || !Number.isInteger(raw.level) || !isNum(raw.x) || !isNum(raw.z) || !Array.isArray(raw.cargo)) return false;
+      out.built = raw.built;
+      out.level = raw.built ? Math.min(Math.max(1, raw.level as number), maxLevel) : 0;
+      if (!out.built) return true;
+      const cap = capacity(out);
       let load = 0;
-      for (const d of dr.cargo) {
+      for (const d of raw.cargo) {
         const drop = parseDrop(d, biome);
-        if (!drop) return null;
+        if (!drop) return false;
         if (load + drop.weight > cap) break;
         load += drop.weight;
-        drone.cargo.push(drop);
+        out.cargo.push(drop);
       }
-      const dz = zoneAtOrDoorway(room, dr.x as number, dr.z as number, progress.unlockedDoors);
+      const dz = zoneAtOrDoorway(room, raw.x as number, raw.z as number, progress.unlockedDoors);
       if (dz && reachableZones(room, progress.unlockedDoors).has(dz.id)) {
-        drone.x = dr.x as number;
-        drone.z = dr.z as number;
+        out.x = raw.x as number;
+        out.z = raw.z as number;
       }
+      return true;
+    };
+    if (!helper(p.structures.drone, progress.structures.drone, DRONE.levels.length, droneCapacity)) return null;
+    if (!helper(p.structures.catcher, progress.structures.catcher, CATCHER.levels.length, (c) => catcherLevel(c).capacity)) return null;
+
+    const r = p.structures.refinery;
+    if (typeof r.built !== "boolean" || !Number.isInteger(r.level) || !isNonNeg(r.stock) || !isNonNeg(r.timer) || typeof r.running !== "boolean") return null;
+    const refinery = progress.structures.refinery;
+    refinery.built = r.built;
+    refinery.level = r.built ? Math.min(Math.max(1, r.level as number), REFINERY.levels.length) : 0;
+    if (refinery.built) {
+      const lvl = refineryLevel(refinery);
+      refinery.stock = Math.min(Math.floor(r.stock as number), lvl.storage);
+      // A batch in progress was paid for: it keeps its remaining time.
+      refinery.running = r.running;
+      refinery.timer = r.running ? Math.min(r.timer as number, lvl.batchSeconds) : 0;
     }
+
+    const o = p.structures.outpost;
+    if (typeof o.built !== "boolean" || !Number.isInteger(o.level)) return null;
+    progress.structures.outpost.built = o.built;
+    progress.structures.outpost.level = o.built ? 1 : 0;
   }
 
   if (!isObj(p.spawnCooldowns)) return null;

@@ -8,8 +8,8 @@ import type { PerkChoice } from "./perks";
 import { newStructures, type StructuresState } from "./structures";
 import { UPGRADE_IDS, type UpgradeId } from "../content/upgrades";
 
-/** Where a drop came from: a captured target, or a batch from the biomass vat. */
-export type DropType = TargetTypeId | "vat";
+/** Where a drop came from: a captured target, or a batch from the biomass vat or the refinery. */
+export type DropType = TargetTypeId | "vat" | "refinery";
 
 /** A captured, not-yet-banked drop. Cargo is not a spendable wallet. */
 export interface CargoDrop {

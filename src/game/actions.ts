@@ -12,7 +12,8 @@ import { fillCravings } from "../domain/cravings";
 import { buyMutagen, type MutagenResult } from "../domain/mutagen";
 import { VAT } from "../content/structures";
 import { repairReactor, type RepairResult } from "../domain/reactor";
-import { advanceStructure, vatBatchDrop, type StructureKind, type StructureResult } from "../domain/structures";
+import { advanceStructure, refineryBatchDrop, vatBatchDrop, type StructureKind, type StructureResult } from "../domain/structures";
+import { releaseCatcher } from "./systems/catcher";
 import { dist2, resolveCircle } from "./geometry";
 import { bankDrop, inBase } from "./systems/deposit";
 import { PLAYER_RADIUS, TARGET_RADIUS, questEvent, refreshObstacles, refreshStats, type World } from "./world";
@@ -103,6 +104,12 @@ export function buildStructure(w: World, kind: StructureKind): StructureResult {
     d.x = w.dronePrev.x = w.map.base.x;
     d.z = w.dronePrev.z = w.map.base.z;
   }
+  if (kind === "catcher" && r.built) {
+    // A new catcher starts beside you.
+    const c = w.progress.structures.catcher;
+    c.x = w.catcherPrev.x = w.player.x;
+    c.z = w.catcherPrev.z = w.player.z;
+  }
   refreshObstacles(w);
   // The vat's footprint may now cover a target or the player: push them clear.
   resolveCircle(w.player, PLAYER_RADIUS, w.map.bounds, w.obstacles);
@@ -140,12 +147,16 @@ export function leaveBiome(w: World): LeaveResult {
   if (w.progress.depth >= MAX_DEPTH) return { ok: false, reason: "deepest" };
   const p = w.progress;
   const before = { ...p.banked };
-  const { vat, drone } = p.structures;
-  const drops = [...p.cargo, ...drone.cargo];
+  const { vat, drone, catcher, refinery } = p.structures;
+  const drops = [...p.cargo, ...drone.cargo, ...catcher.cargo];
   for (let i = 0; i < vat.stock; i++) drops.push(vatBatchDrop(p.depth));
+  for (let i = 0; i < refinery.stock; i++) drops.push(refineryBatchDrop(p.depth));
   p.cargo = [];
   drone.cargo = [];
+  catcher.cargo = [];
   vat.stock = 0;
+  refinery.stock = 0;
+  releaseCatcher(w);
   for (const t of w.tentacles) if (t) t.progress = 0;
   for (const drop of drops) bankDrop(w, drop);
   const banked = emptyWallet();

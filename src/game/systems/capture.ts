@@ -1,8 +1,8 @@
-import { cargoWeight } from "../../domain/progress";
+import { cargoWeight, type CargoDrop } from "../../domain/progress";
 import { dist2, hasLineOfSight } from "../geometry";
 import { gainXp, questEvent, type TargetEntity, type World } from "../world";
 import { bossStunned, bossTuning } from "./boss";
-import { onCaptured } from "./feeding";
+import { onCaptured, onHelperCaptured } from "./feeding";
 
 /** Seconds a target may be out of reach before its progress starts to decay. */
 export const GRACE_SECONDS = 0.3;
@@ -138,6 +138,18 @@ function assignTentacles(w: World): void {
     if (!t.def.multiGrab || !w.tentacles.includes(t)) continue;
     for (let slot = w.tentacles.indexOf(null); slot >= 0; slot = w.tentacles.indexOf(null)) w.tentacles[slot] = t;
   }
+}
+
+/** The catcher's catch: into its own hold. Counts for XP, quests and the bestiary. */
+export function catcherComplete(w: World, t: TargetEntity, into: CargoDrop[]): void {
+  for (let i = 0; i < w.tentacles.length; i++) if (w.tentacles[i] === t) w.tentacles[i] = null;
+  w.targets.splice(w.targets.indexOf(t), 1);
+  into.push({ type: t.def.id, weight: t.def.weight, reward: { ...t.def.reward } });
+  w.progress.spawnCooldowns[t.spawnId] = t.def.respawnSeconds;
+  w.events.push({ type: "catcherCaught", target: t });
+  onHelperCaptured(w, t);
+  gainXp(w, t.def.xp);
+  questEvent(w, { kind: "capture", target: t.def.id });
 }
 
 function complete(w: World, t: TargetEntity): void {

@@ -1,8 +1,9 @@
 import { zoneAt, type MapDef, type Rect } from "../content/map";
 import type { PerkId } from "../content/perks";
-import { VAT } from "../content/structures";
+import { REFINERY, VAT } from "../content/structures";
 import type { StructureKind } from "../domain/structures";
 import type { DroneMode } from "./systems/structures";
+import type { CatcherMode } from "./systems/catcher";
 import { newBossRuntime, type BossRuntime } from "./systems/boss";
 import type { QuestDef } from "../content/quests";
 import type { TargetDef, TargetTypeId } from "../content/targets";
@@ -99,7 +100,7 @@ export type GuardState = "patrol" | "chase" | "windup" | "recover" | "return";
 
 export type GameEvent =
   | { type: "captured"; target: TargetEntity; slot: number }
-  | { type: "deposited"; drop: CargoDrop }
+  | { type: "deposited"; drop: CargoDrop; pad: { x: number; z: number } }
   | { type: "depositComplete" }
   | { type: "purchased" }
   | { type: "questComplete"; quest: QuestDef }
@@ -110,6 +111,8 @@ export type GameEvent =
   | { type: "structureBuilt"; kind: StructureKind; level: number }
   | { type: "droneLoaded" }
   | { type: "droneDeposited" }
+  | { type: "catcherCaught"; target: TargetEntity }
+  | { type: "catcherDeposited" }
   | { type: "bossStunned" }
   | { type: "bossDefeated"; name: string }
   | { type: "reactorRepaired" }
@@ -143,6 +146,10 @@ export interface World {
   droneBudget: number;
   /** Drone position at the start of the tick, for render interpolation. */
   dronePrev: { x: number; z: number };
+  refineryCollectTimer: number;
+  /** The catcher's prey and its grip (0..1). Transient: a reload starts the hunt over. */
+  catcher: { target: TargetEntity | null; progress: number; mode: CatcherMode };
+  catcherPrev: { x: number; z: number };
   player: {
     x: number; z: number; prevX: number; prevZ: number; vx: number; vz: number;
     /** Seconds of post-respawn invulnerability remaining. */
@@ -183,6 +190,9 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
     droneMode: "idle",
     droneBudget: 0,
     dronePrev: { x: progress.structures.drone.x, z: progress.structures.drone.z },
+    refineryCollectTimer: 0,
+    catcher: { target: null, progress: 0, mode: "idle" },
+    catcherPrev: { x: progress.structures.catcher.x, z: progress.structures.catcher.z },
     player: {
       x: progress.player.x, z: progress.player.z,
       prevX: progress.player.x, prevZ: progress.player.z, vx: 0, vz: 0,
@@ -227,6 +237,11 @@ export function refreshObstacles(w: World): void {
   if (w.progress.structures.vat.built) {
     const { x, z } = w.biome.def.sites.vat;
     const h = VAT.halfSize;
+    built.push({ minX: x - h, maxX: x + h, minZ: z - h, maxZ: z + h });
+  }
+  if (w.progress.structures.refinery.built) {
+    const { x, z } = w.biome.def.sites.refinery;
+    const h = REFINERY.halfSize;
     built.push({ minX: x - h, maxX: x + h, minZ: z - h, maxZ: z + h });
   }
   w.obstacles = [...w.map.walls, ...w.map.props, ...built, ...lockedDoors];

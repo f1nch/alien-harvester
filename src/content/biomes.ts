@@ -1,4 +1,5 @@
 import type { Requirements } from "../domain/requirements";
+import type { Reward } from "./currencies";
 import { FACILITY, type MapDef } from "./map";
 import { QUESTS, type QuestDef } from "./quests";
 import { CRYO_LABS } from "./cryo";
@@ -19,6 +20,11 @@ export interface BiomeObjective {
   interactRadius: number;
   /** Unscaled; costs scale with depth. */
   repair: Requirements;
+}
+
+interface Point {
+  x: number;
+  z: number;
 }
 
 /** The way on: the freight elevator in the facility, portals on other worlds. */
@@ -47,7 +53,9 @@ export interface BiomeDef {
   objective: BiomeObjective;
   exit: BiomeExit;
   /** Where structures stand on this floor. */
-  sites: { vat: { x: number; z: number } };
+  sites: { vat: Point; refinery: Point; outpost: Point };
+  /** The forward base: built once per floor, after this quest, for this (unscaled) cost. */
+  outpost: { gate: string; cost: Reward };
   /** Quest that unlocks building structures here (they're carried over once built). */
   structureGate: string;
 }
@@ -73,7 +81,9 @@ export const BIOMES: readonly BiomeDef[] = [
     },
     // Just inside the reactor hall door, clear of the pillars and the console.
     exit: { x: 0, z: 79.5, radius: 1.4, name: "Freight elevator", action: "Take the elevator down" },
-    sites: { vat: { x: 12.5, z: 25.5 } },
+    sites: { vat: { x: 12.5, z: 25.5 }, refinery: { x: 12.5, z: 37 }, outpost: { x: 10, z: 55.5 } },
+    // Halfway: in the security sector, so a trip from the reactor hall is short.
+    outpost: { gate: "q-open-security", cost: { biomass: 200, parts: 10 } },
     structureGate: "q-open-service",
   },
   CRYO_LABS,

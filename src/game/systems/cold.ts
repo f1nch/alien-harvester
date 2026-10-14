@@ -1,12 +1,16 @@
 import { COLD } from "../../content/cold";
+import { OUTPOST } from "../../content/structures";
 import { zoneAtOrDoorway } from "../../content/map";
 import { dist2 } from "../geometry";
 import { refreshStats, type World } from "../world";
 
-/** On a heat vent: chill drains fast here. */
+/** On a heat vent (or a built forward base, which is heated): chill drains fast here. */
 export function onHeatVent(w: World): boolean {
   const p = w.player;
-  return w.map.heatVents?.some((v) => dist2(p.x, p.z, v.x, v.z) <= v.radius * v.radius) ?? false;
+  if (w.map.heatVents?.some((v) => dist2(p.x, p.z, v.x, v.z) <= v.radius * v.radius)) return true;
+  if (!w.progress.structures.outpost.built) return false;
+  const o = w.biome.def.sites.outpost;
+  return dist2(p.x, p.z, o.x, o.z) <= OUTPOST.radius * OUTPOST.radius;
 }
 
 /** True where chill builds: a freezing room, off the vents. */
