@@ -879,13 +879,16 @@ export class Hud {
     const pct = Math.round(Math.max(0, Math.min(1, boss.progress)) * 100);
     this.bossFill.style.width = `${pct}%`;
     const state = boss.boss?.state;
+    const special = boss.boss?.specialActive ? boss.def.bossTuning?.special?.label : undefined;
     const label = state === "stunned" ? "STUNNED · capture ×2"
+      : state === "erupting" ? "Erupting: get clear!"
+      : state === "casting" || state === "burrowed" || (state === "chargeWindup" && special) ? special ?? "Look out"
       : state === "chargeWindup" ? "Charge incoming"
       : state === "slamWindup" ? "Slam incoming"
       : `Captured ${pct}%`;
     this.bossState.textContent = label;
     this.bossBar.classList.toggle("stunned", state === "stunned");
-    this.bossBar.classList.toggle("danger", state === "chargeWindup" || state === "slamWindup");
+    this.bossBar.classList.toggle("danger", state === "chargeWindup" || state === "slamWindup" || state === "casting" || state === "burrowed" || state === "erupting");
   }
 
   private renderFeeding(w: World): void {

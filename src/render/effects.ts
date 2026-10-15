@@ -34,6 +34,9 @@ const STYLES = {
   hit: { colors: [new Color4(1, 0.35, 0.2, 1), new Color4(1, 0.8, 0.3, 1)], size: [0.06, 0.14], life: [0.2, 0.45], speed: [3, 6], gravity: -6, spread: 1 },
   levelUp: { colors: [new Color4(0.75, 0.55, 1, 1), new Color4(0.4, 1, 0.9, 1)], size: [0.12, 0.26], life: [0.7, 1.3], speed: [2, 4.5], gravity: 0.5, spread: 0.6 },
   evolve: { colors: [new Color4(0.3, 0.9, 1, 1), new Color4(1, 0.4, 0.9, 1)], size: [0.15, 0.35], life: [0.9, 1.6], speed: [3, 6], gravity: 0, spread: 1 },
+  // Boss signature strikes landing: shattering ice, and thrown-up sand or debris.
+  ice: { colors: [new Color4(0.75, 0.95, 1, 1), new Color4(0.35, 0.8, 1, 1)], size: [0.08, 0.2], life: [0.35, 0.7], speed: [2.5, 5], gravity: -8, spread: 0.5 },
+  dust: { colors: [new Color4(0.85, 0.65, 0.4, 1), new Color4(0.55, 0.42, 0.3, 1)], size: [0.14, 0.32], life: [0.5, 1], speed: [2, 4.5], gravity: -5, spread: 0.45 },
 } satisfies Record<string, BurstStyle>;
 
 export type BurstKind = keyof typeof STYLES;

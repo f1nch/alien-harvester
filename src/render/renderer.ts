@@ -257,6 +257,13 @@ export class GameRenderer {
         this.shake(Math.min(0.5, e.damage / 60));
       } else if (e.type === "bossStunned") {
         this.shake(0.35);
+      } else if (e.type === "hazardLanded") {
+        const h = e.hazard;
+        const kind = h.style === "ice" ? "ice" : h.style === "erupt" ? "dust" : "hit";
+        if (h.shape === "circle") this.effects.burst(kind, h.x, 0.2, h.z, Math.round(10 + h.radius * 8));
+        // A lash throws spray where the arm's tip comes down (one burst: a kind emits from one point per frame).
+        else this.effects.burst(kind, h.x + h.dirX * h.length * 0.8, 0.2, h.z + h.dirZ * h.length * 0.8, 14);
+        if (h.style === "erupt") this.shake(0.4);
       } else if (e.type === "levelUp") {
         this.effects.burst("levelUp", this.creaturePos.x, 0.3, this.creaturePos.z, 60);
       } else if (e.type === "died") {

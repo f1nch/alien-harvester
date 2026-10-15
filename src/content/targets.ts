@@ -232,6 +232,10 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       chargeSpeed: 8,
       chargeDamage: 30,
       walkSpeed: 1,
+      special: {
+        kind: "icefall", label: "Icefall incoming", minRange: 0, maxRange: 12, cooldown: 7, cast: 0.8,
+        count: 4, radius: 1.6, spread: 2.6, delay: 1.3, stagger: 0.25, damage: 20, chill: 0.35,
+      },
     },
   },
   // --- Specimen vaults (floor B3). Depth-0 equivalents, like Cryo labs.
@@ -317,6 +321,10 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       chargeDamage: 32,
       chargeCooldown: 3.6,
       walkSpeed: 1.3,
+      special: {
+        kind: "frenzy", label: "Frenzy: it won't stop", minRange: 2, maxRange: 13, cooldown: 9, cast: 1.25,
+        extraCharges: 2, windup: 0.8, distance: 6.5,
+      },
     },
   },
   // --- Hangar (floor B4). Depth-0 equivalents. Machine parts are the floor's currency.
@@ -403,6 +411,10 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       chargeDistance: 14,
       chargeDamage: 38,
       walkSpeed: 0.95,
+      special: {
+        kind: "barrage", label: "Barrage incoming", minRange: 0, maxRange: 16, cooldown: 7.5, cast: 1,
+        count: 7, radius: 1.5, spacing: 2, delay: 1.1, stagger: 0.22, damage: 26,
+      },
     },
   },
   // --- Vesh, the hive jungle (portal world 1). Depth-0 equivalents. Hive amber is its currency.
@@ -488,6 +500,10 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       chargeSpeed: 9,
       chargeDamage: 36,
       walkSpeed: 0.9,
+      special: {
+        kind: "brood", label: "Calling her brood", minRange: 0, maxRange: 14, cooldown: 12, cast: 1.4,
+        type: "hiveWarrior", count: 2, max: 3,
+      },
     },
   },
   // --- Ashkar, the desert ruins (portal world 2). Depth-0 equivalents. Relic shards are its currency.
@@ -574,6 +590,10 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       chargeDistance: 15,
       chargeDamage: 40,
       walkSpeed: 1,
+      special: {
+        kind: "burrow", label: "Burrowing: keep moving", minRange: 0, maxRange: 16, cooldown: 9, cast: 0.9,
+        speed: 5, maxSeconds: 4, eruptWindup: 1.1, radius: 2.6, damage: 38, stun: 2.2,
+      },
     },
   },
   // --- Maren, the drowned platforms (portal world 3). Depth-0 equivalents. Tide pearls are its currency.
@@ -660,6 +680,10 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       chargeDistance: 13,
       chargeDamage: 42,
       walkSpeed: 0.9,
+      special: {
+        kind: "lash", label: "Tentacle lash", minRange: 0, maxRange: 11, cooldown: 7, cast: 1.3,
+        lanes: 3, spread: 0.5, length: 11, halfWidth: 0.9, delay: 1.3, damage: 34,
+      },
     },
   },
   // Supply pod: a crate of stolen stock. Quick to crack open, light, and it may hold a

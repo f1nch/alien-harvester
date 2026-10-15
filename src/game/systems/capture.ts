@@ -1,7 +1,7 @@
 import { cargoWeight, type CargoDrop } from "../../domain/progress";
 import { dist2, hasLineOfSight } from "../geometry";
 import { gainXp, questEvent, retireTarget, type TargetEntity, type World } from "../world";
-import { bossStunned, bossTuning } from "./boss";
+import { bossStunned, bossTuning, bossUntargetable } from "./boss";
 import { onCaptured, onHelperCaptured } from "./feeding";
 
 /** Seconds a target may be out of reach before its progress starts to decay. */
@@ -69,7 +69,8 @@ export function updateCapture(w: World, dt: number): void {
       for (let i = 0; i < w.tentacles.length; i++) if (w.tentacles[i] === t) w.tentacles[i] = null;
       continue;
     }
-    if (inReach(w, t)) {
+    // A burrowed boss is out of reach wherever it is: its progress decays as usual.
+    if (!bossUntargetable(t) && inReach(w, t)) {
       t.held = true;
       t.outOfReach = 0;
       const bonus = bossStunned(t) ? bossTuning(t).stunnedCaptureBonus : 1;
@@ -117,7 +118,7 @@ function assignTentacles(w: World): void {
   for (const t of w.targets) w.hash.insert(t);
   const inRange = w.hash
     .query(p.x, p.z, stats.captureRadius)
-    .filter((t) => hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles))
+    .filter((t) => !bossUntargetable(t) && hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles))
     .sort((a, b) => dist2(p.x, p.z, a.x, a.z) - dist2(p.x, p.z, b.x, b.z));
 
   // Reserve cargo on assignment so simultaneous completions can never overflow.

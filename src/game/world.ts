@@ -4,7 +4,7 @@ import { REFINERY, VAT } from "../content/structures";
 import type { StructureKind } from "../domain/structures";
 import type { DroneMode } from "./systems/structures";
 import type { CatcherMode } from "./systems/catcher";
-import { newBossRuntime, type BossRuntime } from "./systems/boss";
+import { newBossRuntime, type BossRuntime, type Hazard } from "./systems/boss";
 import type { QuestDef } from "../content/quests";
 import type { TargetDef, TargetTypeId } from "../content/targets";
 import { currentBiome, scaleReward, type ActiveBiome } from "../domain/biome";
@@ -56,12 +56,14 @@ export interface TargetEntity {
   ai: GuardState;
   /** Seconds left in the current AI state (windup or recovery). */
   aiTimer: number;
-  /** Boss state machine (the warden only). */
+  /** Boss state machine (floor bosses only). */
   boss?: BossRuntime;
   /** A prized specimen: glows, bolts, and pays a big bonus. Transient. */
   prized?: boolean;
   /** From the objective machine's reward wave: no spawn point, pays the wave multiplier. */
   summoned?: boolean;
+  /** Called in by a boss (the hive queen's brood): no spawn point, never respawns. Transient. */
+  brood?: boolean;
 }
 
 /**
@@ -136,6 +138,9 @@ export type GameEvent =
   | { type: "bestiaryMilestone"; target: TargetTypeId; count: number; mutagen: number }
   | { type: "playerHit"; damage: number; by: TargetEntity }
   | { type: "strike"; by: TargetEntity; hit: boolean }
+  /** A boss's telegraphed signature strike came down. */
+  | { type: "hazardLanded"; hazard: Hazard; hit: boolean }
+  | { type: "broodCalled"; count: number }
   | { type: "died"; lost: CargoDrop[]; forgiven: boolean };
 
 export interface World {
@@ -319,11 +324,23 @@ function summonSpots(w: World): Array<{ x: number; z: number }> {
   return out;
 }
 
+/** Spawn point ID shared by every boss's brood (never a key in spawnCooldowns). */
+export const BROOD_SPAWN = "brood";
+
+/** A creature a boss calls to its side. Ordinary in every way except that it never respawns. */
+export function spawnBrood(w: World, type: TargetTypeId, x: number, z: number): TargetEntity {
+  const t = makeTarget(w, w.biome.targets[type], BROOD_SPAWN, x, z, 2);
+  t.brood = true;
+  w.targets.push(t);
+  return t;
+}
+
 /**
  * A target left the world by being caught: its spawn point starts its respawn timer,
  * or, for a summoned creature, the wave has one fewer left.
  */
 export function retireTarget(w: World, t: TargetEntity): void {
+  if (t.brood) return;
   if (t.summoned) {
     w.progress.summon.left = Math.max(0, w.progress.summon.left - 1);
     if (w.progress.summon.left === 0) w.events.push({ type: "waveCleared" });

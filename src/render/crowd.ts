@@ -3,6 +3,7 @@ import {
 } from "@babylonjs/core";
 import { WARDEN, type BossTuning } from "../content/reactor";
 import { TARGETS, type TargetTypeId } from "../content/targets";
+import type { HazardStyle } from "../game/systems/boss";
 import type { TargetEntity } from "../game/world";
 
 interface Visual {
@@ -18,6 +19,8 @@ interface Visual {
   phase: number;
   stride: number;
   initialized: boolean;
+  /** How far a burrowing boss has sunk below the floor (0..1). */
+  sink: number;
   accessories: Array<{ inst: InstancedMesh; rotor: boolean }>;
 }
 
@@ -30,6 +33,16 @@ interface Template {
 }
 
 const SCALE = 1.2;
+
+/** Bosses that tower over the rest get drawn bigger (the sim's hit radius is unchanged). */
+const BOSS_SIZE: Partial<Record<TargetTypeId, number>> = { hiveQueen: 1.15, sandWyrm: 1.15, tideKraken: 1.2, overseerMech: 1.05 };
+/** World units a burrowed boss sinks: enough that only its crest shows. */
+const BURROW_DEPTH = 3.4;
+
+/** Hovers instead of walking. */
+function flyingBoss(type: TargetTypeId): boolean {
+  return type === "cryoSentinel";
+}
 
 interface Dissolve {
   visual: Visual;
@@ -215,30 +228,44 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
       add(MeshBuilder.CreateCylinder("droneRotor", { height: 0.02, diameter: 0.3, tessellation: 18 }, scene), hull, 1.08, side * 0.58);
     }
   } else if (type === "cryoSentinel") {
-    // The cryo sentinel: an icy warden-sized figure with crystal spikes and a glowing visor.
+    // The cryo sentinel: a legless crystal colossus hovering over the ice, faceted all over,
+    // with a ring of shards floating at its waist and a cold core.
     const plate = mat(scene, "sentinelPlate", 0.78, 0.92, 0.98, 0.8);
     const dark = mat(scene, "sentinelDark", 0.3, 0.46, 0.58, 0.5);
     const glow = mat(scene, "sentinelGlow", 0, 0, 0);
     glow.emissiveColor = new Color3(0.25, 0.95, 1);
-    add(MeshBuilder.CreateCapsule("sentinelBody", { height: 2.2, radius: 0.75, tessellation: 20 }, scene), dark, 1.15);
-    add(MeshBuilder.CreateBox("sentinelChest", { width: 1.7, height: 1.1, depth: 1.1 }, scene), plate, 1.55);
-    add(MeshBuilder.CreateSphere("sentinelCore", { diameter: 0.45, segments: 16 }, scene), glow, 1.55, 0, 0.55);
+    // An inverted crystal tapering to a point instead of legs.
+    add(MeshBuilder.CreateCylinder("sentinelBody", { diameterTop: 1.5, diameterBottom: 0.05, height: 1.9, tessellation: 6 }, scene), dark, 1.0);
+    const chest = MeshBuilder.CreatePolyhedron("sentinelChest", { type: 1, size: 0.95 }, scene);
+    chest.scaling.set(1.05, 0.85, 0.75);
+    chest.bakeCurrentTransformIntoVertices();
+    add(chest, plate, 1.95);
+    add(MeshBuilder.CreatePolyhedron("sentinelCore", { type: 1, size: 0.26 }, scene), glow, 1.95, 0, 0.6);
     for (const side of [-1, 1]) {
-      add(MeshBuilder.CreateSphere("sentinelShoulder", { diameter: 0.85, segments: 16 }, scene), plate, 2.05, side * 0.95);
-      const spike = MeshBuilder.CreateCylinder("sentinelShoulderSpike", { diameterTop: 0, diameterBottom: 0.28, height: 0.9, tessellation: 10 }, scene);
-      spike.rotation.z = -side * 0.55;
-      add(spike, plate, 2.65, side * 1.15);
-      const back = MeshBuilder.CreateCylinder("sentinelBackSpike", { diameterTop: 0, diameterBottom: 0.24, height: 0.8, tessellation: 10 }, scene);
-      back.rotation.x = -0.5;
-      add(back, glow, 2.0, side * 0.35, -0.8);
+      add(MeshBuilder.CreatePolyhedron("sentinelShoulder", { type: 1, size: 0.45 }, scene), plate, 2.35, side * 0.95);
+      const spike = MeshBuilder.CreateCylinder("sentinelShoulderSpike", { diameterTop: 0, diameterBottom: 0.3, height: 1.1, tessellation: 5 }, scene);
+      spike.rotation.z = -side * 0.45;
+      add(spike, glow, 2.95, side * 1.15);
+      const back = MeshBuilder.CreateCylinder("sentinelBackSpike", { diameterTop: 0, diameterBottom: 0.26, height: 1.0, tessellation: 5 }, scene);
+      back.rotation.x = -0.6;
+      back.rotation.z = -side * 0.25;
+      add(back, glow, 2.3, side * 0.4, -0.75);
     }
-    const crest = MeshBuilder.CreateCylinder("sentinelCrest", { diameterTop: 0, diameterBottom: 0.3, height: 0.8, tessellation: 10 }, scene);
-    crest.rotation.x = -0.3;
-    add(crest, plate, 3.0, 0, -0.1);
-    add(MeshBuilder.CreateSphere("sentinelHelm", { diameter: 0.8, segments: 18 }, scene), plate, 2.5);
-    add(MeshBuilder.CreateBox("sentinelVisor", { width: 0.55, height: 0.1, depth: 0.12 }, scene), glow, 2.52, 0, 0.36);
-    // Heavy crystalline arms that swing as it stomps.
-    pair("arm", 1.5, 0.28, dark, 1.05, 2.0);
+    // Shards hanging in the air around its waist.
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      const shard = MeshBuilder.CreateCylinder("sentinelShard", { diameterTop: 0, diameterBottom: 0.2, height: 0.55, tessellation: 4 }, scene);
+      shard.rotation.z = Math.cos(a) * 0.5;
+      shard.rotation.x = Math.sin(a) * 0.5;
+      add(shard, i % 2 ? plate : glow, 1.05 + (i % 3) * 0.15, Math.cos(a) * 1.25, Math.sin(a) * 1.25);
+    }
+    const crest = MeshBuilder.CreateCylinder("sentinelCrest", { diameterTop: 0, diameterBottom: 0.34, height: 1.0, tessellation: 5 }, scene);
+    crest.rotation.x = -0.25;
+    add(crest, glow, 3.25, 0, -0.05);
+    add(MeshBuilder.CreatePolyhedron("sentinelHelm", { type: 1, size: 0.42 }, scene), plate, 2.8);
+    add(MeshBuilder.CreateBox("sentinelVisor", { width: 0.5, height: 0.09, depth: 0.12 }, scene), glow, 2.82, 0, 0.3);
+    // Long crystalline arms, hanging free.
+    pair("arm", 1.7, 0.24, dark, 1.15, 2.3);
   } else if (type === "handler") {
     // Handler: padded olive keeper suit, face shield, and a long catch-pole held forward.
     const suit = mat(scene, "handlerSuit", 0.42, 0.48, 0.28);
@@ -297,29 +324,41 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     add(MeshBuilder.CreateSphere("tankSpecimen", { diameter: 0.34, segments: 12 }, scene), mat(scene, "tankShape", 0.15, 0.2, 0.15), 0.75);
     add(MeshBuilder.CreateCylinder("tankCap", { height: 0.14, diameter: 0.74, tessellation: 16 }, scene), metal, 1.34);
   } else if (type === "alphaSpecimen") {
-    // The alpha specimen: a towering four-armed hybrid with a crown of spines and a green core.
+    // The alpha specimen: a hunched, four-armed predator that knuckle-walks on huge forearms,
+    // its low head thrust forward under a crown of bone spines.
     const hide = mat(scene, "alphaHide", 0.35, 0.18, 0.3, 0.3);
     const bone = mat(scene, "alphaBone", 0.85, 0.82, 0.72, 0.4);
     const glow = mat(scene, "alphaGlow", 0, 0, 0);
     glow.emissiveColor = new Color3(0.5, 1, 0.3);
-    add(MeshBuilder.CreateCapsule("alphaBody", { height: 2.2, radius: 0.75, tessellation: 20 }, scene), hide, 1.15);
-    add(MeshBuilder.CreateSphere("alphaChest", { diameter: 1.5, segments: 18 }, scene), hide, 1.6);
-    add(MeshBuilder.CreateSphere("alphaCore", { diameter: 0.45, segments: 16 }, scene), glow, 1.6, 0, 0.62);
-    add(MeshBuilder.CreateSphere("alphaHead", { diameter: 0.8, segments: 18 }, scene), hide, 2.5, 0, 0.1);
-    add(MeshBuilder.CreateBox("alphaEyes", { width: 0.5, height: 0.08, depth: 0.12 }, scene), glow, 2.55, 0, 0.45);
+    // A torso pitched far forward, heavy at the shoulders.
+    const body = MeshBuilder.CreateCapsule("alphaBody", { height: 2.3, radius: 0.72, tessellation: 20 }, scene);
+    body.rotation.x = 1.05;
+    add(body, hide, 1.45, 0, 0.05);
+    const chest = MeshBuilder.CreateSphere("alphaChest", { diameter: 1.55, segments: 18 }, scene);
+    chest.scaling.set(1.15, 0.9, 1);
+    chest.bakeCurrentTransformIntoVertices();
+    add(chest, hide, 1.75, 0, 0.55);
+    add(MeshBuilder.CreateSphere("alphaCore", { diameter: 0.42, segments: 16 }, scene), glow, 1.35, 0, 1.0);
+    add(MeshBuilder.CreateSphere("alphaHead", { diameter: 0.75, segments: 18 }, scene), hide, 1.8, 0, 1.35);
+    add(MeshBuilder.CreateBox("alphaJaw", { width: 0.55, height: 0.18, depth: 0.5 }, scene), bone, 1.52, 0, 1.5);
+    add(MeshBuilder.CreateBox("alphaEyes", { width: 0.5, height: 0.08, depth: 0.12 }, scene), glow, 1.88, 0, 1.68);
     for (let i = 0; i < 5; i++) {
       const a = (i / 4 - 0.5) * 1.6;
       const spine = MeshBuilder.CreateCylinder("alphaSpine", { diameterTop: 0, diameterBottom: 0.2, height: 0.75, tessellation: 10 }, scene);
       spine.rotation.z = -a * 0.6;
-      add(spine, bone, 3.0, Math.sin(a) * 0.4, -0.1);
+      spine.rotation.x = -0.6;
+      add(spine, bone, 2.25, Math.sin(a) * 0.4, 1.05);
     }
     for (const side of [-1, 1]) {
-      const lower = MeshBuilder.CreateCapsule("alphaLowerArm", { height: 1.0, radius: 0.18, tessellation: 12 }, scene);
-      lower.rotation.z = side * 0.4;
-      add(lower, bone, 1.1, side * 1.0, 0.2);
+      // The second pair: short clawed arms tucked under the chest.
+      const lower = MeshBuilder.CreateCapsule("alphaLowerArm", { height: 0.9, radius: 0.15, tessellation: 12 }, scene);
+      lower.rotation.x = 0.9;
+      lower.rotation.z = side * 0.3;
+      add(lower, bone, 1.05, side * 0.55, 1.05);
     }
-    // Heavy upper arms that swing as it stomps.
-    pair("arm", 1.5, 0.28, hide, 1.05, 2.0);
+    // Huge forearms it walks on, and short hind legs.
+    pair("arm", 2.1, 0.28, hide, 1.0, 2.1);
+    pair("leg", 0.95, 0.24, hide, 0.45, 0.95);
   } else if (type === "dockhand") {
     // Dockhand: hi-vis orange overalls with reflective stripes, ear defenders, a toolbelt.
     const suit = mat(scene, "dockSuit", 1, 0.45, 0.08);
@@ -370,23 +409,33 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     add(MeshBuilder.CreateCylinder("fuelValve", { height: 0.16, diameter: 0.18, tessellation: 16 }, scene), mat(scene, "fuelValveMat", 0.3, 0.3, 0.33, 0.6), 0.98);
     add(MeshBuilder.CreateBox("fuelGauge", { width: 0.16, height: 0.1, depth: 0.04 }, scene), gauge, 0.4, 0, 0.3);
   } else if (type === "overseerMech") {
-    // The overseer mech: a hulking walker with a cockpit dome, shoulder lamps and a red eye.
+    // The overseer mech: no arms at all. A wide, low hull on long hydraulic legs, a cockpit
+    // dome, and a missile pod on each shoulder (its barrage).
     const plate = mat(scene, "overseerPlate", 0.55, 0.55, 0.5, 0.7);
     const dark = mat(scene, "overseerDark", 0.18, 0.18, 0.2, 0.4);
+    const stripe = mat(scene, "overseerStripe", 0.95, 0.7, 0.1, 0.4);
     const eye = mat(scene, "overseerEye", 0, 0, 0);
     eye.emissiveColor = new Color3(1, 0.2, 0.1);
     const lamp = mat(scene, "overseerLamp", 0, 0, 0);
     lamp.emissiveColor = new Color3(1, 0.8, 0.3);
-    add(MeshBuilder.CreateCapsule("overseerBody", { height: 2.2, radius: 0.75, tessellation: 20 }, scene), dark, 1.15);
-    add(MeshBuilder.CreateBox("overseerHull", { width: 1.8, height: 1.2, depth: 1.3 }, scene), plate, 1.6);
-    add(MeshBuilder.CreateSphere("overseerDome", { diameter: 0.9, segments: 18, slice: 0.5 }, scene), mat(scene, "overseerGlass", 0.3, 0.45, 0.55, 0.9), 2.2);
-    add(MeshBuilder.CreateBox("overseerEye", { width: 0.6, height: 0.1, depth: 0.12 }, scene), eye, 1.85, 0, 0.66);
+    add(MeshBuilder.CreateBox("overseerPelvis", { width: 1.2, height: 0.5, depth: 0.9 }, scene), dark, 1.55);
+    add(MeshBuilder.CreateBox("overseerHull", { width: 2.3, height: 0.95, depth: 1.7 }, scene), plate, 2.1);
+    add(MeshBuilder.CreateBox("overseerHazard", { width: 2.32, height: 0.12, depth: 1.72 }, scene), stripe, 1.75);
+    add(MeshBuilder.CreateSphere("overseerDome", { diameter: 0.95, segments: 18, slice: 0.5 }, scene), mat(scene, "overseerGlass", 0.3, 0.45, 0.55, 0.9), 2.55, 0, 0.25);
+    add(MeshBuilder.CreateBox("overseerEye", { width: 0.9, height: 0.12, depth: 0.12 }, scene), eye, 2.15, 0, 0.86);
+    const tube = mat(scene, "overseerTube", 0, 0, 0);
+    tube.emissiveColor = new Color3(1, 0.45, 0.1);
     for (const side of [-1, 1]) {
-      add(MeshBuilder.CreateBox("overseerShoulder", { width: 0.6, height: 0.5, depth: 0.8 }, scene), plate, 2.05, side * 1.1);
-      add(MeshBuilder.CreateSphere("overseerLamp", { diameter: 0.2, segments: 12 }, scene), lamp, 2.35, side * 1.1, 0.35);
+      add(MeshBuilder.CreateBox("overseerPod", { width: 0.75, height: 0.7, depth: 1.1 }, scene), dark, 2.55, side * 1.45, -0.1);
+      // Four launch tubes, glowing, on each pod's face.
+      for (const [tx, ty] of [[-0.17, -0.15], [0.17, -0.15], [-0.17, 0.15], [0.17, 0.15]] as const) {
+        const mouth = MeshBuilder.CreateCylinder("overseerTubeMouth", { height: 0.08, diameter: 0.2, tessellation: 12 }, scene);
+        mouth.rotation.x = Math.PI / 2 - 0.35;
+        add(mouth, tube, 2.6 + ty, side * 1.45 + tx, 0.47);
+      }
+      add(MeshBuilder.CreateSphere("overseerLamp", { diameter: 0.2, segments: 12 }, scene), lamp, 2.4, side * 0.95, 0.86);
     }
-    // Hydraulic arms that swing as it stomps.
-    pair("arm", 1.5, 0.28, dark, 1.05, 2.0);
+    pair("leg", 1.5, 0.26, dark, 0.75, 1.5);
   } else if (type === "hiveForager" || type === "skitter" || type === "hiveWarrior") {
     // Hive insects: segmented bodies on six thin legs. Foragers carry an amber blob,
     // skitters are small and pale, warriors are plated with scything forelimbs.
@@ -665,7 +714,7 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
       add(MeshBuilder.CreateBox(`${type}Pocket`, { width: 0.1, height: 0.1, depth: 0.045 }, scene), dark, head.position.y - 0.25, -0.09, 0.22);
     }
   }
-  if (["boss", "cryoSentinel", "overseerMech"].includes(type)) {
+  if (type === "boss") {
     const joint = mat(scene, `${type}Joints`, 0.12, 0.16, 0.2, 0.6);
     pair("leg", 0.6, 0.22, joint, 0.4, 0.6);
     for (const side of [-1, 1]) {
@@ -681,7 +730,9 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
       const ridge = MeshBuilder.CreateSphere(`${type}Ridge`, { diameter: large ? 0.8 : 0.32, segments: 16 }, scene);
       ridge.scaling.set(1, 0.3, 0.4);
       ridge.bakeCurrentTransformIntoVertices();
-      add(ridge, hide, large ? 1.7 : 0.78, 0, (large ? 0.6 : 0.25) - i * (large ? 0.3 : 0.12));
+      // The alpha's ridges run down its forward-pitched back.
+      if (large) add(ridge, hide, 2.08 + (0.8 - i * 0.35) * 0.5, 0, -0.31 + (0.8 - i * 0.35) * 0.87);
+      else add(ridge, hide, 0.78, 0, 0.25 - i * 0.12);
     }
   }
   if (["pod", "fuelCell", "specimenTank", "patrolDrone", "loaderMech", "overseerMech"].includes(type)) {
@@ -689,7 +740,7 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     const big = type === "overseerMech";
     for (const side of [-1, 1]) {
       for (const front of [-1, 1]) {
-        add(MeshBuilder.CreateSphere(`${type}Fastener`, { diameter: big ? 0.12 : 0.065, segments: 12 }, scene), hardware, big ? 2.22 : 0.52, side * (big ? 0.65 : 0.22), front * (big ? 0.5 : 0.22));
+        add(MeshBuilder.CreateSphere(`${type}Fastener`, { diameter: big ? 0.12 : 0.065, segments: 12 }, scene), hardware, big ? 2.58 : 0.52, side * (big ? 0.65 : 0.22), front * (big ? 0.5 : 0.22));
       }
     }
     if (type === "patrolDrone") {
@@ -742,6 +793,88 @@ export class CrowdView {
   private ringMat: StandardMaterial | null = null;
   /** A golden halo over the prized specimen (there is at most one). */
   private halo: Mesh | null = null;
+  /** Pooled ground telegraphs for bosses' signature strikes (unit size, scaled per hazard). */
+  private hazardCircles: Array<{ ring: Mesh; fill: Mesh }> = [];
+  private hazardLanes: Array<{ outline: Mesh; fill: Mesh }> = [];
+  private hazardMats = new Map<HazardStyle, { ring: StandardMaterial; fill: StandardMaterial }>();
+
+  /** Ice reads cold, eruptions sandy; shells and lashes keep the usual danger red. */
+  private hazardMaterials(style: HazardStyle): { ring: StandardMaterial; fill: StandardMaterial } {
+    let m = this.hazardMats.get(style);
+    if (m) return m;
+    const color = style === "ice" ? new Color3(0.45, 0.85, 1) : style === "erupt" ? new Color3(1, 0.6, 0.15) : new Color3(1, 0.22, 0.12);
+    const make = (name: string, alpha: number) => {
+      const s = new StandardMaterial(name, this.scene);
+      s.diffuseColor = Color3.Black();
+      s.emissiveColor = color;
+      s.disableLighting = true;
+      s.alpha = alpha;
+      return s;
+    };
+    m = { ring: make(`hazardRing-${style}`, 0.7), fill: make(`hazardFill-${style}`, 0.32) };
+    this.hazardMats.set(style, m);
+    return m;
+  }
+
+  private updateHazards(targets: readonly TargetEntity[]): void {
+    let circles = 0;
+    let lanes = 0;
+    for (const t of targets) {
+      for (const h of t.boss?.hazards ?? []) {
+        const mats = this.hazardMaterials(h.style);
+        // Fills grow as the strike's own countdown runs out.
+        const k = h.total > 0 ? Math.min(1, Math.max(0.05, 1 - h.timer / h.total)) : 1;
+        if (h.shape === "circle") {
+          let c = this.hazardCircles[circles];
+          if (!c) {
+            const ring = MeshBuilder.CreateTorus("hazardRing", { diameter: 2, thickness: 0.06, tessellation: 40 }, this.scene);
+            const fill = MeshBuilder.CreateDisc("hazardFill", { radius: 1, tessellation: 40 }, this.scene);
+            fill.rotation.x = Math.PI / 2;
+            ring.isPickable = fill.isPickable = false;
+            this.hazardCircles.push((c = { ring, fill }));
+          }
+          circles++;
+          c.ring.material = mats.ring;
+          c.fill.material = mats.fill;
+          c.ring.setEnabled(true);
+          c.fill.setEnabled(true);
+          c.ring.position.set(h.x, 0.045, h.z);
+          c.ring.scaling.set(h.radius, 1, h.radius);
+          c.fill.position.set(h.x, 0.04, h.z);
+          c.fill.scaling.set(h.radius * k, h.radius * k, 1);
+        } else {
+          let l = this.hazardLanes[lanes];
+          if (!l) {
+            const outline = MeshBuilder.CreateGround("hazardLane", { width: 1, height: 1 }, this.scene);
+            const fill = MeshBuilder.CreateGround("hazardLaneFill", { width: 1, height: 1 }, this.scene);
+            outline.isPickable = fill.isPickable = false;
+            this.hazardLanes.push((l = { outline, fill }));
+          }
+          lanes++;
+          // A lane is a whole strip, so it takes the faint material and its growing fill the strong one.
+          l.outline.material = mats.fill;
+          l.fill.material = mats.ring;
+          const width = h.halfWidth * 2;
+          l.outline.setEnabled(true);
+          l.fill.setEnabled(true);
+          l.outline.rotation.y = l.fill.rotation.y = Math.atan2(h.dirX, h.dirZ);
+          l.outline.scaling.set(width, 1, h.length);
+          l.outline.position.set(h.x + (h.dirX * h.length) / 2, 0.03, h.z + (h.dirZ * h.length) / 2);
+          // The fill runs out from the boss along the lane.
+          l.fill.scaling.set(width, 1, h.length * k);
+          l.fill.position.set(h.x + (h.dirX * h.length * k) / 2, 0.035, h.z + (h.dirZ * h.length * k) / 2);
+        }
+      }
+    }
+    for (const c of this.hazardCircles.slice(circles)) {
+      c.ring.setEnabled(false);
+      c.fill.setEnabled(false);
+    }
+    for (const l of this.hazardLanes.slice(lanes)) {
+      l.outline.setEnabled(false);
+      l.fill.setEnabled(false);
+    }
+  }
   private fillMat: StandardMaterial | null = null;
 
   /** A ground strip the warden's charge will run along, filling as the windup completes. */
@@ -824,10 +957,11 @@ export class CrowdView {
     const v = pool?.pop();
     if (v) {
       v.node.setEnabled(true);
-      v.node.scaling.setAll(1);
+      v.node.scaling.setAll(BOSS_SIZE[type] ?? 1);
       return v;
     }
     const node = new TransformNode(`${type}Node`, this.scene);
+    node.scaling.setAll(BOSS_SIZE[type] ?? 1);
     const tpl = this.template(type);
     const parts = tpl.meshes.map((m, i) => {
       const inst = m.createInstance(`${type}Inst${i}`);
@@ -866,7 +1000,7 @@ export class CrowdView {
     const tuning = TARGETS[type].bossTuning ?? WARDEN;
     const range = isBoss ? tuning.slamRadius : TARGETS[type].combat?.attackRange;
     return {
-      type, node, parts, limbs, accessories, phase: Math.random() * 10, stride: 0, initialized: false,
+      type, node, parts, limbs, accessories, phase: Math.random() * 10, stride: 0, initialized: false, sink: 0,
       telegraph: range ? this.makeTelegraph(range) : undefined,
       lane: isBoss ? this.makeLane(tuning) : undefined,
     };
@@ -876,6 +1010,7 @@ export class CrowdView {
     v.node.setEnabled(false);
     v.initialized = false;
     v.stride = 0;
+    v.sink = 0;
     v.telegraph?.ring.setEnabled(false);
     v.telegraph?.fill.setEnabled(false);
     let pool = this.pools.get(v.type);
@@ -899,7 +1034,8 @@ export class CrowdView {
   grabPoint(id: number, out: Vector3): Vector3 | null {
     const v = this.live.get(id);
     if (!v) return null;
-    return out.set(v.node.position.x, v.node.position.y + GRAB_HEIGHT, v.node.position.z);
+    // A burrowed boss is held at the surface, not wherever its sunk body is.
+    return out.set(v.node.position.x, Math.max(0, v.node.position.y) + GRAB_HEIGHT, v.node.position.z);
   }
 
   update(dt: number, targets: readonly TargetEntity[], alpha: number, creature: Vector3): void {
@@ -945,10 +1081,12 @@ export class CrowdView {
         const T = t.def.bossTuning ?? WARDEN;
         const slam = bs.state === "slamWindup";
         const charge = bs.state === "chargeWindup";
+        /** How far through the current windup (0..1). */
+        const k = bs.total > 0 ? 1 - Math.max(0, bs.timer) / bs.total : 1;
+        if (flyingBoss(t.def.id)) y = 0.35 + Math.sin(this.time * 1.8 + t.id) * 0.12;
         v.telegraph.ring.setEnabled(slam);
         v.telegraph.fill.setEnabled(slam);
         if (slam) {
-          const k = 1 - Math.max(0, bs.timer) / T.slamWindup;
           v.telegraph.ring.position.set(x, 0.04, z);
           v.telegraph.fill.position.set(x, 0.035, z);
           v.telegraph.fill.scaling.set(Math.max(0.05, k), Math.max(0.05, k), 1);
@@ -957,20 +1095,36 @@ export class CrowdView {
         v.lane.outline.setEnabled(charge);
         v.lane.fill.setEnabled(charge);
         if (charge) {
-          const k = 1 - Math.max(0, bs.timer) / T.chargeWindup;
           const yaw = Math.atan2(bs.dirX, bs.dirZ);
-          const half = T.chargeDistance / 2;
+          // The lane mesh is built at the full charge distance; a frenzy's shorter runs scale it down.
+          const len = bs.chargeLength / T.chargeDistance;
+          const half = bs.chargeLength / 2;
           for (const m of [v.lane.outline, v.lane.fill]) {
             m.rotation.y = yaw;
             m.position.set(x + bs.dirX * half, m === v.lane.fill ? 0.035 : 0.03, z + bs.dirZ * half);
           }
-          v.lane.fill.scaling.set(1, 1, Math.max(0.05, k));
+          v.lane.outline.scaling.set(1, 1, len);
+          v.lane.fill.scaling.set(1, 1, Math.max(0.05, k) * len);
           v.lane.fill.position.set(x + bs.dirX * half * k, 0.035, z + bs.dirZ * half * k);
           rotX = 0.35 * k; // crouch forward before the rush
         }
         if (bs.state === "stunned") {
           rotZ = Math.sin(this.time * 6) * 0.15;
           rotX = -0.2;
+        }
+        // Signature moves: rear back while casting; the wyrm sinks out of sight and surges back up.
+        const burrow = T.special?.kind === "burrow";
+        let sink = 0;
+        if (bs.state === "casting") {
+          if (burrow) sink = k;
+          else rotX = -0.35 * k;
+        } else if (bs.state === "burrowed") sink = 1;
+        else if (bs.state === "erupting") sink = 1 - Math.max(0, k - 0.8) * 2;
+        v.sink += (sink - v.sink) * (1 - Math.exp(-dt * (sink < v.sink ? 14 : 6)));
+        if (v.sink > 0.01) {
+          // Just the crest breaks the surface while it tunnels, rippling as it goes.
+          y -= v.sink * BURROW_DEPTH;
+          rotZ = Math.sin(this.time * 9) * 0.08 * v.sink;
         }
         v.node.position.set(x, y, z);
         this.pose(v, rotX, t.heading, rotZ, dt);
@@ -1000,6 +1154,7 @@ export class CrowdView {
       v.node.position.set(x, y, z);
       this.pose(v, rotX, facing, rotZ, dt);
     }
+    this.updateHazards(targets);
     this.updateHalo(targets, alpha);
     for (const [id, v] of this.live) {
       if (this.seen.has(id)) continue;
@@ -1017,7 +1172,7 @@ export class CrowdView {
         d.from.y + 0.6 * Math.sin(Math.PI * k) + (0.9 - d.from.y) * e,
         d.from.z + (creature.z - d.from.z) * e,
       );
-      d.visual.node.scaling.setAll(1 - k * 0.95);
+      d.visual.node.scaling.setAll((BOSS_SIZE[d.visual.type] ?? 1) * (1 - k * 0.95));
       d.visual.node.rotation.y += dt * 12;
       if (k >= 1) {
         this.dissolving.splice(i, 1);
@@ -1074,6 +1229,13 @@ function animateLimbs(v: Visual, t: TargetEntity, stride: number, time: number, 
     if (isArm && !left && t.def.combat) {
       if (windup > 0) rx = -2.4 * windup;
       else if (lunge) rx = 0.9;
+    }
+    // Bosses raise both arms overhead through a slam or a cast, and bring them down after.
+    const bs = t.boss;
+    if (isArm && !joint && bs) {
+      const raising = bs.state === "slamWindup" || bs.state === "casting";
+      if (raising) rx = -2.5 * (bs.total > 0 ? 1 - Math.max(0, bs.timer) / bs.total : 1);
+      else if (bs.state === "recover" && bs.total - bs.timer < 0.3) rx = 0.8;
     }
     if (joint) {
       const step = Math.sin(v.phase + (left ? 0 : Math.PI));

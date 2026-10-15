@@ -1,4 +1,5 @@
 import type { Requirements } from "../domain/requirements";
+import type { TargetTypeId } from "./targets";
 
 /** The reactor console: repairing it is the MVP's completion condition. */
 export const REACTOR = {
@@ -64,4 +65,37 @@ export interface BossTuning {
   walkSpeed: number;
   heldSlow: number;
   stunnedCaptureBonus: number;
+  /** The boss's signature move, on top of the slam and charge. The warden has none. */
+  special?: BossSpecial;
 }
+
+/** Shared by every signature move: when the boss may use it. */
+interface SpecialBase {
+  /** Shown on the boss bar while it winds up. */
+  label: string;
+  /** Used only when the player is between these distances. */
+  minRange: number;
+  maxRange: number;
+  /** Seconds between uses. */
+  cooldown: number;
+  /** Seconds the boss spends casting it (rooted, telegraphing). */
+  cast: number;
+}
+
+/**
+ * Signature moves. Every one is telegraphed on the ground before it lands, and the
+ * telegraphed spots are locked when they appear, so moving away always works.
+ */
+export type BossSpecial =
+  /** Ice spikes fall around the player, one aimed at them; each chills where it lands. */
+  | (SpecialBase & { kind: "icefall"; count: number; radius: number; spread: number; delay: number; stagger: number; damage: number; chill: number })
+  /** Chains extra, shorter charges, each re-aimed, with a short windup; stunned only after the last. */
+  | (SpecialBase & { kind: "frenzy"; extraCharges: number; windup: number; distance: number })
+  /** Shells land in a line from the boss through the player and beyond, one after another. */
+  | (SpecialBase & { kind: "barrage"; count: number; radius: number; spacing: number; delay: number; stagger: number; damage: number })
+  /** Calls brood creatures to its side (never more than `max` of them alive at once). */
+  | (SpecialBase & { kind: "brood"; type: TargetTypeId; count: number; max: number })
+  /** Dives out of reach, tunnels after the player, erupts under them, and is briefly stunned. */
+  | (SpecialBase & { kind: "burrow"; speed: number; maxSeconds: number; eruptWindup: number; radius: number; damage: number; stun: number })
+  /** Slams a fan of arms down along lanes aimed at the player. */
+  | (SpecialBase & { kind: "lash"; lanes: number; spread: number; length: number; halfWidth: number; delay: number; damage: number });
