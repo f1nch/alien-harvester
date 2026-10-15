@@ -1,7 +1,7 @@
 import { cargoWeight, type CargoDrop } from "../../domain/progress";
 import { dist2, hasLineOfSight } from "../geometry";
 import { gainXp, questEvent, retireTarget, type TargetEntity, type World } from "../world";
-import { bossStunned, bossTuning, bossUntargetable } from "./boss";
+import { bossStunned, bossTuning, bossUntargetable, disperseBrood } from "./boss";
 import { onCaptured, onHelperCaptured } from "./feeding";
 
 /** Seconds a target may be out of reach before its progress starts to decay. */
@@ -164,6 +164,8 @@ function complete(w: World, t: TargetEntity): void {
   gainXp(w, t.def.xp);
   questEvent(w, { kind: "capture", target: t.def.id });
   if (t.def.behavior === "boss") {
+    // With their queen taken, her brood scatter.
+    disperseBrood(w);
     w.events.push({ type: "bossDefeated", name: t.def.name });
     questEvent(w, { kind: "defeatBoss" });
   }

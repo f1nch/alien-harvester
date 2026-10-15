@@ -502,7 +502,7 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
       walkSpeed: 0.9,
       special: {
         kind: "brood", label: "Calling her brood", minRange: 0, maxRange: 14, cooldown: 12, cast: 1.4,
-        type: "hiveWarrior", count: 2, max: 3,
+        type: "hiveWarrior", count: 2, max: 3, calls: 3,
       },
     },
   },

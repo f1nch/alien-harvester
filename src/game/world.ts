@@ -141,6 +141,7 @@ export type GameEvent =
   /** A boss's telegraphed signature strike came down. */
   | { type: "hazardLanded"; hazard: Hazard; hit: boolean }
   | { type: "broodCalled"; count: number }
+  | { type: "broodScattered"; count: number }
   | { type: "died"; lost: CargoDrop[]; forgiven: boolean };
 
 export interface World {

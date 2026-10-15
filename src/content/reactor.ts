@@ -93,8 +93,12 @@ export type BossSpecial =
   | (SpecialBase & { kind: "frenzy"; extraCharges: number; windup: number; distance: number })
   /** Shells land in a line from the boss through the player and beyond, one after another. */
   | (SpecialBase & { kind: "barrage"; count: number; radius: number; spacing: number; delay: number; stagger: number; damage: number })
-  /** Calls brood creatures to its side (never more than `max` of them alive at once). */
-  | (SpecialBase & { kind: "brood"; type: TargetTypeId; count: number; max: number })
+  /**
+   * Calls brood creatures to its side: never more than `max` alive at once, and at most
+   * `calls` times in the boss's life, so the brood can't be farmed. They scatter when the
+   * boss is caught or the player leaves its hall.
+   */
+  | (SpecialBase & { kind: "brood"; type: TargetTypeId; count: number; max: number; calls: number })
   /** Dives out of reach, tunnels after the player, erupts under them, and is briefly stunned. */
   | (SpecialBase & { kind: "burrow"; speed: number; maxSeconds: number; eruptWindup: number; radius: number; damage: number; stun: number })
   /** Slams a fan of arms down along lanes aimed at the player. */

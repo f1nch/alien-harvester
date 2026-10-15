@@ -518,6 +518,8 @@ async function boot(): Promise<void> {
           hud.toast(`The machine hums: ${e.count} creatures answer. Each pays ${SUMMON.rewardMultiplier}× the usual.`, 3.5);
         } else if (e.type === "broodCalled") {
           hud.toast(`The queen shrieks: ${e.count} of her brood rush to defend her.`, 2.5);
+        } else if (e.type === "broodScattered") {
+          hud.toast("The brood scatter back into the hive.", 2);
         } else if (e.type === "waveCleared") {
           hud.toast("Wave cleared. The machine can summon another.", 3);
           saveNow = true;

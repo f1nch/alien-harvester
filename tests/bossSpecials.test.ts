@@ -339,3 +339,53 @@ describe("signature move review regressions", () => {
     expect(hit).toBe(false);
   });
 });
+
+describe("hive queen: the brood can't be farmed", () => {
+  it("she calls her brood at most `calls` times in her life", () => {
+    const { w, boss } = fight("hiveQueen", 6);
+    const S = special(boss, "brood");
+    for (let k = 0; k < S.calls; k++) {
+      // Clear the hall each time so only the call limit can stop her.
+      w.targets = w.targets.filter((t) => !t.brood);
+      cast(w, boss);
+      expect(boss.boss!.state).toBe("casting");
+      run(w, S.cast + 0.05);
+    }
+    w.targets = w.targets.filter((t) => !t.brood);
+    cast(w, boss);
+    expect(boss.boss!.state).not.toBe("casting");
+    expect(boss.boss!.broodCalls).toBe(S.calls);
+  });
+
+  it("leaving her hall scatters the brood, freeing any tentacle on them", () => {
+    const { w, boss } = fight("hiveQueen", 6);
+    const S = special(boss, "brood");
+    w.stats.captureRadius = 30;
+    cast(w, boss);
+    run(w, S.cast + 0.05);
+    expect(w.targets.some((t) => t.brood)).toBe(true);
+    // Walk well clear of the hall (past the engage margin).
+    w.player.z = w.player.prevZ = boss.zoneRect.minZ - 8;
+    w.stats.captureRadius = 0;
+    run(w, 2); // she finishes recovering from the call, then notices the player has gone
+    expect(w.targets.some((t) => t.brood)).toBe(false);
+    expect(w.tentacles.some((t) => t?.brood)).toBe(false);
+  });
+
+  it("catching the queen scatters her brood", () => {
+    const { w, boss } = fight("hiveQueen", 6);
+    const S = special(boss, "brood");
+    cast(w, boss);
+    run(w, S.cast + 0.05);
+    expect(w.targets.some((t) => t.brood)).toBe(true);
+    // Every tentacle on the queen, one tick from done.
+    w.stats.captureRadius = 30;
+    w.player.z = w.player.prevZ = boss.z - 2;
+    w.tentacles.fill(boss);
+    boss.held = true;
+    boss.progress = 0.99995;
+    run(w, 0.5);
+    expect(w.targets.includes(boss)).toBe(false);
+    expect(w.targets.some((t) => t.brood)).toBe(false);
+  });
+});

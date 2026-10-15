@@ -48,6 +48,8 @@ export interface BossRuntime {
   casts: number;
   /** The last cast that hurt the player. */
   castHit: number;
+  /** Times it has called its brood (the hive queen), never reset while it lives. */
+  broodCalls: number;
 }
 
 export const BOSS_RADIUS = 0.9;
@@ -59,7 +61,7 @@ const FIRST_SPECIAL = 4;
 export function newBossRuntime(): BossRuntime {
   return {
     state: "idle", timer: 0, total: 0, dirX: 0, dirZ: 1, travelled: 0, chargeLength: WARDEN.chargeDistance, chargeCooldown: 2, chargeHit: false,
-    specialCooldown: FIRST_SPECIAL, specialActive: false, chain: 0, hazards: [], casts: 0, castHit: -1,
+    specialCooldown: FIRST_SPECIAL, specialActive: false, chain: 0, hazards: [], casts: 0, castHit: -1, broodCalls: 0,
   };
 }
 
@@ -153,6 +155,7 @@ export function updateBoss(w: World, t: TargetEntity, dt: number): void {
       if (S.kind === "brood" || S.kind === "burrow") t.heading = Math.atan2(p.x - t.x, p.z - t.z);
       if (b.timer > 0) return;
       if (S.kind === "brood") {
+        b.broodCalls++;
         callBrood(w, t, S);
         enter(b, "recover", T.recover);
       } else if (S.kind === "burrow") {
@@ -209,6 +212,8 @@ export function updateBoss(w: World, t: TargetEntity, dt: number): void {
       b.specialActive = false;
       if (!engaged) {
         b.state = "idle";
+        // The player left: the brood scatter rather than linger to be picked off from the doorway.
+        disperseBrood(w);
         // Drift back toward its post.
         stepToward(w, t, t.homeX, t.homeZ, T.walkSpeed * 0.6 * speedScale, dt);
         return;
@@ -216,7 +221,7 @@ export function updateBoss(w: World, t: TargetEntity, dt: number): void {
       b.state = "chase";
       t.heading = Math.atan2(p.x - t.x, p.z - t.z);
       const S = T.special;
-      if (S && b.specialCooldown <= 0 && d2 >= S.minRange ** 2 && d2 <= S.maxRange ** 2 && specialReady(w, S)) {
+      if (S && b.specialCooldown <= 0 && d2 >= S.minRange ** 2 && d2 <= S.maxRange ** 2 && specialReady(w, b, S)) {
         startSpecial(w, t, S);
         return;
       }
@@ -248,10 +253,21 @@ function aimCharge(b: BossRuntime, t: TargetEntity, x: number, z: number, length
   b.dirZ = (z - t.z) / d;
 }
 
-/** The queen won't call more brood while the hall already holds her limit. */
-function specialReady(w: World, S: BossSpecial): boolean {
+/** The queen won't call more brood while the hall holds her limit, or once she's used up her calls. */
+function specialReady(w: World, b: BossRuntime, S: BossSpecial): boolean {
   if (S.kind !== "brood") return true;
-  return w.targets.filter((o) => o.brood).length < S.max;
+  return b.broodCalls < S.calls && w.targets.filter((o) => o.brood).length < S.max;
+}
+
+/**
+ * Brood scatter back into the hive: gone from the world, along with any capture in
+ * progress on them (capture frees tentacles on targets that left). They never respawn.
+ */
+export function disperseBrood(w: World): void {
+  if (!w.targets.some((o) => o.brood)) return;
+  const left = w.targets.filter((o) => !o.brood);
+  w.events.push({ type: "broodScattered", count: w.targets.length - left.length });
+  w.targets = left;
 }
 
 /** Wind up the signature move. Strikes are laid down now, so the telegraph runs the whole windup. */
