@@ -51,7 +51,12 @@ const health = (w: World) => w.progress.player.health;
 
 describe("every floor boss fights differently", () => {
   it("each boss after the warden has its own signature move", () => {
-    const kinds = BOSSES.filter((id) => id !== "boss").map((id) => TARGETS[id].bossTuning?.special?.kind);
+    // A move and its variant (scattered pods, a dive from the sky) count as different moves.
+    const kinds = BOSSES.filter((id) => id !== "boss").map((id) => {
+      const s = TARGETS[id].bossTuning?.special;
+      if (!s) return undefined;
+      return s.kind + (s.kind === "icefall" && s.scatter ? ":scatter" : "") + (s.kind === "burrow" && s.fly ? ":fly" : "");
+    });
     expect(kinds.every(Boolean)).toBe(true);
     expect(new Set(kinds).size).toBe(kinds.length);
     expect(TARGETS.boss.bossTuning?.special).toBeUndefined();
@@ -66,7 +71,10 @@ describe("every floor boss fights differently", () => {
 
   for (const id of BOSSES.filter((b) => b !== "boss")) {
     it(`${TARGETS[id].name} uses its move in a real fight, and it lands or misses without breaking the fight`, () => {
-      const { w, boss } = fight(id, 5);
+      // Start outside the move's minimum range (the whirlpool is for creatures keeping their distance).
+      const { w, boss } = fight(id, 5 + (TARGETS[id].bossTuning?.special?.minRange ?? 0));
+      // A ranged move: hold off the opening charge so the boss is still at range when it's ready.
+      if ((TARGETS[id].bossTuning?.special?.minRange ?? 0) > 3) boss.boss!.chargeCooldown = 99;
       const seen = new Set<string>();
       for (let i = 0; i < Math.round(40 / SIM_DT); i++) {
         stepWorld(w);

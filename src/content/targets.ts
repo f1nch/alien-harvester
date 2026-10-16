@@ -1,5 +1,6 @@
 import { WARDEN, type BossTuning } from "./reactor";
 import type { Reward } from "./currencies";
+import { LATE_TARGETS, type LateTargetId } from "./lateTargets";
 
 export type TargetTypeId =
   | "worker" | "runner" | "technician" | "guard" | "armoredGuard" | "boss" | "pod"
@@ -14,7 +15,9 @@ export type TargetTypeId =
   // Ashkar (portal world 2)
   | "sandSkink" | "duneRunner" | "relicGolem" | "burialUrn" | "sandWyrm"
   // Maren (portal world 3)
-  | "reefCrab" | "skimmer" | "lancerEel" | "pearlClam" | "tideKraken";
+  | "reefCrab" | "skimmer" | "lancerEel" | "pearlClam" | "tideKraken"
+  // Pyrra, Thessa, Kharon, Gloam and Aether (portal worlds 4 to 8): content/lateTargets.ts
+  | LateTargetId;
 
 /** "static": never moves (supply pods). */
 export type TargetBehavior = "wander" | "flee" | "guard" | "boss" | "static";
@@ -64,6 +67,11 @@ export interface TargetDef {
    * and the bestiary. Static creatures (specimen tanks) are not loot.
    */
   loot?: boolean;
+  /**
+   * Drawn as another species' model, recoloured: the later worlds' kin of earlier creatures.
+   * `size` scales the whole model.
+   */
+  appearance?: { like: TargetTypeId; tint: [number, number, number]; glow?: [number, number, number]; size?: number };
 }
 
 export const TARGETS: Record<TargetTypeId, TargetDef> = {
@@ -700,6 +708,7 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
     speed: 0,
     respawnSeconds: 120,
   },
+  ...LATE_TARGETS,
 };
 
 export function isTargetType(id: unknown): id is TargetTypeId {

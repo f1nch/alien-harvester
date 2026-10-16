@@ -90,19 +90,24 @@ describe("ocean currents", () => {
     expect(dry.player.x).toBe(0);
   });
 
-  it("run straight along an axis, and only Maren has them", () => {
-    for (const c of MAREN_MAP.currents!) expect(c.dx === 0 || c.dz === 0).toBe(true);
-    expect(BIOMES.filter((b) => b !== MAREN).every((b) => !b.map.currents)).toBe(true);
+  // Maren's ocean, and the later worlds that reuse currents (Gloam's river, Aether's winds).
+  const flowing = BIOMES.filter((b) => b.map.currents);
+
+  it("run straight along an axis, on the worlds that have them", () => {
+    expect(flowing.map((b) => b.id)).toEqual(["maren", "gloam", "aether"]);
+    for (const b of flowing) for (const c of b.map.currents!) expect(c.dx === 0 || c.dz === 0, b.id).toBe(true);
   });
 
   it("overlap no prop, door or pod", () => {
     const overlaps = (a: { minX: number; maxX: number; minZ: number; maxZ: number }, b: typeof a) =>
       a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ;
-    for (const c of MAREN_MAP.currents!) {
-      for (const p of MAREN_MAP.props) expect(overlaps(c.rect, p)).toBe(false);
-      for (const d of MAREN_MAP.doors) expect(overlaps(c.rect, d.rect)).toBe(false);
-      for (const s of MAREN_MAP.spawns.filter((sp) => sp.type === "pod")) {
-        expect(s.x >= c.rect.minX && s.x <= c.rect.maxX && s.z >= c.rect.minZ && s.z <= c.rect.maxZ).toBe(false);
+    for (const b of flowing) {
+      for (const c of b.map.currents!) {
+        for (const p of b.map.props) expect(overlaps(c.rect, p), b.id).toBe(false);
+        for (const d of b.map.doors) expect(overlaps(c.rect, d.rect), b.id + " " + d.id).toBe(false);
+        for (const s of b.map.spawns.filter((sp) => sp.type === "pod")) {
+          expect(s.x >= c.rect.minX && s.x <= c.rect.maxX && s.z >= c.rect.minZ && s.z <= c.rect.maxZ, b.id + " " + s.id).toBe(false);
+        }
       }
     }
   });

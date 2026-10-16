@@ -70,6 +70,8 @@ export interface MapLook {
   props?: "trunks" | "pillars";
   /** Storm haze colour, for maps with storms. */
   haze?: [number, number, number];
+  /** Colour of the slowing ground (map.resin): amber resin by default; spore mats, bog mud. */
+  resin?: [number, number, number];
 }
 
 export interface MapDef {
@@ -282,4 +284,56 @@ export function zoneAt(map: MapDef, x: number, z: number): ZoneDef | null {
     if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) return zone;
   }
   return null;
+}
+
+/**
+ * Walls for everything inside `bounds` that isn't a room or a doorway, so a map can be
+ * drawn as rooms in any arrangement (side rooms, L-turns) rather than a single column.
+ * Rooms sit a wall's thickness apart; each door rect fills the gap where it opens.
+ * Returns few, large rects: blocked cells are merged along x, then runs stacked along z.
+ */
+export function carveWalls(bounds: Rect, rooms: readonly Rect[], doors: readonly Rect[]): Rect[] {
+  const open = [...rooms, ...doors];
+  const edges = (lo: "minX" | "minZ", hi: "maxX" | "maxZ") => {
+    const vals = new Set<number>([bounds[lo], bounds[hi]]);
+    for (const r of open) {
+      vals.add(Math.min(bounds[hi], Math.max(bounds[lo], r[lo])));
+      vals.add(Math.min(bounds[hi], Math.max(bounds[lo], r[hi])));
+    }
+    return [...vals].sort((a, b) => a - b);
+  };
+  const xs = edges("minX", "maxX");
+  const zs = edges("minZ", "maxZ");
+  const isOpen = (x: number, z: number) => open.some((r) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ);
+  const out: Rect[] = [];
+  // Runs still growing along z, keyed by their x span.
+  let growing = new Map<string, Rect>();
+  for (let j = 0; j < zs.length - 1; j++) {
+    const z0 = zs[j]!;
+    const z1 = zs[j + 1]!;
+    const cz = (z0 + z1) / 2;
+    const runs: Array<[number, number]> = [];
+    for (let i = 0; i < xs.length - 1; i++) {
+      const x0 = xs[i]!;
+      const x1 = xs[i + 1]!;
+      if (isOpen((x0 + x1) / 2, cz)) continue;
+      const last = runs[runs.length - 1];
+      if (last && last[1] === x0) last[1] = x1;
+      else runs.push([x0, x1]);
+    }
+    const next = new Map<string, Rect>();
+    for (const [x0, x1] of runs) {
+      const key = `${x0}:${x1}`;
+      const r = growing.get(key);
+      if (r) {
+        r.maxZ = z1;
+        growing.delete(key);
+        next.set(key, r);
+      } else next.set(key, rect(x0, x1, z0, z1));
+    }
+    for (const r of growing.values()) out.push(r);
+    growing = next;
+  }
+  for (const r of growing.values()) out.push(r);
+  return out;
 }

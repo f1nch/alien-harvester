@@ -36,6 +36,8 @@ const STYLES = {
   evolve: { colors: [new Color4(0.3, 0.9, 1, 1), new Color4(1, 0.4, 0.9, 1)], size: [0.15, 0.35], life: [0.9, 1.6], speed: [3, 6], gravity: 0, spread: 1 },
   // Boss signature strikes landing: shattering ice, and thrown-up sand or debris.
   ice: { colors: [new Color4(0.75, 0.95, 1, 1), new Color4(0.35, 0.8, 1, 1)], size: [0.08, 0.2], life: [0.35, 0.7], speed: [2.5, 5], gravity: -8, spread: 0.5 },
+  spore: { colors: [new Color4(0.6, 1, 0.35, 1), new Color4(0.85, 1, 0.6, 1)], size: [0.12, 0.28], life: [0.6, 1.2], speed: [1, 2.5], gravity: 0.6, spread: 0.8 },
+  ember: { colors: [new Color4(1, 0.55, 0.1, 1), new Color4(1, 0.2, 0.05, 1)], size: [0.08, 0.2], life: [0.4, 0.9], speed: [2.5, 5], gravity: -4, spread: 0.5 },
   dust: { colors: [new Color4(0.85, 0.65, 0.4, 1), new Color4(0.55, 0.42, 0.3, 1)], size: [0.14, 0.32], life: [0.5, 1], speed: [2, 4.5], gravity: -5, spread: 0.45 },
 } satisfies Record<string, BurstStyle>;
 

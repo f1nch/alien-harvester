@@ -163,6 +163,9 @@ export function die(w: World): void {
   p.z = p.prevZ = w.map.base.z;
   p.vx = p.vz = 0;
   p.invulnerable = RESPAWN_INVULNERABLE;
+  // A boss's whirlpool doesn't follow you home.
+  p.pullX = 0;
+  p.pullZ = 0;
   p.sinceHit = 99;
   prog.player.x = p.x;
   prog.player.z = p.z;

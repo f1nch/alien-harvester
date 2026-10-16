@@ -252,12 +252,19 @@ export function buildEnvironment(scene: Scene, map: MapDef, shadows: ShadowGener
     const r = d.rect;
     const cx = (r.minX + r.maxX) / 2;
     const cz = (r.minZ + r.maxZ) / 2;
-    const panel = MeshBuilder.CreateBox(`door-${d.id}`, { width: r.maxX - r.minX, depth: (r.maxZ - r.minZ) * 0.5, height: DOOR_HEIGHT }, scene);
+    // A side door (in a wall running north-south) is longer in z than in x.
+    const sideways = r.maxZ - r.minZ > r.maxX - r.minX;
+    const panel = MeshBuilder.CreateBox(`door-${d.id}`, sideways
+      ? { width: (r.maxX - r.minX) * 0.5, depth: r.maxZ - r.minZ, height: DOOR_HEIGHT }
+      : { width: r.maxX - r.minX, depth: (r.maxZ - r.minZ) * 0.5, height: DOOR_HEIGHT }, scene);
     panel.position.set(cx, DOOR_HEIGHT / 2, cz);
     panel.material = doorMat;
-    for (const side of [r.minX, r.maxX]) {
-      const post = MeshBuilder.CreateBox(`doorPost-${d.id}`, { width: 0.16, depth: r.maxZ - r.minZ + 0.1, height: DOOR_HEIGHT + 0.2 }, scene);
-      post.position.set(side, (DOOR_HEIGHT + 0.2) / 2, cz);
+    for (const end of sideways ? [r.minZ, r.maxZ] : [r.minX, r.maxX]) {
+      const post = MeshBuilder.CreateBox(`doorPost-${d.id}`, sideways
+        ? { width: r.maxX - r.minX + 0.1, depth: 0.16, height: DOOR_HEIGHT + 0.2 }
+        : { width: 0.16, depth: r.maxZ - r.minZ + 0.1, height: DOOR_HEIGHT + 0.2 }, scene);
+      if (sideways) post.position.set(cx, (DOOR_HEIGHT + 0.2) / 2, end);
+      else post.position.set(end, (DOOR_HEIGHT + 0.2) / 2, cz);
       post.material = postMat;
       post.freezeWorldMatrix();
     }

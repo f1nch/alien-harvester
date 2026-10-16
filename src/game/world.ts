@@ -170,6 +170,9 @@ export interface World {
     invulnerable: number;
     /** Seconds since last taking damage; regeneration waits for this. */
     sinceHit: number;
+    /** A boss's drag this tick (m/s), applied and cleared by the next movement step. */
+    pullX: number;
+    pullZ: number;
   };
   /** Desired movement, already normalised to length <= 1. */
   input: { x: number; z: number };
@@ -214,7 +217,7 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
     player: {
       x: progress.player.x, z: progress.player.z,
       prevX: progress.player.x, prevZ: progress.player.z, vx: 0, vz: 0,
-      invulnerable: 0, sinceHit: 99,
+      invulnerable: 0, sinceHit: 99, pullX: 0, pullZ: 0,
     },
     input: { x: 0, z: 0 },
     targets: [],

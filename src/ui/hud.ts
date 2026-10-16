@@ -8,7 +8,7 @@ import { CATCHER, DRONE, OUTPOST, REFINERY, VAT } from "../content/structures";
 
 import { catcherLevel, droneCapacity, nextStep, refineryIdle, refineryInput, refineryLevel, stepRequirements, STRUCTURE_KINDS, vatLevel, type StructureKind } from "../domain/structures";
 import { describePerk, isLegal, perkStacks } from "../domain/perks";
-import { CURRENCY_LABEL, type Currency } from "../content/currencies";
+import { CURRENCY_LABEL, LATE_CURRENCIES, type Currency } from "../content/currencies";
 import { canAfford, capRaise, maxLevel, nextCost, nextExtraCost, upgradePrice, upgradeValue } from "../domain/economy";
 import { evolutionRequirements, nextEvolution } from "../domain/evolution";
 import type { Requirement } from "../domain/requirements";
@@ -33,7 +33,7 @@ export function structureName(kind: StructureKind): string {
 }
 
 /** Distinct shapes per currency, so cost labels don't rely on colour. */
-export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈", shards: "◬", pearls: "◉" };
+export const CURRENCY_ICON: Record<Currency, string> = { biomass: "◆", genetic: "✦", parts: "⬢", mutagen: "✺", crystals: "❄", alloy: "▰", amber: "◈", shards: "◬", pearls: "◉", glass: "✹", spores: "✿", moonstone: "☾", bogiron: "▣", silk: "≈" };
 
 const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
@@ -175,6 +175,8 @@ export class Hud {
   private shardsChip: HTMLElement;
   private pearls: HTMLElement;
   private pearlsChip: HTMLElement;
+  /** Chips for the later worlds' currencies, built from LATE_CURRENCIES. */
+  private lateChips: Array<{ c: Currency; value: HTMLElement; root: HTMLElement }> = [];
   private stormBox: HTMLElement;
   private stormText: HTMLElement;
   private stormFill: HTMLElement;
@@ -286,6 +288,7 @@ export class Hud {
     const prl = chip("◉", "pearls", "Tide pearls");
     this.pearls = prl.value;
     this.pearlsChip = prl.root;
+    this.lateChips = LATE_CURRENCIES.map((c) => ({ c, ...chip(CURRENCY_ICON[c], c, CURRENCY_LABEL[c]) }));
 
     const lvl = el("div", "chip level-chip");
     this.level = el("span", "chip-value", "Lv 1");
@@ -343,7 +346,7 @@ export class Hud {
     this.stormFill = el("div", "storm-fill");
     stormBar.append(this.stormFill);
     this.stormBox.append(this.stormText, stormBar);
-    top.append(bio.root, gen.root, cry.root, amb.root, sha.root, prl.root, mut.root, lvl, bars, this.feedBox, this.chillBox, this.stormBox);
+    top.append(bio.root, gen.root, cry.root, amb.root, sha.root, prl.root, ...this.lateChips.map((l) => l.root), mut.root, lvl, bars, this.feedBox, this.chillBox, this.stormBox);
 
     // Objectives and hints flow under the HUD so they never overlap it as it wraps.
     const sub = el("div", "hud-sub");
@@ -724,7 +727,7 @@ export class Hud {
     const cargo = cargoWeight(p.cargo);
     const cap = w.stats.cargoCapacity;
     const key = [
-      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, p.banked.amber, p.banked.shards, p.banked.pearls, w.chillApplied, w.storm.phase, w.stormApplied, Math.round(w.storm.intensity * 10), feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired, p.summon.left,
+      p.banked.biomass, p.banked.genetic, p.banked.parts, p.banked.mutagen, p.banked.crystals, p.banked.alloy, p.banked.amber, p.banked.shards, p.banked.pearls, ...LATE_CURRENCIES.map((c) => p.banked[c]), w.chillApplied, w.storm.phase, w.stormApplied, Math.round(w.storm.intensity * 10), feedKey(w), JSON.stringify(p.cravings), JSON.stringify(p.mutagenLevels), JSON.stringify(p.bestiary), p.xp, cargo, cap, s.atReactor, s.atExit, p.depth, p.reactorRepaired, p.summon.left,
       s.boss ? `${Math.round(s.boss.progress * 100)}:${s.boss.boss?.state}` : "", s.respecBlocker, Math.ceil(p.player.health), w.stats.maxHealth, w.cargoFull, s.inBase, s.door?.id,
       this.upgradesOpen, this.perksOpen, structureKey(w), JSON.stringify(p.pendingPerks), JSON.stringify(p.perks), JSON.stringify(p.quests), p.unlockedDoors.length, p.evolution, JSON.stringify(p.upgrades),
     ].join("|");
@@ -746,6 +749,10 @@ export class Hud {
     this.shardsChip.classList.toggle("hidden", p.banked.shards === 0 && !worldPays(w, "shards"));
     this.pearls.textContent = compact(p.banked.pearls);
     this.pearlsChip.classList.toggle("hidden", p.banked.pearls === 0 && !worldPays(w, "pearls"));
+    for (const l of this.lateChips) {
+      l.value.textContent = compact(p.banked[l.c]);
+      l.root.classList.toggle("hidden", p.banked[l.c] === 0 && !worldPays(w, l.c));
+    }
     // Mutagen appears with the first one earned.
     this.mutagenChip.classList.toggle("hidden", p.banked.mutagen === 0 && Object.keys(p.mutagenLevels).length === 0);
     this.renderFeeding(w);
@@ -799,7 +806,7 @@ export class Hud {
       const hidden = lvl === 0 && ((id === "thermalFat" && !w.map.zones.some((z) => z.cold))
         || (id === "chitin" && p.banked.amber === 0 && !worldHasAmber(w))
         || (id === "dustLids" && p.banked.shards === 0 && !worldPays(w, "shards"))
-        || (id === "webbedLimbs" && p.banked.pearls === 0 && !worldPays(w, "pearls")));
+        || (id === "webbedLimbs" && p.banked.pearls === 0 && !worldPays(w, "pearls") && !w.map.currents));
       row.root.classList.toggle("hidden", hidden);
       const cost = nextCost(p, id);
       const cur = upgradeValue(p, id);
@@ -881,7 +888,7 @@ export class Hud {
     const state = boss.boss?.state;
     const special = boss.boss?.specialActive ? boss.def.bossTuning?.special?.label : undefined;
     const label = state === "stunned" ? "STUNNED · capture ×2"
-      : state === "erupting" ? "Erupting: get clear!"
+      : state === "erupting" ? (boss.def.bossTuning?.special?.kind === "burrow" && boss.def.bossTuning.special.fly ? "Diving: get clear!" : "Erupting: get clear!")
       : state === "casting" || state === "burrowed" || (state === "chargeWindup" && special) ? special ?? "Look out"
       : state === "chargeWindup" ? "Charge incoming"
       : state === "slamWindup" ? "Slam incoming"
@@ -1034,6 +1041,7 @@ export class Hud {
       ["Hive amber", String(s.amber)],
       ["Relic shards", String(s.shards)],
       ["Tide pearls", String(s.pearls)],
+      ...LATE_CURRENCIES.map((c): [string, string] => [CURRENCY_LABEL[c], String(s.late[c])]),
       ["Location", s.place],
       ["Doors open", String(s.doorsOpen)],
       ["Objectives done", String(s.questsDone)],

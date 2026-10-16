@@ -21,7 +21,7 @@ import { CATCHER, DRONE, REFINERY, VAT } from "../content/structures";
 import { mulberry32 } from "../domain/rng";
 import { newProgress, type CargoDrop, type ProgressState, type QuestState } from "../domain/progress";
 
-export const SCHEMA_VERSION = 18;
+export const SCHEMA_VERSION = 19;
 export const CONTENT_VERSION = 1;
 
 /** The level cap before endless levels (v9). */
@@ -232,6 +232,13 @@ function migrate(raw: Obj): Obj | null {
     // v18 adds Maren, the third portal world: the tide pearls currency and the Webbed limbs
     // track, both parsing as 0 when absent. The bump stops older builds dropping pearls.
     m = { ...m, schemaVersion: 18 };
+  }
+  if (m.schemaVersion === 18) {
+    // v19 adds five portal worlds after Maren (Pyrra, Thessa, Kharon, Gloam, Aether) and
+    // their currencies: ember glass, glow spores, moonstone, bog iron and sky silk, all
+    // parsing as 0 when absent. Floors are appended, so nobody moves; the bump stops older
+    // builds dropping the new currencies (and a floor id they don't know).
+    m = { ...m, schemaVersion: 19 };
   }
   return m.schemaVersion === SCHEMA_VERSION ? m : null;
 }

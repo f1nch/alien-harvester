@@ -9,6 +9,11 @@ import { HANGAR } from "./hangar";
 import { VESH } from "./vesh";
 import { ASHKAR } from "./ashkar";
 import { MAREN } from "./maren";
+import { PYRRA } from "./pyrra";
+import { THESSA } from "./thessa";
+import { KHARON } from "./kharon";
+import { GLOAM } from "./gloam";
+import { AETHER } from "./aether";
 import { REACTOR } from "./reactor";
 
 /** The machine a biome's quest chain ends at (the reactor console in the facility). */
@@ -104,4 +109,9 @@ export const BIOMES: readonly BiomeDef[] = [
   VESH,
   ASHKAR,
   MAREN,
+  PYRRA,
+  THESSA,
+  KHARON,
+  GLOAM,
+  AETHER,
 ];

@@ -102,9 +102,17 @@ function doorStripes(scene: Scene, map: MapDef): void {
   for (const d of map.doors) {
     const r = d.rect;
     const cx = (r.minX + r.maxX) / 2;
-    for (const z of [r.minZ - 0.45, r.maxZ + 0.45]) {
-      const strip = MeshBuilder.CreateGround(`stripe-${d.id}-${z}`, { width: r.maxX - r.minX + 1.6, height: 0.7 }, scene);
-      strip.position.set(cx, 0.015, z);
+    const cz = (r.minZ + r.maxZ) / 2;
+    // Stripes lie across the threshold on both faces of the wall: north and south of a
+    // door in an east-west wall, east and west of a side door.
+    const sideways = r.maxZ - r.minZ > r.maxX - r.minX;
+    const faces = sideways ? [r.minX - 0.45, r.maxX + 0.45] : [r.minZ - 0.45, r.maxZ + 0.45];
+    for (const f of faces) {
+      const strip = MeshBuilder.CreateGround(`stripe-${d.id}-${f}`, sideways
+        ? { width: 0.7, height: r.maxZ - r.minZ + 1.6 }
+        : { width: r.maxX - r.minX + 1.6, height: 0.7 }, scene);
+      if (sideways) strip.position.set(f, 0.015, cz);
+      else strip.position.set(cx, 0.015, f);
       strip.material = mat;
       strip.freezeWorldMatrix();
     }
@@ -141,9 +149,20 @@ function zoneLabels(scene: Scene, map: MapDef): void {
     mat.specularColor = Color3.Black();
     mat.alpha = 0.45;
     const plane = MeshBuilder.CreateGround(`label-${zone.id}`, { width: 7, height: 1.3 }, scene);
-    // The first zone's label sits by the base; others just past their entrance door.
-    const z = zone === map.zones[0] ? zone.rect.minZ + 10.5 : zone.rect.minZ + 2.4;
-    plane.position.set((zone.rect.minX + zone.rect.maxX) / 2, 0.014, z);
+    // The first zone's label sits by the base; others just past their entrance door, on
+    // whichever side it opens (a side room's label sits inside its side door).
+    const zr = zone.rect;
+    const midX = (zr.minX + zr.maxX) / 2;
+    const entry = map.doors.find((d) => d.to === zone.id)?.rect;
+    if (zone === map.zones[0] || !entry) plane.position.set(midX, 0.014, zone === map.zones[0] ? zr.minZ + 10.5 : zr.minZ + 2.4);
+    else {
+      const dz = (entry.minZ + entry.maxZ) / 2;
+      const inset = 4.2;
+      if (entry.maxZ <= zr.minZ + 0.01) plane.position.set(midX, 0.014, zr.minZ + 2.4);
+      else if (entry.minZ >= zr.maxZ - 0.01) plane.position.set(midX, 0.014, zr.maxZ - 2.4);
+      else if (entry.maxX <= zr.minX + 0.01) plane.position.set(zr.minX + inset, 0.014, dz);
+      else plane.position.set(zr.maxX - inset, 0.014, dz);
+    }
     plane.material = mat;
     plane.freezeWorldMatrix();
   }
@@ -400,8 +419,9 @@ function resinPools(scene: Scene, map: MapDef): void {
   const pools = map.resin;
   if (!pools || pools.length === 0) return;
   const mat = new StandardMaterial("resinMat", scene);
-  mat.diffuseColor = new Color3(0.55, 0.3, 0.05);
-  mat.emissiveColor = new Color3(0.35, 0.16, 0.02);
+  const tint = map.look?.resin;
+  mat.diffuseColor = tint ? new Color3(...tint) : new Color3(0.55, 0.3, 0.05);
+  mat.emissiveColor = tint ? new Color3(...tint).scale(0.18) : new Color3(0.35, 0.16, 0.02);
   mat.specularColor = new Color3(0.9, 0.7, 0.4);
   mat.specularPower = 96;
   mat.alpha = 0.85;
@@ -566,7 +586,16 @@ function flora(scene: Scene, map: MapDef, look: MapLook): void {
 /** The theme of the zone a wall section borders (by depth along the map). */
 function zoneFor(map: MapDef, w: Rect): ZoneTheme | null {
   const cz = (w.minZ + w.maxZ) / 2;
-  const zone: ZoneDef | undefined = map.zones.find((z) => cz >= z.rect.minZ && cz <= z.rect.maxZ);
+  const cx = (w.minX + w.maxX) / 2;
+  // The nearest zone to the wall's centre (side rooms share a z band with the main column).
+  let zone: ZoneDef | undefined;
+  let best = Infinity;
+  for (const z of map.zones) {
+    const ddx = Math.max(z.rect.minX - cx, 0, cx - z.rect.maxX);
+    const ddz = Math.max(z.rect.minZ - cz, 0, cz - z.rect.maxZ);
+    const d = ddx * ddx + ddz * ddz;
+    if (d < best) { best = d; zone = z; }
+  }
   return zone?.theme ?? null;
 }
 

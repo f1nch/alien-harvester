@@ -1,3 +1,4 @@
+import { LATE_CURRENCIES, type LateCurrency } from "../content/currencies";
 import { FORM_NAMES } from "../content/evolution";
 import { currentBiome } from "../domain/biome";
 import { levelForXp } from "../domain/levels";
@@ -38,6 +39,8 @@ export interface SaveSummary {
   amber: number;
   shards: number;
   pearls: number;
+  /** The later worlds' currencies, whole units. */
+  late: Record<LateCurrency, number>;
   doorsOpen: number;
   questsDone: number;
   reactorRepaired: boolean;
@@ -58,6 +61,7 @@ export function summarize(save: SaveFile): SaveSummary {
     amber: Math.floor(p.banked.amber),
     shards: Math.floor(p.banked.shards),
     pearls: Math.floor(p.banked.pearls),
+    late: Object.fromEntries(LATE_CURRENCIES.map((c) => [c, Math.floor(p.banked[c])])) as Record<LateCurrency, number>,
     doorsOpen: p.unlockedDoors.length,
     questsDone: Object.values(p.quests).filter((q) => q.done).length,
     reactorRepaired: p.reactorRepaired,

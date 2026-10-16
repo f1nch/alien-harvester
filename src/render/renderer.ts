@@ -110,7 +110,7 @@ export class GameRenderer {
       // Storm haze never hides what the player reads in the world: reach, bars, telegraphs.
       const clear = new Set(["radiusMat", "arrowMat", "barBg", "barFill", "telegraphRing", "telegraphFill", "shadeRing", "prizedHalo"]);
       const unfog = (m: { name: string; fogEnabled?: boolean }) => {
-        if (clear.has(m.name) && "fogEnabled" in m) m.fogEnabled = false;
+        if ((clear.has(m.name) || m.name.startsWith("hazard")) && "fogEnabled" in m) m.fogEnabled = false;
       };
       scene.materials.forEach(unfog);
       scene.onNewMaterialAddedObservable.add(unfog);
@@ -259,7 +259,7 @@ export class GameRenderer {
         this.shake(0.35);
       } else if (e.type === "hazardLanded") {
         const h = e.hazard;
-        const kind = h.style === "ice" ? "ice" : h.style === "erupt" ? "dust" : "hit";
+        const kind = h.style === "ice" ? "ice" : h.style === "erupt" ? "dust" : h.style === "spore" ? "spore" : h.style === "magma" ? "ember" : "hit";
         if (h.shape === "circle") this.effects.burst(kind, h.x, 0.2, h.z, Math.round(10 + h.radius * 8));
         // A lash throws spray where the arm's tip comes down (one burst: a kind emits from one point per frame).
         else this.effects.burst(kind, h.x + h.dirX * h.length * 0.8, 0.2, h.z + h.dirZ * h.length * 0.8, 14);
@@ -384,7 +384,11 @@ export class GameRenderer {
 
   private updateCamera(x: number, z: number, dt: number): void {
     // Horizontal framing follows the zone the player is in (kept while crossing a doorway).
-    this.cameraZone = zoneAt(this.map, x, z)?.rect ?? this.cameraZone;
+    // An open doorway frames like the room it leads into, so crossing a side door pans
+    // the camera across with you instead of leaving you at the screen edge.
+    const doorway = this.map.doors.find((d) => x >= d.rect.minX && x <= d.rect.maxX && z >= d.rect.minZ && z <= d.rect.maxZ);
+    const ahead = doorway ? this.map.zones.find((zz) => zz.id === (zoneAt(this.map, this.look.x, this.look.z)?.id === doorway.to ? doorway.from : doorway.to)) : null;
+    this.cameraZone = zoneAt(this.map, x, z)?.rect ?? ahead?.rect ?? this.cameraZone;
     const zr = this.cameraZone;
     const dist = CAMERA_OFFSET.length();
     const aspect = this.engine.getAspectRatio(this.camera);

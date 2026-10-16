@@ -28,6 +28,11 @@ export function updatePlayer(w: World, dt: number): void {
     p.vx += flow.dx * k;
     p.vz += flow.dz * k;
   }
+  // A boss's whirlpool drags you in; it's set fresh every tick it lasts.
+  p.vx += p.pullX;
+  p.vz += p.pullZ;
+  p.pullX = 0;
+  p.pullZ = 0;
   p.x += p.vx * dt;
   p.z += p.vz * dt;
   resolveCircle(p, PLAYER_RADIUS, w.map.bounds, w.obstacles);

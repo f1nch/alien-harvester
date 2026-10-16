@@ -1,4 +1,5 @@
 import type { Requirements } from "../domain/requirements";
+import type { HazardStyle } from "../game/systems/boss";
 import type { TargetTypeId } from "./targets";
 
 /** The reactor console: repairing it is the MVP's completion condition. */
@@ -87,8 +88,11 @@ interface SpecialBase {
  * telegraphed spots are locked when they appear, so moving away always works.
  */
 export type BossSpecial =
-  /** Ice spikes fall around the player, one aimed at them; each chills where it lands. */
-  | (SpecialBase & { kind: "icefall"; count: number; radius: number; spread: number; delay: number; stagger: number; damage: number; chill: number })
+  /**
+   * Ice spikes fall around the player, one aimed at them; each chills where it lands.
+   * `scatter` spreads the rest over the whole hall instead (the sporemother's pods).
+   */
+  | (SpecialBase & { kind: "icefall"; count: number; radius: number; spread: number; delay: number; stagger: number; damage: number; chill: number; scatter?: boolean; style?: HazardStyle })
   /** Chains extra, shorter charges, each re-aimed, with a short windup; stunned only after the last. */
   | (SpecialBase & { kind: "frenzy"; extraCharges: number; windup: number; distance: number })
   /** Shells land in a line from the boss through the player and beyond, one after another. */
@@ -99,7 +103,16 @@ export type BossSpecial =
    * boss is caught or the player leaves its hall.
    */
   | (SpecialBase & { kind: "brood"; type: TargetTypeId; count: number; max: number; calls: number })
-  /** Dives out of reach, tunnels after the player, erupts under them, and is briefly stunned. */
-  | (SpecialBase & { kind: "burrow"; speed: number; maxSeconds: number; eruptWindup: number; radius: number; damage: number; stun: number })
+  /**
+   * Dives out of reach, tunnels after the player, erupts under them, and is briefly stunned.
+   * With `fly` it soars out of reach instead and dives down on them (the storm roc).
+   */
+  | (SpecialBase & { kind: "burrow"; speed: number; maxSeconds: number; eruptWindup: number; radius: number; damage: number; stun: number; fly?: boolean })
+  /** Rings of eruptions bursting outward from the boss, wave after wave, with gaps to stand in. */
+  | (SpecialBase & { kind: "nova"; waves: number; spacing: number; radius: number; delay: number; stagger: number; damage: number })
+  /** Four beams in a + aimed at the player, then four more in an x. */
+  | (SpecialBase & { kind: "crossfire"; length: number; halfWidth: number; delay: number; second: number; damage: number })
+  /** Drags the player in (at `strength` m/s within `reach`) while a crushing ring winds up round it. */
+  | (SpecialBase & { kind: "pull"; strength: number; reach: number; radius: number; damage: number })
   /** Slams a fan of arms down along lanes aimed at the player. */
   | (SpecialBase & { kind: "lash"; lanes: number; spread: number; length: number; halfWidth: number; delay: number; damage: number });

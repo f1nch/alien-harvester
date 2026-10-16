@@ -14,7 +14,7 @@ export type BossState =
   /** About to burst out where its eruption ring is drawn. Still out of reach. */
   | "erupting";
 
-export type HazardStyle = "ice" | "shell" | "lash" | "erupt";
+export type HazardStyle = "ice" | "shell" | "lash" | "erupt" | "spore" | "magma";
 
 /** Where a signature move will land. Locked when it appears, so it can always be dodged. */
 export type Hazard =
@@ -152,7 +152,8 @@ export function updateBoss(w: World, t: TargetEntity, dt: number): void {
     case "casting": {
       b.timer -= dt;
       const S = T.special!;
-      if (S.kind === "brood" || S.kind === "burrow") t.heading = Math.atan2(p.x - t.x, p.z - t.z);
+      if (S.kind === "brood" || S.kind === "burrow" || S.kind === "pull") t.heading = Math.atan2(p.x - t.x, p.z - t.z);
+      if (S.kind === "pull") pullPlayer(w, t, S);
       if (b.timer > 0) return;
       if (S.kind === "brood") {
         b.broodCalls++;
@@ -289,10 +290,15 @@ function startSpecial(w: World, t: TargetEntity, S: BossSpecial): void {
         // The first falls where the player stands; the rest scatter around them.
         const a = w.rng() * Math.PI * 2;
         const r = i === 0 ? 0 : S.spread * (0.45 + 0.55 * w.rng());
-        const spot = { x: p.x + Math.cos(a) * r, z: p.z + Math.sin(a) * r };
+        const u = w.rng();
+        const v = w.rng();
+        // Scattered pods land anywhere in the hall; spikes fall round the player.
+        const spot = i > 0 && S.scatter
+          ? { x: room.minX + 1 + u * (room.maxX - room.minX - 2), z: room.minZ + 1 + v * (room.maxZ - room.minZ - 2) }
+          : { x: p.x + Math.cos(a) * r, z: p.z + Math.sin(a) * r };
         clampInto(spot, room, 0.4);
         const timer = S.delay + i * S.stagger;
-        b.hazards.push({ shape: "circle", style: "ice", x: spot.x, z: spot.z, radius: S.radius, timer, total: timer, damage: S.damage, chill: S.chill, cast: b.casts });
+        b.hazards.push({ shape: "circle", style: S.style ?? "ice", x: spot.x, z: spot.z, radius: S.radius, timer, total: timer, damage: S.damage, chill: S.chill, cast: b.casts });
       }
       break;
     case "barrage": {
@@ -322,6 +328,40 @@ function startSpecial(w: World, t: TargetEntity, S: BossSpecial): void {
       }
       break;
     }
+    case "nova":
+      // Ring after ring outward. Each ring's eruptions sit a little over a diameter and a
+      // half apart (a gap to stand in), and alternate rings are turned half a step.
+      for (let k = 0; k < S.waves; k++) {
+        const ringR = S.spacing * (k + 1);
+        const n = Math.max(3, Math.round((Math.PI * 2 * ringR) / (S.radius * 3.2)));
+        const turn = k % 2 ? Math.PI / n : 0;
+        const timer = S.delay + k * S.stagger;
+        for (let i = 0; i < n; i++) {
+          const a = turn + (i / n) * Math.PI * 2;
+          const x = t.x + Math.sin(a) * ringR;
+          const z = t.z + Math.cos(a) * ringR;
+          if (!pointInRect(x, z, room) || insideObstacle(w, x, z)) continue;
+          b.hazards.push({ shape: "circle", style: "magma", x, z, radius: S.radius, timer, total: timer, damage: S.damage, cast: b.casts });
+        }
+      }
+      break;
+    case "crossfire": {
+      const aim = Math.atan2(p.x - t.x, p.z - t.z);
+      for (let k = 0; k < 8; k++) {
+        // A + aimed at the player, then an x between its arms.
+        const a = aim + (k * Math.PI) / 4;
+        const dirX = Math.sin(a);
+        const dirZ = Math.cos(a);
+        const length = laneLength(w, t.x, t.z, dirX, dirZ, S.length, room);
+        const timer = S.delay + (k % 2 ? S.second : 0);
+        b.hazards.push({ shape: "lane", style: "shell", x: t.x, z: t.z, dirX, dirZ, length, halfWidth: S.halfWidth, timer, total: timer, damage: S.damage, cast: b.casts });
+      }
+      break;
+    }
+    case "pull":
+      // The crushing ring lands as the cast ends; the pull runs the whole cast.
+      b.hazards.push({ shape: "circle", style: "lash", x: t.x, z: t.z, radius: S.radius, timer: S.cast, total: S.cast, damage: S.damage, cast: b.casts });
+      break;
     case "brood":
     case "burrow":
       break;
@@ -331,6 +371,19 @@ function startSpecial(w: World, t: TargetEntity, S: BossSpecial): void {
 
 function d2Of(a: { x: number; z: number }, b: { x: number; z: number }): number {
   return dist2(a.x, a.z, b.x, b.z);
+}
+
+/** The whirlpool: drags the player toward the boss while they're within reach and in sight. */
+function pullPlayer(w: World, t: TargetEntity, S: Extract<BossSpecial, { kind: "pull" }>): void {
+  const p = w.player;
+  const dx = t.x - p.x;
+  const dz = t.z - p.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 0.5 || d > S.reach || !hasLineOfSight(t.x, t.z, p.x, p.z, w.obstacles)) return;
+  // Current resistance (Webbed limbs) helps against it too.
+  const k = S.strength * (1 - w.stats.currentResist / 100);
+  p.pullX += (dx / d) * k;
+  p.pullZ += (dz / d) * k;
 }
 
 /** Count down every laid strike; each that lands hurts the player if they're still in it. */

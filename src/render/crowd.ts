@@ -35,9 +35,19 @@ interface Template {
 const SCALE = 1.2;
 
 /** Bosses that tower over the rest get drawn bigger (the sim's hit radius is unchanged). */
+/** How big a type is drawn: a variant's own size, else the boss sizes below. */
+function sizeOf(type: TargetTypeId): number {
+  return TARGETS[type].appearance?.size ?? BOSS_SIZE[type] ?? 1;
+}
+
 const BOSS_SIZE: Partial<Record<TargetTypeId, number>> = { hiveQueen: 1.15, sandWyrm: 1.15, tideKraken: 1.2, overseerMech: 1.05 };
+/** How high a flying boss soars while out of reach. */
+const FLY_HEIGHT = 7;
 /** World units a burrowed boss sinks: enough that only its crest shows. */
 const BURROW_DEPTH = 3.4;
+
+/** Small creatures that hover and bob instead of walking. */
+const FLYERS = new Set<TargetTypeId>(["patrolDrone", "ashMoth", "driftJelly", "skyRay"]);
 
 /** Hovers instead of walking. */
 function flyingBoss(type: TargetTypeId): boolean {
@@ -686,6 +696,257 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
     }
     // Two great arms that swing as it moves.
     pair("arm", 1.6, 0.26, skin, 1.0, 1.9);
+  } else if (type === "calderaTitan") {
+    // The caldera titan: a walking mountain of basalt, cracked with glowing lava, a small
+    // smoking volcano on its back and arms like boulders.
+    const rock = mat(scene, "titanRock", 0.17, 0.14, 0.14, 0.2);
+    const lava = mat(scene, "titanLava", 0, 0, 0);
+    lava.emissiveColor = new Color3(1, 0.4, 0.05);
+    const body = MeshBuilder.CreatePolyhedron("titanBody", { type: 2, size: 1.15 }, scene);
+    body.scaling.set(1.15, 1, 0.95);
+    body.bakeCurrentTransformIntoVertices();
+    add(body, rock, 1.75);
+    add(MeshBuilder.CreatePolyhedron("titanHead", { type: 2, size: 0.42 }, scene), rock, 3.0, 0, 0.35);
+    add(MeshBuilder.CreateBox("titanEyes", { width: 0.55, height: 0.09, depth: 0.12 }, scene), lava, 3.02, 0, 0.72);
+    for (let i = 0; i < 5; i++) {
+      // Glowing cracks across the chest.
+      const crack = MeshBuilder.CreateBox("titanCrack", { width: 0.08, height: 0.9 - i * 0.08, depth: 0.08 }, scene);
+      crack.rotation.z = (i - 2) * 0.35;
+      add(crack, lava, 1.7 + (i % 2) * 0.25, (i - 2) * 0.32, 1.08);
+    }
+    // The volcano on its back, with a molten crater.
+    add(MeshBuilder.CreateCylinder("titanCone", { diameterTop: 0.5, diameterBottom: 1.5, height: 1.1, tessellation: 9 }, scene), rock, 3.0, 0, -0.75);
+    add(MeshBuilder.CreateCylinder("titanCrater", { diameter: 0.42, height: 0.08, tessellation: 12 }, scene), lava, 3.56, 0, -0.75);
+    for (const side of [-1, 1]) add(MeshBuilder.CreatePolyhedron("titanShoulder", { type: 1, size: 0.55 }, scene), rock, 2.55, side * 1.25);
+    pair("arm", 1.7, 0.36, rock, 1.3, 2.4);
+    pair("leg", 0.9, 0.32, rock, 0.55, 0.9);
+  } else if (type === "sporemother") {
+    // The sporemother: a mushroom the size of a house on a thick, rooted stalk, its cap
+    // spotted with glowing spore sacs, tendrils hanging from the gills.
+    const flesh = mat(scene, "motherFlesh", 0.5, 0.36, 0.55, 0.2);
+    const cap = mat(scene, "motherCap", 0.32, 0.18, 0.4, 0.3);
+    const glow = mat(scene, "motherGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.55, 1, 0.35);
+    add(MeshBuilder.CreateCylinder("motherStalk", { diameterTop: 1.0, diameterBottom: 1.6, height: 2.4, tessellation: 16 }, scene), flesh, 1.2);
+    const dome = MeshBuilder.CreateSphere("motherCapDome", { diameter: 3.8, segments: 20, slice: 0.5 }, scene);
+    dome.scaling.y = 0.7;
+    dome.bakeCurrentTransformIntoVertices();
+    add(dome, cap, 2.35);
+    add(MeshBuilder.CreateCylinder("motherGills", { diameter: 3.6, height: 0.12, tessellation: 24 }, scene), flesh, 2.36);
+    for (let i = 0; i < 9; i++) {
+      // Spore sacs on the cap's surface.
+      const a = (i / 9) * Math.PI * 2;
+      const r = i % 3 === 0 ? 0.55 : 1.25;
+      add(MeshBuilder.CreateSphere("motherSac", { diameter: 0.36 + (i % 2) * 0.14, segments: 10 }, scene), glow, 2.35 + Math.sqrt(1.9 ** 2 - r * r) * 0.68, Math.cos(a) * r, Math.sin(a) * r);
+    }
+    for (const side of [-1, 1]) add(MeshBuilder.CreateSphere("motherEye", { diameter: 0.24, segments: 10 }, scene), glow, 1.85, side * 0.35, 0.68);
+    for (let i = 0; i < 4; i++) {
+      // Root flare at the base.
+      const a = (i / 4) * Math.PI * 2 + 0.4;
+      const root = MeshBuilder.CreateCylinder("motherRoot", { diameterTop: 0.1, diameterBottom: 0.4, height: 1.1, tessellation: 6 }, scene);
+      root.rotation.z = Math.PI / 2.6;
+      root.rotation.y = a;
+      add(root, flesh, 0.2, Math.cos(a) * 0.9, -Math.sin(a) * 0.9);
+    }
+    // Tendrils that lash out from under the cap.
+    pair("arm", 1.8, 0.16, flesh, 1.3, 2.25);
+  } else if (type === "shardHydra") {
+    // The shard hydra: a crystal body on stubby legs with five glassy necks fanning out,
+    // each ending in a head with a violet eye.
+    const crystal = mat(scene, "hydraCrystal", 0.45, 0.48, 0.62, 0.9);
+    const dark = mat(scene, "hydraDark", 0.2, 0.18, 0.3, 0.6);
+    const glow = mat(scene, "hydraGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.8, 0.5, 1);
+    const body = MeshBuilder.CreatePolyhedron("hydraBody", { type: 1, size: 1.05 }, scene);
+    body.scaling.set(1.2, 0.8, 1.3);
+    body.bakeCurrentTransformIntoVertices();
+    add(body, crystal, 1.35);
+    add(MeshBuilder.CreatePolyhedron("hydraCore", { type: 1, size: 0.3 }, scene), glow, 1.35, 0, 1.15);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 4 - 0.5) * 1.5;
+      const neck = MeshBuilder.CreateCylinder("hydraNeck", { diameterTop: 0.18, diameterBottom: 0.34, height: 1.6, tessellation: 6 }, scene);
+      neck.rotation.z = -a * 0.75;
+      neck.rotation.x = 0.35;
+      add(neck, dark, 2.35, Math.sin(a) * 0.75, 0.55);
+      const hx = Math.sin(a) * 1.35;
+      add(MeshBuilder.CreatePolyhedron("hydraHead", { type: 1, size: 0.3 }, scene), crystal, 3.1 - Math.abs(a) * 0.15, hx, 0.95);
+      add(MeshBuilder.CreateSphere("hydraEye", { diameter: 0.14, segments: 8 }, scene), glow, 3.12 - Math.abs(a) * 0.15, hx, 1.2);
+    }
+    for (let i = 0; i < 4; i++) {
+      // Shards jutting from the back.
+      const spike = MeshBuilder.CreateCylinder("hydraSpike", { diameterTop: 0, diameterBottom: 0.3, height: 0.9, tessellation: 4 }, scene);
+      spike.rotation.x = -0.5;
+      spike.rotation.z = (i - 1.5) * 0.3;
+      add(spike, glow, 1.9, (i - 1.5) * 0.45, -0.75);
+    }
+    pair("leg", 0.85, 0.26, dark, 0.75, 0.85);
+  } else if (type === "mireLeviathan") {
+    // The mire leviathan: coils of a vast eel heaped in the pool, one great neck reared up
+    // with a gaping jaw and two pale eyes, fins along its back.
+    const hide = mat(scene, "leviHide", 0.22, 0.27, 0.18, 0.5);
+    const belly = mat(scene, "leviBelly", 0.55, 0.55, 0.35, 0.3);
+    const glow = mat(scene, "leviGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.85, 1, 0.45);
+    for (let i = 0; i < 7; i++) {
+      // A ring of coils round its base.
+      const a = (i / 7) * Math.PI * 2;
+      const coil = MeshBuilder.CreateSphere("leviCoil", { diameter: 1.1 - (i % 3) * 0.1, segments: 12 }, scene);
+      coil.scaling.set(1.2, 0.8, 1);
+      coil.bakeCurrentTransformIntoVertices();
+      add(coil, hide, 0.45, Math.cos(a) * 1.1, Math.sin(a) * 1.1 - 0.2);
+    }
+    for (const [y, z, d] of [[1.0, 0.1, 1.15], [1.75, 0.35, 1.0], [2.5, 0.6, 0.9]] as const) {
+      add(MeshBuilder.CreateSphere("leviNeck", { diameter: d, segments: 14 }, scene), hide, y, 0, z);
+      add(MeshBuilder.CreateSphere("leviThroat", { diameter: d * 0.7, segments: 10 }, scene), belly, y - 0.05, 0, z + d * 0.25);
+    }
+    const head = MeshBuilder.CreateSphere("leviHead", { diameter: 1.05, segments: 14 }, scene);
+    head.scaling.set(1, 0.75, 1.35);
+    head.bakeCurrentTransformIntoVertices();
+    add(head, hide, 3.15, 0, 1.0);
+    const jaw = MeshBuilder.CreateBox("leviJaw", { width: 0.75, height: 0.16, depth: 0.95 }, scene);
+    jaw.rotation.x = 0.35;
+    add(jaw, belly, 2.78, 0, 1.25);
+    for (const side of [-1, 1]) add(MeshBuilder.CreateSphere("leviEye", { diameter: 0.22, segments: 10 }, scene), glow, 3.32, side * 0.38, 1.35);
+    for (let i = 0; i < 4; i++) {
+      const fin = MeshBuilder.CreateCylinder("leviFin", { diameterTop: 0, diameterBottom: 0.36, height: 0.6, tessellation: 3 }, scene);
+      fin.rotation.x = -0.4;
+      add(fin, glow, 1.25 + i * 0.6, 0, -0.05 + i * 0.25);
+    }
+    // Two clawed forelimbs, for the crash at the end of its whirlpool.
+    pair("arm", 1.4, 0.2, hide, 0.95, 1.9);
+  } else if (type === "stormRoc") {
+    // The storm roc: a huge bird, pale with storm-blue barring, wings half spread, a hooked
+    // beak and crackling eyes.
+    const feather = mat(scene, "rocFeather", 0.78, 0.78, 0.86, 0.2);
+    const bar = mat(scene, "rocBar", 0.28, 0.35, 0.55, 0.3);
+    const beak = mat(scene, "rocBeak", 0.95, 0.75, 0.3, 0.5);
+    const glow = mat(scene, "rocGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.55, 0.85, 1);
+    const body = MeshBuilder.CreateSphere("rocBody", { diameter: 1.9, segments: 16 }, scene);
+    body.scaling.set(1, 1, 1.35);
+    body.bakeCurrentTransformIntoVertices();
+    add(body, feather, 1.75);
+    add(MeshBuilder.CreateSphere("rocHead", { diameter: 0.85, segments: 14 }, scene), feather, 2.75, 0, 1.0);
+    const hook = MeshBuilder.CreateCylinder("rocBeak", { diameterTop: 0, diameterBottom: 0.36, height: 0.75, tessellation: 8 }, scene);
+    hook.rotation.x = Math.PI / 2 + 0.35;
+    add(hook, beak, 2.6, 0, 1.55);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateSphere("rocEye", { diameter: 0.16, segments: 8 }, scene), glow, 2.85, side * 0.3, 1.3);
+      // Wings, half spread and swept back, barred with storm blue.
+      const wing = MeshBuilder.CreateBox("rocWing", { width: 2.6, height: 0.1, depth: 1.1 }, scene);
+      wing.rotation.z = side * 0.35;
+      wing.rotation.y = side * 0.3;
+      add(wing, feather, 2.3, side * 1.95, -0.15);
+      const stripe = MeshBuilder.CreateBox("rocWingBar", { width: 2.4, height: 0.12, depth: 0.25 }, scene);
+      stripe.rotation.z = side * 0.35;
+      stripe.rotation.y = side * 0.3;
+      add(stripe, bar, 2.32, side * 1.95, -0.45);
+    }
+    const tail = MeshBuilder.CreateBox("rocTail", { width: 1.1, height: 0.08, depth: 1.0 }, scene);
+    tail.rotation.x = -0.4;
+    add(tail, bar, 1.6, 0, -1.6);
+    add(MeshBuilder.CreateTorus("rocCrest", { diameter: 0.5, thickness: 0.06, tessellation: 16 }, scene), glow, 3.15, 0, 0.95);
+    pair("leg", 0.9, 0.14, beak, 0.4, 0.95);
+  } else if (type === "ashMoth") {
+    // Ash moth: a furry grey body on broad, ember-edged wings.
+    const fur = mat(scene, "mothFur", 0.35, 0.32, 0.3, 0.1);
+    const wingMat = mat(scene, "mothWing", 0.45, 0.4, 0.38, 0.1);
+    const glow = mat(scene, "mothGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(1, 0.5, 0.15);
+    const body = MeshBuilder.CreateCapsule("mothBody", { height: 0.6, radius: 0.13, tessellation: 12 }, scene);
+    body.rotation.x = Math.PI / 2;
+    add(body, fur, 0.75);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateSphere("mothEye", { diameter: 0.08, segments: 8 }, scene), glow, 0.82, side * 0.07, 0.3);
+      const wing = MeshBuilder.CreateDisc("mothWingDisc", { radius: 0.38, tessellation: 18 }, scene);
+      wing.rotation.x = Math.PI / 2;
+      wing.rotation.z = side * 0.4;
+      add(wing, wingMat, 0.82, side * 0.36, 0.02);
+      const edge = MeshBuilder.CreateTorus("mothWingEdge", { diameter: 0.74, thickness: 0.03, tessellation: 18 }, scene);
+      edge.rotation.z = side * 0.4;
+      add(edge, glow, 0.82, side * 0.36, 0.02);
+    }
+  } else if (type === "puffcap") {
+    // Puffcap: a squat white stalk under a fat glowing cap, speckled with spore pores.
+    const stalk = mat(scene, "puffStalk", 0.85, 0.82, 0.75, 0.1);
+    const cap = mat(scene, "puffCap", 0.5, 0.3, 0.6, 0.3);
+    const glow = mat(scene, "puffGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.55, 1, 0.35);
+    add(MeshBuilder.CreateCylinder("puffStem", { diameterTop: 0.3, diameterBottom: 0.42, height: 0.5, tessellation: 14 }, scene), stalk, 0.25);
+    add(MeshBuilder.CreateSphere("puffCapDome", { diameter: 0.9, segments: 16, slice: 0.55 }, scene), cap, 0.45);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      add(MeshBuilder.CreateSphere("puffSpot", { diameter: 0.12, segments: 8 }, scene), glow, 0.75, Math.cos(a) * 0.25, Math.sin(a) * 0.25);
+    }
+  } else if (type === "driftJelly") {
+    // Drift jelly: a translucent bell drifting at head height, trailing glowing threads.
+    const bell = mat(scene, "jellyBell", 0.55, 0.6, 0.85, 0.9);
+    bell.alpha = 0.75;
+    const glow = mat(scene, "jellyGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.65, 0.5, 1);
+    add(MeshBuilder.CreateSphere("jellyBellDome", { diameter: 0.7, segments: 16, slice: 0.55 }, scene), bell, 1.05);
+    add(MeshBuilder.CreateSphere("jellyCore", { diameter: 0.22, segments: 10 }, scene), glow, 1.12);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      add(MeshBuilder.CreateCylinder("jellyThread", { diameter: 0.035, height: 0.75, tessellation: 5 }, scene), glow, 0.7, Math.cos(a) * 0.18, Math.sin(a) * 0.18);
+    }
+  } else if (type === "bogToad") {
+    // Bog toad: a wide, warty toad with iron nodules on its back and big golden eyes.
+    const skin = mat(scene, "toadSkin", 0.32, 0.36, 0.2, 0.3);
+    const bellyMat = mat(scene, "toadBelly", 0.7, 0.66, 0.45, 0.1);
+    const iron = mat(scene, "toadIron", 0.35, 0.3, 0.28, 0.7);
+    const eye = mat(scene, "toadEye", 0, 0, 0);
+    eye.emissiveColor = new Color3(1, 0.8, 0.2);
+    const body = MeshBuilder.CreateSphere("toadBody", { diameter: 0.85, segments: 16 }, scene);
+    body.scaling.set(1.2, 0.7, 1);
+    body.bakeCurrentTransformIntoVertices();
+    add(body, skin, 0.35);
+    const throat = MeshBuilder.CreateSphere("toadThroat", { diameter: 0.5, segments: 12 }, scene);
+    throat.scaling.set(1, 0.6, 0.6);
+    throat.bakeCurrentTransformIntoVertices();
+    add(throat, bellyMat, 0.28, 0, 0.32);
+    for (const side of [-1, 1]) {
+      add(MeshBuilder.CreateSphere("toadEyeBall", { diameter: 0.17, segments: 10 }, scene), eye, 0.62, side * 0.2, 0.28);
+      const haunch = MeshBuilder.CreateSphere("toadHaunch", { diameter: 0.38, segments: 10 }, scene);
+      haunch.scaling.set(0.8, 0.6, 1.2);
+      haunch.bakeCurrentTransformIntoVertices();
+      add(haunch, skin, 0.2, side * 0.45, -0.15);
+    }
+    for (let i = 0; i < 5; i++) add(MeshBuilder.CreateSphere("toadNodule", { diameter: 0.1, segments: 6 }, scene), iron, 0.62, (i - 2) * 0.12, -0.05 + (i % 2) * 0.12);
+  } else if (type === "skyRay") {
+    // Sky ray: a pale manta gliding at head height, a long whip tail behind.
+    const skin = mat(scene, "raySkin", 0.82, 0.84, 0.94, 0.3);
+    const back = mat(scene, "rayBack", 0.45, 0.55, 0.8, 0.3);
+    const glow = mat(scene, "rayGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.55, 0.85, 1);
+    const wings = MeshBuilder.CreateSphere("rayWings", { diameter: 1, segments: 14 }, scene);
+    wings.scaling.set(1.6, 0.12, 0.8);
+    wings.bakeCurrentTransformIntoVertices();
+    add(wings, skin, 1.05);
+    const top = MeshBuilder.CreateSphere("rayBackPlate", { diameter: 0.55, segments: 12 }, scene);
+    top.scaling.set(1.2, 0.25, 1.1);
+    top.bakeCurrentTransformIntoVertices();
+    add(top, back, 1.1);
+    for (const side of [-1, 1]) add(MeshBuilder.CreateSphere("rayEye", { diameter: 0.07, segments: 8 }, scene), glow, 1.12, side * 0.16, 0.35);
+    const tail = MeshBuilder.CreateCylinder("rayTail", { diameterTop: 0.02, diameterBottom: 0.06, height: 0.9, tessellation: 5 }, scene);
+    tail.rotation.x = Math.PI / 2;
+    add(tail, glow, 1.05, 0, -0.75);
+  } else if (type === "nestEgg") {
+    // Nest egg: a big speckled egg sat in a ring of silk and twigs.
+    const shell = mat(scene, "eggShell", 0.9, 0.88, 0.82, 0.4);
+    const silk = mat(scene, "eggSilk", 0.8, 0.82, 0.95, 0.2);
+    const speck = mat(scene, "eggSpeck", 0.35, 0.45, 0.65, 0.2);
+    const glow = mat(scene, "eggGlow", 0, 0, 0);
+    glow.emissiveColor = new Color3(0.6, 0.85, 1);
+    add(MeshBuilder.CreateTorus("eggNest", { diameter: 0.85, thickness: 0.22, tessellation: 18 }, scene), silk, 0.12);
+    const egg = MeshBuilder.CreateSphere("eggBody", { diameter: 0.62, segments: 16 }, scene);
+    egg.scaling.y = 1.3;
+    egg.bakeCurrentTransformIntoVertices();
+    add(egg, shell, 0.48);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      add(MeshBuilder.CreateSphere("eggSpot", { diameter: 0.09, segments: 6 }, scene), i % 3 ? speck : glow, 0.45 + (i % 2) * 0.2, Math.cos(a) * 0.28, Math.sin(a) * 0.28);
+    }
   } else {
     // Technician: lab coat flare, goggles, and a boxy equipment pack.
     const coat = mat(scene, "techCoat", 0.92, 0.95, 0.97);
@@ -783,6 +1044,26 @@ function makeTemplate(scene: Scene, type: TargetTypeId): Template {
   };
 }
 
+/**
+ * A later world's kin of an earlier species: the same model, its colours pulled toward
+ * `tint` (keeping each part's light and dark), and its glowing parts in `glow`.
+ */
+function recolour(t: Template, tint: [number, number, number], glow?: [number, number, number]): Template {
+  const done = new Set<StandardMaterial>();
+  for (const m of t.meshes) {
+    const mat = m.material as StandardMaterial | null;
+    if (!mat || done.has(mat)) continue;
+    done.add(mat);
+    const d = mat.diffuseColor;
+    const light = Math.min(1.4, 0.35 + (0.3 * d.r + 0.59 * d.g + 0.11 * d.b) * 1.3);
+    mat.diffuseColor = new Color3(tint[0] * light, tint[1] * light, tint[2] * light);
+    const e = mat.emissiveColor;
+    const strength = Math.max(e.r, e.g, e.b);
+    if (strength > 0.05 && glow) mat.emissiveColor = new Color3(glow[0] * strength, glow[1] * strength, glow[2] * strength);
+  }
+  return t;
+}
+
 export class CrowdView {
   private templates = new Map<TargetTypeId, Template>();
   private pools = new Map<TargetTypeId, Visual[]>();
@@ -802,7 +1083,11 @@ export class CrowdView {
   private hazardMaterials(style: HazardStyle): { ring: StandardMaterial; fill: StandardMaterial } {
     let m = this.hazardMats.get(style);
     if (m) return m;
-    const color = style === "ice" ? new Color3(0.45, 0.85, 1) : style === "erupt" ? new Color3(1, 0.6, 0.15) : new Color3(1, 0.22, 0.12);
+    const color = style === "ice" ? new Color3(0.45, 0.85, 1)
+      : style === "erupt" ? new Color3(1, 0.6, 0.15)
+      : style === "spore" ? new Color3(0.55, 1, 0.3)
+      : style === "magma" ? new Color3(1, 0.4, 0.05)
+      : new Color3(1, 0.22, 0.12);
     const make = (name: string, alpha: number) => {
       const s = new StandardMaterial(name, this.scene);
       s.diffuseColor = Color3.Black();
@@ -945,7 +1230,8 @@ export class CrowdView {
   private template(type: TargetTypeId): Template {
     let t = this.templates.get(type);
     if (!t) {
-      t = makeTemplate(this.scene, type);
+      const look = TARGETS[type].appearance;
+      t = look ? recolour(makeTemplate(this.scene, look.like), look.tint, look.glow) : makeTemplate(this.scene, type);
       this.templates.set(type, t);
       for (const m of t.meshes) this.shadows?.addShadowCaster(m);
     }
@@ -957,11 +1243,11 @@ export class CrowdView {
     const v = pool?.pop();
     if (v) {
       v.node.setEnabled(true);
-      v.node.scaling.setAll(BOSS_SIZE[type] ?? 1);
+      v.node.scaling.setAll(sizeOf(type));
       return v;
     }
     const node = new TransformNode(`${type}Node`, this.scene);
-    node.scaling.setAll(BOSS_SIZE[type] ?? 1);
+    node.scaling.setAll(sizeOf(type));
     const tpl = this.template(type);
     const parts = tpl.meshes.map((m, i) => {
       const inst = m.createInstance(`${type}Inst${i}`);
@@ -1035,7 +1321,7 @@ export class CrowdView {
     const v = this.live.get(id);
     if (!v) return null;
     // A burrowed boss is held at the surface, not wherever its sunk body is.
-    return out.set(v.node.position.x, Math.max(0, v.node.position.y) + GRAB_HEIGHT, v.node.position.z);
+    return out.set(v.node.position.x, Math.min(0.5, Math.max(0, v.node.position.y)) + GRAB_HEIGHT, v.node.position.z);
   }
 
   update(dt: number, targets: readonly TargetEntity[], alpha: number, creature: Vector3): void {
@@ -1064,7 +1350,7 @@ export class CrowdView {
           pivot.rotation.z = Math.sin(this.time * 3.4 + t.id) * 0.08;
         }
       }
-      const flying = t.def.id === "patrolDrone";
+      const flying = FLYERS.has(t.def.id);
       let y = Math.abs(Math.sin(v.phase)) * v.stride * 0.065 + Math.sin(this.time * 2.1 + t.id) * 0.012;
       if (flying) y = Math.sin(this.time * 3 + t.id) * 0.07;
       let rotZ = Math.sin(v.phase) * v.stride * 0.045;
@@ -1122,9 +1408,16 @@ export class CrowdView {
         else if (bs.state === "erupting") sink = 1 - Math.max(0, k - 0.8) * 2;
         v.sink += (sink - v.sink) * (1 - Math.exp(-dt * (sink < v.sink ? 14 : 6)));
         if (v.sink > 0.01) {
-          // Just the crest breaks the surface while it tunnels, rippling as it goes.
-          y -= v.sink * BURROW_DEPTH;
-          rotZ = Math.sin(this.time * 9) * 0.08 * v.sink;
+          if (T.special?.kind === "burrow" && T.special.fly) {
+            // Soars up out of reach and banks round overhead, then stoops on the player.
+            y += v.sink * FLY_HEIGHT;
+            rotZ = Math.sin(this.time * 2.4) * 0.35 * v.sink;
+            rotX = 0.3 * v.sink;
+          } else {
+            // Just the crest breaks the surface while it tunnels, rippling as it goes.
+            y -= v.sink * BURROW_DEPTH;
+            rotZ = Math.sin(this.time * 9) * 0.08 * v.sink;
+          }
         }
         v.node.position.set(x, y, z);
         this.pose(v, rotX, t.heading, rotZ, dt);
@@ -1172,7 +1465,7 @@ export class CrowdView {
         d.from.y + 0.6 * Math.sin(Math.PI * k) + (0.9 - d.from.y) * e,
         d.from.z + (creature.z - d.from.z) * e,
       );
-      d.visual.node.scaling.setAll((BOSS_SIZE[d.visual.type] ?? 1) * (1 - k * 0.95));
+      d.visual.node.scaling.setAll(sizeOf(d.visual.type) * (1 - k * 0.95));
       d.visual.node.rotation.y += dt * 12;
       if (k >= 1) {
         this.dissolving.splice(i, 1);

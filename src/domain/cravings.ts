@@ -1,3 +1,4 @@
+import { LATE_CRAVING_GOALS } from "../content/lateTargets";
 import { reachableZones, zoneAt } from "../content/map";
 import { TARGETS, type TargetTypeId } from "../content/targets";
 import { currentBiome, tidy } from "./biome";
@@ -42,10 +43,18 @@ const CAPTURE_GOAL: Partial<Record<TargetTypeId, number>> = {
   hiveForager: 8, skitter: 10, hiveWarrior: 4, broodSac: 3,
   sandSkink: 8, duneRunner: 6, relicGolem: 4, burialUrn: 3,
   reefCrab: 8, skimmer: 10, lancerEel: 4, pearlClam: 3,
+  ...LATE_CRAVING_GOALS,
 };
 
 /** A full-enough hold for "bank a full hold": share of capacity. */
 export const FULL_HOLD = 0.8;
+
+/** English plurals for creature names: drift jellies, void mantises, cinder beetles. */
+export function plural(name: string): string {
+  if (/[^aeiou]y$/.test(name)) return name.slice(0, -1) + "ies";
+  if (/(s|x|sh|ch)$/.test(name)) return name + "es";
+  return name + "s";
+}
 
 export function describeCraving(c: Craving): string {
   switch (c.kind) {
@@ -53,7 +62,8 @@ export function describeCraving(c: Craving): string {
       const def = TARGETS[c.target!];
       // Things that never move (specimen tanks) are cracked open rather than caught.
       const verb = def.behavior === "static" ? "Crack open" : "Catch";
-      return `${verb} ${c.goal} ${def.name.toLowerCase()}${c.goal === 1 ? "" : "s"}`;
+      const name = def.name.toLowerCase();
+      return `${verb} ${c.goal} ${c.goal === 1 ? name : plural(name)}`;
     }
     case "burst": return `Catch ${c.goal} within ${c.seconds} s`;
     case "bankTrip": return `Bank ${c.goal} biomass in one trip`;

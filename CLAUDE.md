@@ -22,7 +22,7 @@ Pushing to `main` deploys to GitHub Pages (https://f1nch.github.io/alien-harvest
 
 ## Saves (high risk; handle carefully)
 
-- Schema version is in `persistence/schema.ts` (currently 18). Any change to persisted state means: bump `SCHEMA_VERSION`, add a step to `migrate()`, validate in `parseSave`, and add a migration test. Tests use the `SCHEMA_VERSION` constant, never literals.
+- Schema version is in `persistence/schema.ts` (currently 19). Any change to persisted state means: bump `SCHEMA_VERSION`, add a step to `migrate()`, validate in `parseSave`, and add a migration test. Tests use the `SCHEMA_VERSION` constant, never literals.
 - `parseSave` must accept every reachable live state, because `store.write` refuses invalid saves and would block saving for good. Bound numbers (`MAX_AMOUNT`). Parse order matters: perks before cargo and health; structures after doors.
 - Never lower an upgrade cap or rename persistent IDs (quests, perks, spawns, doors, biomes). A test pins the caps.
 - Saves record the floor being played (`progress.floor`, a biome id) and visits per floor (`progress.visits`: first visits show the story, repeats a numeral), so new hand-made floors are appended to `BIOMES` without moving anyone; use `currentBiome(p)` / `nextBiome(p)`, not `biomeAt(depth)`, for the player's floor.
