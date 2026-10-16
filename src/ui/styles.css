@@ -74,56 +74,13 @@ html, body {
 #ui { position: absolute; inset: 0; pointer-events: none; }
 #ui > * { pointer-events: auto; }
 
-.hud-top {
-  position: absolute;
-  top: calc(env(safe-area-inset-top) + 10px);
-  left: calc(env(safe-area-inset-left) + 12px);
-  right: calc(env(safe-area-inset-right) + 12px);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: stretch;
-  pointer-events: none !important;
-}
-
-.chip, .cargo {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 6px 10px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  min-height: 36px;
-}
-.chip-label { color: var(--muted); font-size: 12px; }
-.chip-value { font-weight: 700; font-variant-numeric: tabular-nums; }
 .chip-icon.biomass { color: var(--accent); }
 
-.cargo { flex: 1 1 140px; flex-direction: column; align-items: stretch; gap: 4px; }
-.cargo-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
-.cargo-value { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
 .cargo-bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .cargo-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--violet), var(--accent)); transition: width 0.15s; }
-.cargo.full { border-color: var(--warn); }
-.cargo.full .cargo-fill { background: repeating-linear-gradient(45deg, var(--warn) 0 6px, #c77d1d 6px 12px); }
-.cargo.full .cargo-label::after { content: " FULL"; color: var(--warn); font-weight: 700; }
+.cargo-meter.full .cargo-fill { background: repeating-linear-gradient(45deg, var(--warn) 0 6px, #c77d1d 6px 12px); }
+.cargo-meter.full .meter-name::after { content: " FULL"; color: var(--warn); font-weight: 700; }
 
-.hint {
-  position: absolute;
-  top: calc(env(safe-area-inset-top) + 64px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  font-size: 14px;
-  white-space: nowrap;
-  pointer-events: none !important;
-}
-.hint.warn { border-color: var(--warn); color: var(--warn); font-weight: 700; }
 
 .btn {
   font: inherit;
@@ -256,29 +213,6 @@ html, body {
 
 /* Stage B HUD additions */
 .chip-icon.genetic { color: var(--violet); }
-.cargo { flex-basis: 100%; }
-.level-chip { gap: 8px; }
-.level-col { display: flex; flex-direction: column; gap: 2px; min-width: 70px; }
-.level-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.level-fill { height: 100%; width: 0; background: var(--violet); transition: width 0.2s; }
-.level-text { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
-
-.quests {
-  position: absolute;
-  top: calc(env(safe-area-inset-top) + 112px);
-  left: calc(env(safe-area-inset-left) + 12px);
-  max-width: min(260px, 60vw);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 8px 10px;
-  font-size: 13px;
-  pointer-events: none !important;
-}
-.quests-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
-.quest { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
-.quest-count { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.hint { top: calc(env(safe-area-inset-top) + 112px); left: auto; right: calc(env(safe-area-inset-right) + 12px); transform: none; }
 
 .door-card {
   position: absolute;
@@ -305,19 +239,9 @@ html, body {
 .dev-toggle { top: auto; bottom: calc(env(safe-area-inset-bottom) + 84px); }
 .dev-panel { top: auto; bottom: calc(env(safe-area-inset-bottom) + 136px); }
 
-/* Layout fixes: objectives/hint flow under the HUD; toasts clear the door card. */
-.hud-sub { flex-basis: 100%; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-.quests, .hint { position: static; transform: none; }
-.quests { flex: 0 1 auto; }
-.hint { white-space: normal; text-align: center; max-width: 45%; }
 .toast { bottom: auto; top: 42%; max-width: calc(100% - 32px); white-space: normal; text-align: center; }
 .dev-toggle { left: auto; right: calc(env(safe-area-inset-right) + 12px); bottom: auto; top: 55%; }
 .dev-panel { left: auto; right: calc(env(safe-area-inset-right) + 12px); bottom: auto; top: calc(55% + 52px); }
-@media (max-width: 420px) {
-  .chip .chip-label { display: none; }
-  /* Room for every currency on a phone: tighter wallet chips. */
-  .hud-top > .chip:not(.level-chip) { padding: 5px 7px; gap: 4px; }
-}
 
 /* Evolution section */
 .evo { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -332,11 +256,8 @@ html, body {
 .dev-panel { top: auto; bottom: calc(45% + 6px); max-height: 50%; overflow-y: auto; }
 
 /* Health, damage feedback */
-.hud-bars { flex-basis: 100%; display: flex; gap: 8px; }
-.hud-bars .cargo { flex: 1 1 0; }
 .health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #ff5a6e, #ff9a6e); transition: width 0.15s; }
-.health.low { border-color: #ff5a6e; }
-.health.low .cargo-value { color: #ff8a9a; }
+.health.low .meter-value { color: #ff8a9a; }
 .vignette {
   position: absolute;
   inset: 0;
@@ -406,15 +327,6 @@ html, body {
 .structure-row { padding: 8px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); display: grid; gap: 4px; }
 .structure-row .door-reqs { margin: 4px 0; }
 .structure-row .btn { width: 100%; }
-.drone-status {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: var(--muted);
-  align-self: flex-start;
-}
 
 /* Boss bar, reactor card, completion */
 .boss-bar {
@@ -451,9 +363,7 @@ html, body {
 .chill-meter { border-color: rgba(143, 227, 255, 0.5); }
 .chill-fill { height: 100%; width: 0; background: #8fe3ff; border-radius: inherit; transition: width 0.2s; }
 .storm-fill { height: 100%; width: 0; background: #e8b25a; border-radius: inherit; transition: width 0.2s; }
-.cravings-title { margin-top: 6px; }
-.craving .quest-count { color: #ff7ad9; }
-.feed-meter { flex-basis: 100%; box-sizing: border-box; background: rgba(10, 8, 20, 0.8); border: 1px solid rgba(255, 122, 217, 0.4); border-radius: 10px; padding: 4px 8px; font-size: 12px; min-width: 140px; }
+.feed-meter { box-sizing: border-box; background: rgba(10, 8, 20, 0.8); border: 1px solid rgba(255, 122, 217, 0.4); border-radius: 10px; padding: 4px 8px; font-size: 12px; }
 .feed-meter .feed-text { display: block; margin-bottom: 3px; font-weight: 700; }
 .feed-fill { height: 100%; width: 0; background: #ff7ad9; border-radius: inherit; transition: width 0.2s; }
 .feed-meter.frenzy { border-color: #ff7ad9; animation: frenzy-pulse 0.6s ease-in-out infinite alternate; }
@@ -516,23 +426,12 @@ html, body {
 }
 @media (prefers-reduced-motion: reduce) { .floater { animation-duration: 0.01s; } }
 
-/* A compact instrument cluster leaves the playfield open on larger screens.
-   Mobile retains full-width meters and comfortable touch targets. */
-.chip, .cargo, .quests, .hint, .drone-status, .feed-meter, .door-card, .boss-bar {
+/* Shared panel look for the floating HUD pieces. */
+.hud-status, .wallet-btn, .wallet-more, .quests, .hint, .helper-badge, .feed-meter, .door-card, .boss-bar {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
   border-radius: 10px;
 }
-.chip-icon { font-size: 13px; }
-.chip-value { letter-spacing: -0.02em; }
 .cargo-bar { height: 5px; }
-.quest { gap: 12px; line-height: 1.5; }
-.quests-title { letter-spacing: 0.1em; font-size: 10px; }
-.quest-summary { cursor: pointer; color: var(--muted); font-size: 11px; }
-.quest-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-.quest-extras { padding-top: 4px; }
-.hint { border-radius: 10px; font-size: 12px; line-height: 1.5; }
-.hud-sub { flex-wrap: wrap; }
-.drone-status { max-width: 100%; line-height: 1.5; }
 .btn {
   border-radius: 9px;
   background: #232b40;
@@ -595,40 +494,16 @@ html, body {
 }
 
 @media (min-width: 760px) {
-  .quest-summary { display: none; }
-  .hud-top { top: 20px; left: 20px; right: auto; width: 360px; gap: 6px; }
-  .chip { min-height: 32px; padding: 5px 8px; font-size: 12px; gap: 5px; }
-  .chip-label { font-size: 11px; }
-  .level-chip { margin-left: auto; }
-  .level-col { min-width: 60px; }
-  .hud-bars { gap: 6px; }
-  .cargo { padding: 8px 10px; gap: 6px; }
-  .cargo-label { font-size: 11px; }
-  .hud-sub { flex-direction: column; align-items: stretch; gap: 6px; }
-  .quests { max-width: 100%; padding: 10px 12px; font-size: 12px; }
-  .hint { max-width: 100%; align-self: flex-start; padding: 7px 11px; text-align: left; }
-  .feed-meter { min-width: 0; padding: 7px 10px; font-size: 11px; }
   .btn-upgrade { min-height: 40px; font-size: 13px; right: 20px; bottom: 20px; }
   .btn-upgrade.left { left: 20px; }
   .btn-perk { min-height: 40px; right: 20px; bottom: 70px; }
   .btn-perk.left { left: 20px; }
   .door-card { width: 320px; bottom: 76px; padding: 14px; }
-  .boss-bar { top: 20px; left: auto; right: 20px; transform: none; width: 300px; }
+  .boss-bar { top: 110px; left: auto; right: 20px; transform: none; width: 300px; }
   .panel { align-items: center; padding: 24px; }
   .panel-card { width: min(520px, 100%); max-height: min(760px, 100%); }
 }
 
-@media (max-width: 759px) {
-  .hud-sub { flex-direction: column; align-items: stretch; gap: 5px; }
-  .quests { max-width: 100%; padding: 6px 10px; font-size: 12px; }
-  .quest { line-height: 1.35; padding: 1px 0; }
-  .quest-summary { min-height: 44px; display: flex; align-items: center; gap: 6px; }
-  .quest-summary::before { content: "+"; color: var(--accent); font-size: 15px; }
-  .quest-details[open] .quest-summary::before { content: "−"; }
-  .quest-extras { max-height: 18vh; overflow-y: auto; overscroll-behavior: contain; }
-  .quests { pointer-events: auto !important; }
-  .hint { max-width: 100%; align-self: flex-start; padding: 4px 10px; text-align: left; }
-}
 
 @media (min-width: 760px) and (hover: hover) and (pointer: fine) {
   .panel-card .btn { min-height: 36px; }
@@ -644,4 +519,154 @@ html, body {
 
 @media (prefers-reduced-motion: reduce) {
   .btn { transition: none; }
+}
+
+/* Top HUD: status card and objective on the left, wallet and helper badges on the right.
+   Everything hugs the top edge so the middle of the screen (and the joystick) stays clear. */
+.hud-top {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: calc(env(safe-area-inset-left) + 8px);
+  right: calc(env(safe-area-inset-right) + 8px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "status side" "sub sub";
+  gap: 6px;
+  align-items: start;
+  pointer-events: none !important;
+}
+.hud-status { grid-area: status; }
+.hud-side { grid-area: side; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.hud-sub { grid-area: sub; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+
+.hud-status {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 5px 8px 6px;
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+}
+.level-row { display: flex; align-items: center; gap: 6px; }
+.level-badge { font-weight: 700; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.level-bar { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.level-fill { height: 100%; width: 0; background: var(--violet); transition: width 0.2s; }
+.level-text { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hud-bars { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.meter { display: grid; gap: 2px; min-width: 0; }
+.meter-label { display: flex; justify-content: space-between; gap: 4px; color: var(--muted); white-space: nowrap; }
+.meter-icon { color: #ff7a8a; }
+.meter-value { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.hud-status .cargo-bar { height: 4px; }
+
+.hud-wallet { position: relative; pointer-events: auto; }
+.wallet-btn {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  min-height: 36px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.wallet-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wallet-main { display: flex; gap: 8px; }
+.coin { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.coin-value { font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.wallet-count { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.wallet-count::after { content: " ▾"; }
+.hud-wallet.open .wallet-count::after { content: " ▴"; }
+.wallet-more {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 3;
+  min-width: 180px;
+  background: #101521;
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+.coin-row { display: grid; grid-template-columns: 16px 1fr auto; gap: 6px; align-items: center; min-height: 24px; }
+.coin-label { color: var(--muted); }
+.chip-icon { font-size: 13px; text-align: center; }
+
+.hud-badges { display: flex; gap: 4px; }
+.helper-badge {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.helper-badge::before { content: "● "; color: var(--muted); font-size: 8px; vertical-align: 2px; }
+.helper-badge.busy::before { color: var(--accent); }
+
+.quests {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  max-width: 100%;
+  pointer-events: auto;
+}
+.quest-line {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.quest-line::-webkit-details-marker { display: none; }
+.quest-line:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.quest-line::after { content: "▾"; color: var(--muted); margin-left: auto; }
+.quests[open] .quest-line::after { content: "▴"; }
+.quests.bare .quest-line { cursor: default; }
+.quests.bare .quest-line::after { content: none; }
+.quest-line .quest-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quest-line .quest-count { flex-shrink: 0; }
+.quest-line .quest { display: contents; }
+.quest-floor { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; flex-shrink: 0; }
+.quest-cravings { color: #ff7ad9; font-weight: 700; flex-shrink: 0; }
+.quest-body { padding: 0 10px 8px; max-height: 24vh; overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.quests-title { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin: 6px 0 2px; }
+.quest { display: flex; justify-content: space-between; gap: 12px; line-height: 1.4; padding: 2px 0; }
+.quest-count { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.craving .quest-count { color: #ff7ad9; }
+
+.hud-sub .feed-meter { width: 100%; max-width: 320px; }
+.hint {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 100%;
+  pointer-events: none !important;
+}
+.hint.warn { border-color: var(--warn); color: var(--warn); font-weight: 700; }
+
+/* Phones: the bare minimum of words. */
+@media (max-width: 420px) {
+  .level-text, .meter-word { display: none; }
+  .wallet-main { gap: 6px; }
+}
+
+/* Wider screens: a fixed-width column on the left, the wallet far right. */
+@media (min-width: 760px) {
+  .hud-top { top: 16px; left: 16px; right: 16px; grid-template-columns: 300px 1fr auto; grid-template-areas: "status . side" "sub . ."; }
+  .hud-status { padding: 7px 10px 8px; gap: 6px; }
+  .quests { width: 100%; }
 }

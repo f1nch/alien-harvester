@@ -552,6 +552,7 @@ async function boot(): Promise<void> {
           saveNow = true;
         } else if (e.type === "droneDeposited" || e.type === "catcherDeposited") {
           // The drone banked cargo: persist it like a player deposit.
+          hud.notice(e.type === "droneDeposited" ? "Drone banked its load" : "Catcher banked its catch");
           saveNow = true;
         } else if (e.type === "doorUnlocked" || e.type === "purchased") saveNow = true;
       }

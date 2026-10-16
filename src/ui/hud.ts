@@ -69,13 +69,27 @@ function structureKey(w: World): string {
   ].join(",");
 }
 
-function chip(icon: string, iconCls: string, label: string): { root: HTMLElement; value: HTMLElement } {
-  const root = el("div", "chip");
-  root.setAttribute("aria-label", label);
-  root.title = label;
-  const value = el("span", "chip-value", "0");
-  root.append(el("span", `chip-icon ${iconCls}`, icon), el("span", "chip-label", label), value);
-  return { root, value };
+/** Wallet order. Machine parts and alloy only ever show in costs, never in the wallet. */
+const WALLET_ORDER: Currency[] = ["biomass", "genetic", "crystals", "amber", "shards", "pearls", ...LATE_CURRENCIES, "mutagen"];
+
+const OBJECTIVES_PREF = "alien-harvester.hud.objectivesOpen";
+
+/** The player's own choice to keep the objectives open or closed on this device, if any. */
+function readObjectivesPref(): boolean | null {
+  try {
+    const v = window.localStorage.getItem(OBJECTIVES_PREF);
+    return v === "1" ? true : v === "0" ? false : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeObjectivesPref(open: boolean): void {
+  try {
+    window.localStorage.setItem(OBJECTIVES_PREF, open ? "1" : "0");
+  } catch {
+    // Storage blocked: the panel still works, it just isn't remembered.
+  }
 }
 
 /** What the feeding meter and hints show; changes trigger a HUD redraw. */
@@ -124,6 +138,29 @@ function worldPays(w: World, c: Currency): boolean {
   return w.map.spawns.some((s) => (w.biome.targets[s.type].reward[c] ?? 0) > 0);
 }
 
+/** A helper's badge: its name and load, busy or idle, the full status for hover and screen readers. */
+function helperBadge(badge: HTMLElement, name: string, load: string, status: string, busy: boolean): void {
+  badge.textContent = `${name} ${load}`;
+  badge.classList.toggle("busy", busy);
+  badge.title = `${name}: ${status} (${load})`;
+  badge.setAttribute("aria-label", badge.title);
+}
+
+/** Matters on this floor: its creatures pay it (or, for crystals, it has freezing rooms). */
+function floorCurrency(w: World, c: Currency): boolean {
+  return c === "biomass" || worldPays(w, c) || (c === "crystals" && w.map.zones.some((z) => z.cold));
+}
+
+/** Earned or useful by now. Each currency appears where it first matters, and stays once earned. */
+function walletShows(w: World, c: Currency): boolean {
+  const p = w.progress;
+  if (c === "biomass" || p.banked[c] > 0) return true;
+  // Genetic material waits for the first door, to keep the first minutes uncluttered.
+  if (c === "genetic") return p.unlockedDoors.length > 0;
+  if (c === "mutagen") return Object.keys(p.mutagenLevels).length > 0;
+  return floorCurrency(w, c);
+}
+
 function requirementList(list: HTMLElement, reqs: Requirement[]): void {
   list.replaceChildren(
     ...reqs.map((r) => {
@@ -162,21 +199,15 @@ export interface CompletionStats {
 }
 
 export class Hud {
-  private biomass: HTMLElement;
-  private genetic: HTMLElement;
-  private geneticChip: HTMLElement;
-  private mutagen: HTMLElement;
-  private crystals: HTMLElement;
-  private crystalsChip: HTMLElement;
-  private mutagenChip: HTMLElement;
-  private amber: HTMLElement;
-  private amberChip: HTMLElement;
-  private shards: HTMLElement;
-  private shardsChip: HTMLElement;
-  private pearls: HTMLElement;
-  private pearlsChip: HTMLElement;
-  /** Chips for the later worlds' currencies, built from LATE_CURRENCIES. */
-  private lateChips: Array<{ c: Currency; value: HTMLElement; root: HTMLElement }> = [];
+  /** Wallet: this floor's currencies inline, every earned currency one tap away. */
+  private walletBox: HTMLElement;
+  private walletBtn: HTMLButtonElement;
+  private walletMain: HTMLElement;
+  private walletCount: HTMLElement;
+  private walletMore: HTMLElement;
+  private coins = new Map<Currency, { mini: HTMLElement; miniValue: HTMLElement; full: HTMLElement; fullValue: HTMLElement }>();
+  /** Phones fit two currencies inline, wider screens four. */
+  private narrow = window.matchMedia("(max-width: 420px)");
   private stormBox: HTMLElement;
   private stormText: HTMLElement;
   private stormFill: HTMLElement;
@@ -196,10 +227,9 @@ export class Hud {
   private cargoFill: HTMLElement;
   private cargoBox: HTMLElement;
   private hint: HTMLElement;
-  private quests: HTMLElement;
   private questDetails: HTMLDetailsElement;
-  private questSummary: HTMLElement;
-  private questExtras: HTMLElement;
+  private questLine: HTMLElement;
+  private questBody: HTMLElement;
   private doorCard: HTMLElement;
   private doorTitle: HTMLElement;
   private doorList: HTMLElement;
@@ -223,8 +253,8 @@ export class Hud {
   private evoList: HTMLElement;
   private evoBtn: HTMLButtonElement;
   private structureRows = new Map<StructureKind, { root: HTMLElement; status: HTMLElement; reqs: HTMLElement; btn: HTMLButtonElement }>();
-  private droneStatus: HTMLElement;
-  private catcherStatus: HTMLElement;
+  private droneBadge: HTMLElement;
+  private catcherBadge: HTMLElement;
   private catcherText = "";
   private bossBar: HTMLElement;
   private bossFill: HTMLElement;
@@ -267,54 +297,36 @@ export class Hud {
   private last = "";
 
   constructor(root: HTMLElement, cb: HudCallbacks) {
+    // Top HUD: a compact status card (level, health, cargo) and the objective line on the
+    // left; the wallet and helper badges on the right. The middle stays open for play.
     const top = el("div", "hud-top");
-    const bio = chip("◆", "biomass", "Biomass");
-    this.biomass = bio.value;
-    const gen = chip("✦", "genetic", "Genetic");
-    this.genetic = gen.value;
-    this.geneticChip = gen.root;
-    const cry = chip("❄", "crystals", "Cryo crystals");
-    this.crystals = cry.value;
-    this.crystalsChip = cry.root;
-    const mut = chip("✺", "mutagen", "Mutagen");
-    this.mutagen = mut.value;
-    this.mutagenChip = mut.root;
-    const amb = chip("◈", "amber", "Hive amber");
-    this.amber = amb.value;
-    this.amberChip = amb.root;
-    const sha = chip("◬", "shards", "Relic shards");
-    this.shards = sha.value;
-    this.shardsChip = sha.root;
-    const prl = chip("◉", "pearls", "Tide pearls");
-    this.pearls = prl.value;
-    this.pearlsChip = prl.root;
-    this.lateChips = LATE_CURRENCIES.map((c) => ({ c, ...chip(CURRENCY_ICON[c], c, CURRENCY_LABEL[c]) }));
 
-    const lvl = el("div", "chip level-chip");
-    this.level = el("span", "chip-value", "Lv 1");
+    const status = el("div", "hud-status");
+    const lvlRow = el("div", "level-row");
+    this.level = el("span", "level-badge", "Lv 1");
     const lvlBar = el("div", "level-bar");
     this.levelFill = el("div", "level-fill");
     lvlBar.append(this.levelFill);
     this.levelText = el("span", "level-text");
-    const lvlCol = el("div", "level-col");
-    lvlCol.append(lvlBar, this.levelText);
-    lvl.append(this.level, lvlCol);
+    lvlRow.append(this.level, lvlBar, this.levelText);
 
-    this.healthBox = el("div", "cargo health");
+    this.healthBox = el("div", "meter health");
     this.healthBox.setAttribute("aria-label", "Health");
-    const healthLabel = el("div", "cargo-label");
-    healthLabel.append(el("span", undefined, "♥ Health"));
-    this.healthText = el("span", "cargo-value", "100 / 100");
-    healthLabel.append(this.healthText);
+    const healthLabel = el("div", "meter-label");
+    const healthName = el("span", "meter-name");
+    healthName.append(el("span", "meter-icon", "♥"), el("span", "meter-word", " Health"));
+    this.healthText = el("span", "meter-value", "100 / 100");
+    healthLabel.append(healthName, this.healthText);
     const hbar = el("div", "cargo-bar");
     this.healthFill = el("div", "health-fill");
     hbar.append(this.healthFill);
     this.healthBox.append(healthLabel, hbar);
 
-    this.cargoBox = el("div", "cargo");
-    const cargoLabel = el("div", "cargo-label");
-    cargoLabel.append(el("span", undefined, "Cargo"));
-    this.cargoText = el("span", "cargo-value", "0 / 20");
+    this.cargoBox = el("div", "meter cargo-meter");
+    this.cargoBox.setAttribute("aria-label", "Cargo");
+    const cargoLabel = el("div", "meter-label");
+    cargoLabel.append(el("span", "meter-name", "Cargo"));
+    this.cargoText = el("span", "meter-value", "0 / 20");
     cargoLabel.append(this.cargoText);
     const bar = el("div", "cargo-bar");
     this.cargoFill = el("div", "cargo-fill");
@@ -322,8 +334,48 @@ export class Hud {
     this.cargoBox.append(cargoLabel, bar);
     const bars = el("div", "hud-bars");
     bars.append(this.healthBox, this.cargoBox);
-    // Combo toward a feeding frenzy, or the frenzy itself: full width under the bars,
-    // so it never squeezes the objectives.
+    status.append(lvlRow, bars);
+
+    // Wallet: the button shows this floor's currencies; tapping it lists every one earned.
+    this.walletBox = el("div", "hud-wallet");
+    this.walletBtn = el("button", "wallet-btn");
+    this.walletBtn.type = "button";
+    this.walletBtn.setAttribute("aria-expanded", "false");
+    this.walletBtn.setAttribute("aria-controls", "wallet-more");
+    this.walletMain = el("span", "wallet-main");
+    this.walletCount = el("span", "wallet-count");
+    this.walletBtn.append(this.walletMain, this.walletCount);
+    this.walletMore = el("div", "wallet-more hidden");
+    this.walletMore.id = "wallet-more";
+    this.walletMore.setAttribute("role", "group");
+    this.walletMore.setAttribute("aria-label", "All currencies");
+    for (const c of WALLET_ORDER) {
+      const mini = el("span", "coin");
+      const miniValue = el("span", "coin-value", "0");
+      mini.append(el("span", `chip-icon ${c}`, CURRENCY_ICON[c]), miniValue);
+      mini.title = CURRENCY_LABEL[c];
+      const full = el("div", "coin-row");
+      const fullValue = el("span", "coin-value", "0");
+      full.append(el("span", `chip-icon ${c}`, CURRENCY_ICON[c]), el("span", "coin-label", CURRENCY_LABEL[c]), fullValue);
+      this.coins.set(c, { mini, miniValue, full, fullValue });
+    }
+    this.walletBtn.addEventListener("click", () => this.setWalletOpen(this.walletMore.classList.contains("hidden")));
+    // A tap anywhere else closes the list, so it never lingers over the world.
+    document.addEventListener("pointerdown", (e) => {
+      if (!this.walletBox.contains(e.target as Node)) this.setWalletOpen(false);
+    }, true);
+    this.narrow.addEventListener("change", () => (this.last = ""));
+    this.walletBox.append(this.walletBtn, this.walletMore);
+
+    // Helpers working for you: one short badge each, the full sentence on hover and for screen readers.
+    this.droneBadge = el("div", "helper-badge hidden");
+    this.catcherBadge = el("div", "helper-badge hidden");
+    const badges = el("div", "hud-badges");
+    badges.append(this.droneBadge, this.catcherBadge);
+    const side = el("div", "hud-side");
+    side.append(this.walletBox, badges);
+
+    // Combo toward a feeding frenzy, or the frenzy itself.
     this.feedBox = el("div", "feed-meter hidden");
     this.feedBox.setAttribute("role", "status");
     this.feedText = el("span", "feed-text");
@@ -346,26 +398,25 @@ export class Hud {
     this.stormFill = el("div", "storm-fill");
     stormBar.append(this.stormFill);
     this.stormBox.append(this.stormText, stormBar);
-    top.append(bio.root, gen.root, cry.root, amb.root, sha.root, prl.root, ...this.lateChips.map((l) => l.root), mut.root, lvl, bars, this.feedBox, this.chillBox, this.stormBox);
 
-    // Objectives and hints flow under the HUD so they never overlap it as it wraps.
+    // Objective: one line (floor, next step, open cravings) that expands to the full list.
+    // Starts open on wide screens and closed on phones; a choice the player makes is remembered.
     const sub = el("div", "hud-sub");
-    this.quests = el("div", "quests");
-    this.quests.setAttribute("aria-live", "polite");
-    this.questDetails = el("details", "quest-details");
-    this.questSummary = el("summary", "quest-summary", "More objectives");
-    this.questExtras = el("div", "quest-extras");
-    this.questDetails.append(this.questSummary, this.questExtras);
-    const compactObjectives = window.matchMedia("(max-width: 759px)");
-    this.questDetails.open = !compactObjectives.matches;
-    compactObjectives.addEventListener("change", (event) => {
-      this.questDetails.open = !event.matches;
+    this.questDetails = el("details", "quests");
+    this.questLine = el("summary", "quest-line");
+    this.questBody = el("div", "quest-body");
+    this.questBody.setAttribute("aria-live", "polite");
+    this.questDetails.append(this.questLine, this.questBody);
+    const phone = window.matchMedia("(max-width: 759px)");
+    const saved = readObjectivesPref();
+    this.questDetails.open = saved ?? !phone.matches;
+    phone.addEventListener("change", (event) => {
+      if (readObjectivesPref() === null) this.questDetails.open = !event.matches;
     });
+    this.questLine.addEventListener("click", () => writeObjectivesPref(!this.questDetails.open));
     this.hint = el("div", "hint");
-    this.droneStatus = el("div", "drone-status hidden");
-    this.catcherStatus = el("div", "drone-status hidden");
-    sub.append(this.quests, this.hint, this.droneStatus, this.catcherStatus);
-    top.append(sub);
+    sub.append(this.questDetails, this.feedBox, this.chillBox, this.stormBox, this.hint);
+    top.append(status, side, sub);
 
     this.doorCard = el("div", "door-card hidden");
     this.doorCard.setAttribute("role", "region");
@@ -694,6 +745,11 @@ export class Hud {
     if (!this.toastBusy) this.nextToast(seconds);
   }
 
+  /** Routine news (a helper banked its load): shown briefly when nothing else is, otherwise dropped. */
+  notice(msg: string): void {
+    if (!this.toastBusy) this.toast(msg, 1.6);
+  }
+
   private nextToast(seconds: number): void {
     const msg = this.toastQueue.shift();
     if (msg === undefined) {
@@ -734,27 +790,7 @@ export class Hud {
     if (key === this.last) return;
     this.last = key;
 
-    this.biomass.textContent = compact(p.banked.biomass);
-    this.genetic.textContent = compact(p.banked.genetic);
-    // Genetic material appears once it matters, to keep the first minutes uncluttered.
-    this.geneticChip.classList.toggle("hidden", p.banked.genetic === 0 && p.unlockedDoors.length === 0);
-    this.crystals.textContent = compact(p.banked.crystals);
-    // Crystals appear on the first floor that has them, and stay once earned.
-    this.crystalsChip.classList.toggle("hidden", p.banked.crystals === 0 && !w.map.zones.some((z) => z.cold));
-    this.mutagen.textContent = compact(p.banked.mutagen);
-    this.amber.textContent = compact(p.banked.amber);
-    // Amber appears on the first world that has it, and stays once earned.
-    this.amberChip.classList.toggle("hidden", p.banked.amber === 0 && !worldHasAmber(w));
-    this.shards.textContent = compact(p.banked.shards);
-    this.shardsChip.classList.toggle("hidden", p.banked.shards === 0 && !worldPays(w, "shards"));
-    this.pearls.textContent = compact(p.banked.pearls);
-    this.pearlsChip.classList.toggle("hidden", p.banked.pearls === 0 && !worldPays(w, "pearls"));
-    for (const l of this.lateChips) {
-      l.value.textContent = compact(p.banked[l.c]);
-      l.root.classList.toggle("hidden", p.banked[l.c] === 0 && !worldPays(w, l.c));
-    }
-    // Mutagen appears with the first one earned.
-    this.mutagenChip.classList.toggle("hidden", p.banked.mutagen === 0 && Object.keys(p.mutagenLevels).length === 0);
+    this.renderWallet(w);
     this.renderFeeding(w);
     this.renderChill(w);
     this.renderStorm(w);
@@ -853,10 +889,22 @@ export class Hud {
         if (target > 1) row.append(el("span", "quest-count", `${fmt(Math.floor(questCount(w.progress, q.id)))} / ${target}`));
         return row;
       });
-    this.questSummary.textContent = `More objectives · ${Math.max(0, active.length - 1) + p.cravings.length}`;
-    this.questDetails.classList.toggle("hidden", active.length <= 1 && p.cravings.length === 0);
-    this.questExtras.replaceChildren(
-      ...objectives.slice(1),
+
+    // The line: floor, the next step (with its count), and how many cravings are open.
+    const lead = next ? el("span", "quest-name", next) : objectives[0];
+    const line: HTMLElement[] = [el("span", "quest-floor", w.biome.name)];
+    if (lead) line.push(lead);
+    if (p.cravings.length) {
+      const cravings = el("span", "quest-cravings", `✺${p.cravings.length}`);
+      cravings.setAttribute("aria-label", `${p.cravings.length} cravings`);
+      line.push(cravings);
+    }
+    this.questLine.replaceChildren(...line);
+
+    const extras = objectives.slice(next ? 0 : 1);
+    this.questDetails.classList.toggle("bare", extras.length === 0 && p.cravings.length === 0);
+    this.questBody.replaceChildren(
+      ...extras,
       ...(p.cravings.length ? [el("div", "quests-title cravings-title", "Cravings")] : []),
       ...p.cravings.map((c) => {
         const row = el("div", "quest craving");
@@ -866,11 +914,37 @@ export class Hud {
         return row;
       }),
     );
-    this.quests.replaceChildren(
-      el("div", "quests-title", w.biome.name),
-      ...(next ? [el("div", "quest", next)] : objectives.slice(0, 1)),
-      this.questDetails,
-    );
+  }
+
+  /** Inline: this floor's currencies (two on a phone, four wider). The list: every one earned. */
+  private renderWallet(w: World): void {
+    const shown = WALLET_ORDER.filter((c) => walletShows(w, c));
+    const local = shown.filter((c) => floorCurrency(w, c));
+    // Biomass first, then what this floor is about, then genetic material if there's room.
+    const ranked = [...local.filter((c) => c !== "genetic"), ...local.filter((c) => c === "genetic")];
+    const inline = new Set(ranked.slice(0, this.narrow.matches ? 2 : 4));
+    const mini: HTMLElement[] = [];
+    const full: HTMLElement[] = [];
+    for (const c of shown) {
+      const coin = this.coins.get(c)!;
+      const value = compact(w.progress.banked[c]);
+      coin.miniValue.textContent = value;
+      coin.fullValue.textContent = value;
+      if (inline.has(c)) mini.push(coin.mini);
+      full.push(coin.full);
+    }
+    this.walletMain.replaceChildren(...mini);
+    this.walletMore.replaceChildren(...full);
+    const more = shown.length - inline.size;
+    this.walletCount.textContent = more > 0 ? `+${more}` : "";
+    const summary = shown.filter((c) => inline.has(c)).map((c) => `${compact(w.progress.banked[c])} ${CURRENCY_LABEL[c].toLowerCase()}`).join(", ");
+    this.walletBtn.setAttribute("aria-label", `Wallet: ${summary}${more > 0 ? `, and ${more} more` : ""}. Show all currencies.`);
+  }
+
+  private setWalletOpen(open: boolean): void {
+    this.walletMore.classList.toggle("hidden", !open);
+    this.walletBtn.setAttribute("aria-expanded", String(open));
+    this.walletBox.classList.toggle("open", open);
   }
 
   private pick(option: number | "fallback"): void {
@@ -1134,11 +1208,11 @@ export class Hud {
     }
 
     const d = p.structures.drone;
-    this.droneStatus.classList.toggle("hidden", !d.built);
+    this.droneBadge.classList.toggle("hidden", !d.built);
     if (d.built) {
       const load = `${fmt(cargoWeight(d.cargo))}/${droneCapacity(d)}`;
       const label = { idle: "waiting at base", toPlayer: "coming to you", toVat: "collecting from the vat", toRefinery: "collecting alloy", toBase: "delivering" }[w.droneMode];
-      this.droneStatus.textContent = `Drone: ${label} (${load})`;
+      helperBadge(this.droneBadge, "Drone", load, label, w.droneMode !== "idle");
     }
   }
 
@@ -1146,16 +1220,18 @@ export class Hud {
   private renderCatcher(w: World): void {
     const c = w.progress.structures.catcher;
     let text = "";
+    let load = "";
+    let label = "";
     if (c.built) {
-      const load = `${fmt(cargoWeight(c.cargo))}/${catcherLevel(c).capacity}`;
+      load = `${fmt(cargoWeight(c.cargo))}/${catcherLevel(c).capacity}`;
       const prey = w.catcher.target;
-      const label = w.catcher.mode === "hunting" && prey ? `catching a ${prey.def.name.toLowerCase()} (${Math.round(w.catcher.progress * 10) * 10}%)` : w.catcher.mode === "toPad" ? "delivering" : "following you";
-      text = `Catcher: ${label} (${load})`;
+      label = w.catcher.mode === "hunting" && prey ? `catching a ${prey.def.name.toLowerCase()} (${Math.round(w.catcher.progress * 10) * 10}%)` : w.catcher.mode === "toPad" ? "delivering" : "following you";
+      text = `${label}|${load}`;
     }
     if (text === this.catcherText) return;
     this.catcherText = text;
-    this.catcherStatus.classList.toggle("hidden", text === "");
-    this.catcherStatus.textContent = text;
+    this.catcherBadge.classList.toggle("hidden", text === "");
+    if (text) helperBadge(this.catcherBadge, "Catcher", load, label, w.catcher.mode === "hunting" || w.catcher.mode === "toPad");
   }
 
   private renderPerks(w: World): void {
