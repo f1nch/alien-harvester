@@ -163,19 +163,43 @@ Agreed in discussion, not built yet. It replaces act 3's chain ("each world's ob
 
 ### The flow
 
-- The facility goes down floor after floor without end. Past the four hand-made floors (B1 to B4), floors repeat them at greater depth, as cycling does today.
+- The facility goes down floor after floor without end; the order is under **Facility floors** below.
 - **Every 5th floor has an 80% chance of a portal.** The roll is derived from the run and the floor number, so it is fixed (reloading can't reroll it) and needs no saved state. **Never two misses in a row:** if the last portal floor rolled none, this one has one, so a portal comes at least every 10 floors.
 - **The portal is in a bonus side room behind the floor's boss.** Defeating the boss opens it. It is not the floor's exit: the freight elevator still leads on, and the player may skip the portal.
 - Going through sets a **return point**: the floor and its state (doors, quests, objective, outpost). The world is played at that floor's depth. Its exit brings the player back to the portal room with everything as they left it, and the floor's elevator still goes on. Floor 1 > 2 > 3 > 4 > 5 > 5.5 (the world) > 6.
 - **Leaving early:** the arrival portal takes the player back at any time, without the clear reward. Each portal can be cleared once: afterwards the room shows the world as cleared.
 - Worlds come in story order (Vesh on the first portal, Ashkar on the second and so on); after Aether they repeat as Vesh II and so on.
 
+### Facility floors
+
+Seven combat floors: the original Cryo labs, Specimen vaults and Hangar, and four new ones (B5 Security core, B6 Waste processing, B7 Incinerator, B8 Deep containment; themes and hazards still to be agreed). Repeats come back deeper and tougher with a numeral, as today.
+
+| Floors | What comes up |
+| --- | --- |
+| 1 | Research wing (B1): always the start, the tutorial. |
+| 2 to 4 | The originals in order: Cryo labs, Specimen vaults, Hangar. |
+| **5** | **One of the four new floors, picked at random**, with the first portal room. |
+| 6 to 10 | The originals again in order: Cryo labs, Specimen vaults, Hangar, Cryo labs, Specimen vaults. |
+| 11 on | All seven shuffled like a deck: each comes up once before any repeats. |
+
+- Every random pick (floor 5's new floor, the deck from floor 11) is fixed per run so reloading can't reroll it. That needs one new saved value, a run seed, from which the picks are derived.
+- The new floors can start tougher than the originals (nobody meets them before floor 5, and mostly not before 11), but from floor 11 any floor can follow any other, so the pacing test should hold all seven within a band at the same depth.
+- A hazard's first appearance gets a short card ("Searchlight: stay out of the beam"), since floors no longer come in a fixed order.
+
+### The ship floor
+
+The hangar stays a combat floor. The ship has a **floor of its own**: a safe place with no creatures, where the brood ship is rebuilt and sells **special upgrades that aren't in the upgrades menu**.
+
+- The freight elevator stops there about **once every 10 floors, after the first portal** (e.g. between floors 10 and 11, 20 and 21). *Open: a fixed stop every 10 floors, or a 1-in-10 chance per floor (fixed by the run seed, like the portals).*
+- A stop is an extra step on the way down, like a portal trip: the player leaves the ship floor by the elevator and carries on to the next floor.
+- *Open: what the special upgrades are, what they cost (probably world currencies and parts, so portal trips feed them), and how they differ from the ship systems that world clears grant.*
+
 ### Why go: the clear reward
 
 Paid on a full clear (doors, boss, objective), never just for entering, so stepping in and out can't be farmed.
 
 - **Every clear: a lump sum of XP and biomass**, scaled to the depth like any payout. *Open: the size; a starting point is about what one facility floor's doors cost at that depth, so a trip pays for the next floor.*
-- **First clear of each world: a ship system.** The ship in the hangar isn't for escaping: rebuilt, it becomes a brood ship that sends help down the shaft. Systems mix **companions** (alongside the drone: e.g. small flying swarmers that harry the guard or boss you're holding, larvae that follow you and regenerate your health) with permanent bonuses. Eight worlds, eight systems. *Open: which system each world gives, how strong, and how many companions can be out at once on mobile.*
+- **First clear of each world: a ship system.** The ship isn't for escaping: rebuilt on the ship floor, it becomes a brood ship that sends help down the shaft. Systems mix **companions** (alongside the drone: e.g. small flying swarmers that harry the guard or boss you're holding, larvae that follow you and regenerate your health) with permanent bonuses. Eight worlds, eight systems. *Open: which system each world gives, how strong, and how many companions can be out at once on mobile.*
 - **The world's currency** feeds its upgrade track (Chitin plating, Dust lids, Webbed limbs and the late worlds' tracks), and only worlds pay it.
 - Repeat visits pay their depth-scaled lump sum, without a second ship system.
 
@@ -186,12 +210,13 @@ The chain is live (all eight worlds deployed 2026-10-16), so some saves are in a
 - They keep playing where they are. A world with no return point shows a **"Return to facility" button** (a second tap confirms, since the world's doors and quests are left behind). It moves the player to the facility floor a fresh run reaches at their depth + 1: the same step down the old portal exit would have made, so nobody loses depth. Everything `enterNextBiome` keeps (currencies, mutations, perks, evolution, XP, structures) is kept; cargo and stock are banked first.
 - Clearing that world works as before and lands them in the facility the same way, with the clear reward.
 - Worlds a save has already cleared (visited and left, per `progress.visits`) grant their ship systems on migration.
-- New state: the return point (floor, depth, door/quest/objective/outpost state) and cleared ship systems. Schema bump, migration, `parseSave` validation and migration tests, plus a reviewer pass.
+- New state: the return point (floor, depth, door/quest/objective/outpost state), cleared ship systems, the run seed (saves without one get a fresh seed; their next floor follows the table for its depth) and ship-floor upgrades. Schema bump, migration, `parseSave` validation and migration tests, plus a reviewer pass.
 
 ### Other work it needs
 
 - A portal room on each facility map, off the boss area, with a door that opens on the boss's defeat.
-- **More facility floors:** only four are hand-made (B1 to B4), so the first portal at floor 5 would already be a repeat. Four more facility floors (B5 to B8) with their own hazards are planned, so the spine has eight hand-made floors before it cycles.
+- **Four new facility floors** (B5 to B8) and the **ship floor**. Proposed hazards: searchlights that raise an alarm and bring guards (B5, new system), toxic goo pools and drips that hurt (B6, resin pools plus damage), conveyor belts and flame jets (B7, currents and heat vents), laser grids and shock panels on a timer (B8, new system).
+- The new floor order, the run seed and the ship floor ship **together with the portal rooms**, as one save update: on their own, the hangar would stop leading to Vesh and the worlds would be unreachable.
 - **Pacing (done 2026-10-16):** all eight worlds were cut by a third to suit side trips: Vesh about 26 minutes at depth-0 equivalents, then about 8% longer per world up to Aether at about 45 (`tests/pacing.test.ts` pins both).
 - Story lines that assume the chain (e.g. Aether's "coordinates that feel very close to home") get rewritten.
 
