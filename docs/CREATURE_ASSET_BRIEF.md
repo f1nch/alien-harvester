@@ -1,6 +1,10 @@
 # Creature asset brief
 
-> **Selected art direction (October 13, 2026):** Tendon Stalker replaces the original blob concept below: dry charcoal-plum tissue, swept chitin, mint crest/core, two resting capture arms, four walking legs and one tail. The older silhouette and wet material descriptions are historical starting points, not requirements for this approved design. Technical names, sockets, budgets, in-place animation and export rules still apply. The first rigged hatchling is integrated; see [its workflow](../art/alien/tendon-stalker/README.md). Its materials retain the authored dry look, and procedural capture tubes are rooted at its sockets. The juvenile is integrated as the evolved form, and a rigged adult export is ready for a future third gameplay stage.
+**Refinement update (2026-10-16):** the [refined four-stage lineage](../art/alien/tendon-stalker/refined/README.md) supersedes earlier runtime geometry/animation measurements: Hatchling 3,819, Juvenile 5,015, Adult 5,567, Apex 4,363 triangles; each has 27 bones, eight sockets, five materials and six clips. The user requested smoother animation and a less busy Apex. New sibling Blender sources preserve the originals. The simpler Apex is still a single skinned mesh; modular customization remains planned.
+
+**Runtime update (2026-10-15):** the adult GLB renders at existing tier 2 and the rigged [apex](../art/alien/tendon-stalker/apex/README.md) at tier 3 and above, after hatchling (0) and juvenile (1), with independent procedural fallback. Adult and apex each have an 8,000-triangle body budget. The apex has 6,999 triangles, 27 bones, eight sockets and six inherited adult clips. Progression and saves are unchanged; the initial static blockout is preserved. Historical two-form dimensions and examples below describe the original brief, not an instruction to remove the adult.
+
+> **Selected art direction (October 13, 2026):** Tendon Stalker replaces the original blob concept below: dry charcoal-plum tissue, swept chitin, mint crest/core, two resting capture arms, four walking legs and one tail. The older silhouette and wet material descriptions are historical starting points, not requirements for this approved design. Technical names, sockets, budgets, in-place animation and export rules still apply. The first rigged hatchling is integrated; see [its workflow](../art/alien/tendon-stalker/README.md). Its materials retain the authored dry look, and procedural capture tubes are rooted at its sockets. The juvenile is integrated as the evolved form, and the adult is integrated at tier 2 and apex at tier 3 and above.
 
 What to build in Blender so the game can load the creature as a GLB in place of the procedural placeholder (`src/render/creature.ts`). This is a brief to model against: the measurements, names and limits below are what the game will check for. Part 1 is for modelling, Part 2 is the code plan, Part 3 is a first-pass Blender workflow.
 
@@ -78,6 +82,7 @@ The creature is the hero asset, but it shares the frame with up to 150 crowd cha
 | --- | --- |
 | Larval body + legs + eyes | **≤ 5,000 triangles** |
 | Evolved body + legs + eyes + spines | **≤ 8,000 triangles** |
+| Adult or apex body | **≤ 8,000 triangles** each; current apex 6,999 |
 | One tentacle | **≤ 400 triangles** (the game shows up to 8 at once) |
 | Body skeleton | **≤ 40 bones**; at most **4 bone influences per vertex** |
 | Tentacle skeleton | **10 bones** in a single chain |

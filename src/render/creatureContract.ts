@@ -3,10 +3,14 @@
  * summary of a loaded file. Renderer-free so it can be unit-tested.
  */
 
-export const CREATURE_FORMS = ["larval", "evolved"] as const;
+/**
+ * One model file per life stage, indexed by evolution tier: larval (hatchling) is tier 0,
+ * evolved (juvenile) tier 1, adult tier 2, apex tier 3. IDs name files, so never rename one.
+ */
+export const CREATURE_FORMS = ["larval", "evolved", "adult", "apex"] as const;
 export type CreatureForm = (typeof CREATURE_FORMS)[number];
 
-/** Evolution tier to model file. Tiers past the last form reuse it. */
+/** Evolution tier to model file. Endless tiers past the apex reuse it. */
 export function formForTier(tier: number): CreatureForm {
   return CREATURE_FORMS[Math.max(0, Math.min(tier, CREATURE_FORMS.length - 1))]!;
 }
@@ -84,7 +88,7 @@ const SOCKET_DUPLICATE = /^socket\.tentacle\.\d+\.\d{3}$/;
 const REQUIRED_ANIMATIONS = ["idle", "move"] as const;
 const OPTIONAL_ANIMATIONS = ["capture", "gulp", "hurt", "evolve"] as const;
 
-export const TRIANGLE_BUDGET: Record<CreatureForm, number> = { larval: 5000, evolved: 8000 };
+export const TRIANGLE_BUDGET: Record<CreatureForm, number> = { larval: 5000, evolved: 8000, adult: 8000, apex: 8000 };
 export const TENTACLE_TRIANGLE_BUDGET = 400;
 
 /** Blender appends ".001" to duplicate names; point at the near miss so it's easy to fix. */

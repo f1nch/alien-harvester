@@ -71,9 +71,13 @@ def candidates(n):
     if n.startswith(('Capture hook','Capture opposing','Capture tendon')): return chains['Capture_'+side]
     if n.startswith('Capture shoulder'): return ['capture.'+side+'.0']
     if n.startswith(('Foot claw','Shin chitin','Leg armor')):
-        tokens=n.split(); idx=int(tokens[-1] if not n.startswith('Foot') else tokens[-2]); s=-1 if '-1' in n else 1
+        tokens=n.split(); idx=int(tokens[-1] if not n.startswith('Foot') else tokens[-2])
+        # Parse the side field, not any occurrence of -1: a right foot's outer
+        # toe also has toe index -1 and must never bind to the opposite leg.
+        s=int(tokens[-3] if n.startswith('Foot') else tokens[-2])
         chain=chains['Leg_'+('L' if s<0 else 'R')+'_'+str(idx)]
         return chain if n.startswith('Shin') else [chain[-1] if n.startswith('Foot') else chain[0]]
+    if n.startswith('Tail | terminal spike'): return ['tail.3']
     if n.startswith('Tail'): return ['tail.'+str(i) for i in range(4)]
     if n.startswith('Jaw | split'): return ['jaw']
     if n.startswith(('Head','Forehead','Eye','Tooth','Jaw | dark')): return ['head']

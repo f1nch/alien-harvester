@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  checkCreatureGlb, creatureModelPath, formForTier, isGlb, TENTACLE_BONES, TRIANGLE_BUDGET, type GlbSummary,
+  checkCreatureGlb, CREATURE_FORMS, creatureModelPath, formForTier, isGlb, TENTACLE_BONES, TRIANGLE_BUDGET, type GlbSummary,
 } from "../src/render/creatureContract";
 
 /** A file that follows the brief exactly. */
@@ -124,11 +124,40 @@ describe("creature GLB contract", () => {
 
 describe("creature model files", () => {
   it("maps evolution tiers to forms, clamping past the last", () => {
+    expect(CREATURE_FORMS).toEqual(["larval", "evolved", "adult", "apex"]);
     expect(formForTier(0)).toBe("larval");
     expect(formForTier(1)).toBe("evolved");
-    expect(formForTier(5)).toBe("evolved");
+    // The adult is tier 2 only.
+    expect(formForTier(2)).toBe("adult");
+    expect(formForTier(3)).toBe("apex");
+    // Endless evolution keeps the apex model.
+    expect(formForTier(4)).toBe("apex");
+    expect(formForTier(50)).toBe("apex");
     expect(formForTier(-1)).toBe("larval");
-    expect(creatureModelPath("larval")).toBe("models/creature_larval.glb");
+  });
+
+  it("keeps model URLs relative, one file per form", () => {
+    expect(CREATURE_FORMS.map(creatureModelPath)).toEqual([
+      "models/creature_larval.glb", "models/creature_evolved.glb", "models/creature_adult.glb", "models/creature_apex.glb",
+    ]);
+    for (const form of CREATURE_FORMS) expect(creatureModelPath(form).startsWith("/")).toBe(false);
+  });
+
+  it("budgets the apex like the adult", () => {
+    const s = valid();
+    s.bodyTriangles = TRIANGLE_BUDGET.apex;
+    expect(TRIANGLE_BUDGET.apex).toBe(8000);
+    expect(checkCreatureGlb("apex", s).warnings).toEqual([]);
+    s.bodyTriangles += 1;
+    expect(checkCreatureGlb("apex", s).warnings.join()).toMatch(/budget 8000/);
+  });
+
+  it("budgets the adult like the evolved form", () => {
+    const s = valid();
+    s.bodyTriangles = TRIANGLE_BUDGET.adult;
+    expect(checkCreatureGlb("adult", s).warnings).toEqual([]);
+    s.bodyTriangles += 1;
+    expect(checkCreatureGlb("adult", s).warnings.join()).toMatch(/budget 8000/);
   });
 
   it("recognises GLB bytes and rejects the HTML a dev server serves for missing files", () => {

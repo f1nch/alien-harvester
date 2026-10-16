@@ -1,7 +1,7 @@
 // @ts-expect-error Vitest runs in Node; the browser project's types omit Node APIs.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { FreeCamera, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import { FreeCamera, NullEngine, Scene, Vector3, VertexBuffer } from "@babylonjs/core";
 import { loadCreatureGlb, summarize } from "../src/render/creatureAssets";
 import { GltfCreature } from "../src/render/gltfCreature";
 import { ProceduralCreature } from "../src/render/proceduralCreature";
@@ -91,6 +91,35 @@ describe("authored Stalker evolution models", () => {
 });
 
 describe("baked Stalker foot planting", () => {
+  it.each(["larval", "evolved", "adult", "apex"] as const)("keeps %s foot geometry bound to its own side", async (form) => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      const bytes = new Uint8Array(readFileSync(new URL(`../public/models/creature_${form}.glb`, import.meta.url)));
+      const source = await loadCreatureGlb(scene, form, bytes);
+      if (source.kind !== "ready") throw new Error(JSON.stringify(source));
+      const checked = new Set<string>();
+      for (const mesh of source.container.meshes.filter((mesh) => mesh.skeleton)) {
+        const positions = mesh.getVerticesData(VertexBuffer.PositionKind)!;
+        const indices = mesh.getVerticesData(VertexBuffer.MatricesIndicesKind)!;
+        const weights = mesh.getVerticesData(VertexBuffer.MatricesWeightsKind)!;
+        for (let vertex = 0; vertex < mesh.getTotalVertices(); vertex++) {
+          for (let slot = 0; slot < 4; slot++) {
+            if (weights[vertex * 4 + slot]! < 0.5) continue;
+            const bone = mesh.skeleton!.bones[indices[vertex * 4 + slot]!]!;
+            const leg = /^leg\.([0-3])\.c$/.exec(bone.name);
+            if (!leg) continue;
+            const side = Number(leg[1]) < 2 ? -1 : 1;
+            expect(positions[vertex * 3]! * side, `${form} vertex ${vertex} bound to ${bone.name}`).toBeGreaterThan(0);
+            checked.add(bone.name);
+          }
+        }
+      }
+      expect(checked.size).toBe(4);
+      source.container.dispose();
+    } finally { scene.dispose(); engine.dispose(); }
+  }, 20000);
+
   it.each(["hatchling", "juvenile", "adult"])("keeps %s stance feet stationary under forward travel", (stage) => {
     const folder = stage === "hatchling" ? "" : `${stage}/`;
     const base = `../art/alien/tendon-stalker/${folder}`;

@@ -1,0 +1,16 @@
+{
+  "stage": "apex",
+  "status": "static blockout",
+  "meshes": 42,
+  "triangles": 7143,
+  "rigged": false,
+  "animations": [],
+  "source": "art\\alien\\tendon-stalker\\adult\\tendon-stalker-adult.blend",
+  "remaining": [
+    "silhouette review",
+    "retopology and material refinement",
+    "rig and weights",
+    "six in-place clips and capture sockets",
+    "runtime validation and integration"
+  ]
+}

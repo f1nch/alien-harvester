@@ -1,0 +1,38 @@
+{
+  "hatchling": {
+    "max_loop_matrix_error": {
+      "idle": 6.123233849335533e-18,
+      "move": 8.57252763722393e-18,
+      "capture": 8.998558947403348e-34
+    },
+    "fps": 60,
+    "move_duration_seconds": 0.7666666666666667
+  },
+  "juvenile": {
+    "max_loop_matrix_error": {
+      "idle": 6.123233849335533e-18,
+      "move": 8.57252763722393e-18,
+      "capture": 8.998558947403348e-34
+    },
+    "fps": 60,
+    "move_duration_seconds": 0.7666666666666667
+  },
+  "adult": {
+    "max_loop_matrix_error": {
+      "idle": 6.123233849335533e-18,
+      "move": 8.57252763722393e-18,
+      "capture": 8.998558947403348e-34
+    },
+    "fps": 60,
+    "move_duration_seconds": 0.7666666666666667
+  },
+  "apex": {
+    "max_loop_matrix_error": {
+      "idle": 6.123233849335533e-18,
+      "move": 8.57252763722393e-18,
+      "capture": 8.998558947403348e-34
+    },
+    "fps": 60,
+    "move_duration_seconds": 0.7666666666666667
+  }
+}
