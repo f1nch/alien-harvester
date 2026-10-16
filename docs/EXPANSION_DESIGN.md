@@ -164,9 +164,9 @@ Agreed in discussion, not built yet. It replaces act 3's chain ("each world's ob
 ### The flow
 
 - The facility goes down floor after floor without end; the order is under **Facility floors** below.
-- **Every 5th floor has an 80% chance of a portal.** The roll is derived from the run and the floor number, so it is fixed (reloading can't reroll it) and needs no saved state. **Never two misses in a row:** if the last portal floor rolled none, this one has one, so a portal comes at least every 10 floors.
+- **No portals before floor 11. From then on, every 5th floor (15, 20, 25 and so on) has an 80% chance of a portal.** The roll is derived from the run and the floor number, so it is fixed (reloading can't reroll it) and needs no saved state. **Never two misses in a row:** if the last portal floor rolled none, this one has one, so a portal comes at least every 10 floors.
 - **The portal is in a bonus side room behind the floor's boss.** Defeating the boss opens it. It is not the floor's exit: the freight elevator still leads on, and the player may skip the portal.
-- Going through sets a **return point**: the floor and its state (doors, quests, objective, outpost). The world is played at that floor's depth. Its exit brings the player back to the portal room with everything as they left it, and the floor's elevator still goes on. Floor 1 > 2 > 3 > 4 > 5 > 5.5 (the world) > 6.
+- Going through sets a **return point**: the floor and its state (doors, quests, objective, outpost). The world is played at that floor's depth. Its exit brings the player back to the portal room with everything as they left it, and the floor's elevator still goes on. For example: floor 14 > 15 > 15.5 (the world) > 16.
 - **Leaving early:** the arrival portal takes the player back at any time, without the clear reward. Each portal can be cleared once: afterwards the room shows the world as cleared.
 - Worlds come in story order (Vesh on the first portal, Ashkar on the second and so on); after Aether they repeat as Vesh II and so on.
 
@@ -178,7 +178,7 @@ Seven combat floors: the original Cryo labs, Specimen vaults and Hangar, and fou
 | --- | --- |
 | 1 | Research wing (B1): always the start, the tutorial. |
 | 2 to 4 | The originals in order: Cryo labs, Specimen vaults, Hangar. |
-| **5** | **One of the four new floors, picked at random**, with the first portal room. |
+| **5** | **One of the four new floors, picked at random.** No portal room. |
 | 6 to 10 | The originals again in order: Cryo labs, Specimen vaults, Hangar, Cryo labs, Specimen vaults. |
 | 11 on | All seven shuffled like a deck: each comes up once before any repeats. |
 
@@ -190,7 +190,7 @@ Seven combat floors: the original Cryo labs, Specimen vaults and Hangar, and fou
 
 The hangar stays a combat floor. The ship has a **floor of its own**: a safe place with no creatures, where the brood ship is rebuilt and sells **special upgrades that aren't in the upgrades menu**.
 
-- The freight elevator stops there about **once every 10 floors, after the first portal** (e.g. between floors 10 and 11, 20 and 21). *Open: a fixed stop every 10 floors, or a 1-in-10 chance per floor (fixed by the run seed, like the portals).*
+- The freight elevator stops there about **once every 10 floors, after the first portal** (e.g. between floors 20 and 21, 30 and 31). *Open: a fixed stop every 10 floors, or a 1-in-10 chance per floor (fixed by the run seed, like the portals).*
 - A stop is an extra step on the way down, like a portal trip: the player leaves the ship floor by the elevator and carries on to the next floor.
 - *Open: what the special upgrades are, what they cost (probably world currencies and parts, so portal trips feed them), and how they differ from the ship systems that world clears grant.*
 
