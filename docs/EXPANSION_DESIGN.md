@@ -157,6 +157,44 @@ Saves: v11 adds the crystals and alloy currencies and Thermal fat (chill is tran
 
 ---
 
+## Proposal: portal rooms (worlds as side trips), 2026-10-16
+
+Agreed in discussion, not built yet. It replaces act 3's chain ("each world's objective charges the portal to the next world") with side trips off the facility. The facility becomes the endless spine; portal worlds become optional trips with a reward.
+
+### The flow
+
+- The facility goes down floor after floor without end. Past the four hand-made floors (B1 to B4), floors repeat them at greater depth, as cycling does today.
+- **Every 5th floor has an 80% chance of a portal.** The roll is derived from the run and the floor number, so it is fixed (reloading can't reroll it) and needs no saved state. **Never two misses in a row:** if the last portal floor rolled none, this one has one, so a portal comes at least every 10 floors.
+- **The portal is in a bonus side room behind the floor's boss.** Defeating the boss opens it. It is not the floor's exit: the freight elevator still leads on, and the player may skip the portal.
+- Going through sets a **return point**: the floor and its state (doors, quests, objective, outpost). The world is played at that floor's depth. Its exit brings the player back to the portal room with everything as they left it, and the floor's elevator still goes on. Floor 1 > 2 > 3 > 4 > 5 > 5.5 (the world) > 6.
+- **Leaving early:** the arrival portal takes the player back at any time, without the clear reward. Each portal can be cleared once: afterwards the room shows the world as cleared.
+- Worlds come in story order (Vesh on the first portal, Ashkar on the second and so on); after Aether they repeat as Vesh II and so on.
+
+### Why go: the clear reward
+
+Paid on a full clear (doors, boss, objective), never just for entering, so stepping in and out can't be farmed.
+
+- **First clear of each world: a ship system**, a permanent bonus (e.g. capture power, cargo, move speed). This is the "parts rebuild your ship" thread made concrete: eight worlds, eight systems. *Open: which system each world gives and how big.*
+- **The world's currency** feeds its upgrade track (Chitin plating, Dust lids, Webbed limbs and the late worlds' tracks), and only worlds pay it.
+- Repeat visits pay their depth-scaled rewards, without a second ship system.
+
+### Saves already in a portal world
+
+The chain is live (all eight worlds deployed 2026-10-16), so some saves are in a portal world with no return point.
+
+- They keep playing where they are. A world with no return point shows a **"Return to facility" button** (a second tap confirms, since the world's doors and quests are left behind). It moves the player to the facility floor a fresh run reaches at their depth + 1: the same step down the old portal exit would have made, so nobody loses depth. Everything `enterNextBiome` keeps (currencies, mutations, perks, evolution, XP, structures) is kept; cargo and stock are banked first.
+- Clearing that world works as before and lands them in the facility the same way, with the clear reward.
+- Worlds a save has already cleared (visited and left, per `progress.visits`) grant their ship systems on migration.
+- New state: the return point (floor, depth, door/quest/objective/outpost state) and cleared ship systems. Schema bump, migration, `parseSave` validation and migration tests, plus a reviewer pass.
+
+### Other work it needs
+
+- A portal room on each facility map, off the boss area, with a door that opens on the boss's defeat.
+- **Pacing:** worlds take about 45 to 65 minutes in `tests/pacing.test.ts` at depth-0 equivalents, much longer than a facility floor. As side trips they probably want to be about a third shorter; the pacing test can pin the new length.
+- Story lines that assume the chain (e.g. Aether's "coordinates that feel very close to home") get rewritten.
+
+---
+
 ## Risks and how they're handled
 
 - **Saves** change in every phase. Each gets a schema bump, a migration, validation, migration tests and a reviewer pass. IDs of biome 1 never change.
