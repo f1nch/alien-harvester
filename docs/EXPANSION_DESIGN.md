@@ -192,14 +192,35 @@ The hangar stays a combat floor. The ship has a **floor of its own**: a safe pla
 
 - **Once the first portal world is cleared**, each floor has a **1-in-10 chance** of being the ship floor (fixed by the run seed, like the portals), and stops are **at least 10 floors apart**: e.g. the first world cleared from floor 15, then 16 > 17 (ship) > ... no ship before 27. That averages a stop about every 20 floors. **Safety net:** a stop is guaranteed if 20 floors pass after the gap without one, so no run goes more than 30 floors without the ship.
 - A stop is an extra step on the way down, like a portal trip: the player leaves the ship floor by the elevator and carries on to the next floor.
-- *Open: what the special upgrades are, what they cost (probably world currencies and parts, so portal trips feed them), and how they differ from the ship systems that world clears grant.*
+- **Ship-floor upgrades** are levelled tracks that improve the ship systems and structures, sold only here (never in the upgrades menu). Each costs **one world's currency plus parts**, so world currencies matter outside their world. A stop comes about every 20 floors, so each visit should afford a level or two and a full set takes several visits. *Open: exact prices, set with the pacing test.*
+
+| Upgrade | Paid in | Effect | Levels | Needs |
+| --- | --- | --- | --- | --- |
+| Larva brood | Amber | +1 larva, then more healing | 3 | Brood larvae |
+| Swarm bay | Spores | +1 flyer, then +5% more power against fighters per level | 3 | Spore swarm |
+| Drone hold | Pearls | More drone cargo, past the drone's normal cap | 3 | |
+| Catcher arms | Moonstone | Faster catcher, past its normal cap | 3 | |
+| Launch boost | Glass | Start every floor with a 60 s power-up from the existing feeding boosts; level 2 lengthens it | 2 | |
+| Homing charge | Silk | A second homing call per floor | 1 | Homing call |
 
 ### Why go: the clear reward
 
 Paid on a full clear (doors, boss, objective), never just for entering, so stepping in and out can't be farmed.
 
-- **Every clear: a lump sum of XP and biomass**, scaled to the depth like any payout. *Open: the size; a starting point is about what one facility floor's doors cost at that depth, so a trip pays for the next floor.*
-- **First clear of each world: a ship system.** The ship isn't for escaping: rebuilt on the ship floor, it becomes a brood ship that sends help down the shaft. Systems mix **companions** (alongside the drone: e.g. small flying swarmers that harry the guard or boss you're holding, larvae that follow you and regenerate your health) with permanent bonuses. Eight worlds, eight systems. *Open: which system each world gives, how strong, and how many companions can be out at once on mobile.*
+- **Every clear: a lump sum** of **biomass equal to half the world's own biomass prices** (doors, outpost, objective) and **XP equal to half the XP its quests pay**, both at the world's depth. Tied to the world's own numbers, it scales with each world and depth and roughly pays for the next facility floor (Vesh: about 650 biomass at depth-0 equivalents).
+- **First clear of each world: a ship system.** The ship isn't for escaping: rebuilt on the ship floor, it becomes a brood ship that sends help down the shaft. Percent bonuses are summed with perks in `computeStats`. Two systems are companions, at most five out at once (fine on mobile).
+
+| World | System | Effect |
+| --- | --- | --- |
+| Vesh | Brood larvae (companion) | 2 larvae follow you and heal 2 health/s, in combat too (regeneration is out of combat only). |
+| Ashkar | Relic sorter | +10% resource yield. |
+| Maren | Ballast fins | +10% move speed. |
+| Pyrra | Forged hull | +15% max health. |
+| Thessa | Spore swarm (companion) | 3 small flyers dart at the guard or boss you're holding: +20% capture power against creatures that fight back. |
+| Kharon | Tractor lens | +15% capture radius. |
+| Gloam | Brood pouch | +20% cargo. |
+| Aether | Homing call | Once per floor, fly straight back to base with your cargo. |
+
 - **The world's currency** feeds its upgrade track (Chitin plating, Dust lids, Webbed limbs and the late worlds' tracks), and only worlds pay it.
 - Repeat visits pay their depth-scaled lump sum, without a second ship system.
 
