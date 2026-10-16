@@ -190,7 +190,7 @@ Seven combat floors: the original Cryo labs, Specimen vaults and Hangar, and fou
 
 The hangar stays a combat floor. The ship has a **floor of its own**: a safe place with no creatures, where the brood ship is rebuilt and sells **special upgrades that aren't in the upgrades menu**.
 
-- The freight elevator stops there about **once every 10 floors, after the first portal** (e.g. between floors 20 and 21, 30 and 31). *Open: a fixed stop every 10 floors, or a 1-in-10 chance per floor (fixed by the run seed, like the portals).*
+- **Once the first portal world is cleared**, each floor has a **1-in-10 chance** of being the ship floor (fixed by the run seed, like the portals), and stops are **at least 10 floors apart**: e.g. 10 > 11 > 12 > 13 (ship) > ... no ship before 23. That averages a stop about every 20 floors. *Suggested safety net (not yet agreed): a stop is guaranteed if 20 floors pass after the gap without one, so no run goes 30 floors without the ship.*
 - A stop is an extra step on the way down, like a portal trip: the player leaves the ship floor by the elevator and carries on to the next floor.
 - *Open: what the special upgrades are, what they cost (probably world currencies and parts, so portal trips feed them), and how they differ from the ship systems that world clears grant.*
 
