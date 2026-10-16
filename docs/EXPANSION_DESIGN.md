@@ -174,9 +174,10 @@ Agreed in discussion, not built yet. It replaces act 3's chain ("each world's ob
 
 Paid on a full clear (doors, boss, objective), never just for entering, so stepping in and out can't be farmed.
 
-- **First clear of each world: a ship system**, a permanent bonus (e.g. capture power, cargo, move speed). This is the "parts rebuild your ship" thread made concrete: eight worlds, eight systems. *Open: which system each world gives and how big.*
+- **Every clear: a lump sum of XP and biomass**, scaled to the depth like any payout. *Open: the size; a starting point is about what one facility floor's doors cost at that depth, so a trip pays for the next floor.*
+- **First clear of each world: a ship system.** The ship in the hangar isn't for escaping: rebuilt, it becomes a brood ship that sends help down the shaft. Systems mix **companions** (alongside the drone: e.g. small flying swarmers that harry the guard or boss you're holding, larvae that follow you and regenerate your health) with permanent bonuses. Eight worlds, eight systems. *Open: which system each world gives, how strong, and how many companions can be out at once on mobile.*
 - **The world's currency** feeds its upgrade track (Chitin plating, Dust lids, Webbed limbs and the late worlds' tracks), and only worlds pay it.
-- Repeat visits pay their depth-scaled rewards, without a second ship system.
+- Repeat visits pay their depth-scaled lump sum, without a second ship system.
 
 ### Saves already in a portal world
 
@@ -190,7 +191,8 @@ The chain is live (all eight worlds deployed 2026-10-16), so some saves are in a
 ### Other work it needs
 
 - A portal room on each facility map, off the boss area, with a door that opens on the boss's defeat.
-- **Pacing:** worlds take about 45 to 65 minutes in `tests/pacing.test.ts` at depth-0 equivalents, much longer than a facility floor. As side trips they probably want to be about a third shorter; the pacing test can pin the new length.
+- **More facility floors:** only four are hand-made (B1 to B4), so the first portal at floor 5 would already be a repeat. Four more facility floors (B5 to B8) with their own hazards are planned, so the spine has eight hand-made floors before it cycles.
+- **Pacing (done 2026-10-16):** all eight worlds were cut by a third to suit side trips: Vesh about 26 minutes at depth-0 equivalents, then about 8% longer per world up to Aether at about 45 (`tests/pacing.test.ts` pins both).
 - Story lines that assume the chain (e.g. Aether's "coordinates that feel very close to home") get rewritten.
 
 ---

@@ -92,8 +92,8 @@ export function worldPace(b: BiomeDef, a: PaceAssumptions = BASELINE): WorldPace
   return { id: b.id, local, cost, income, seconds: seconds + loops * loopSeconds };
 }
 
-/** Maren (the last world before these) is the yardstick. */
-const WORLDS = ["maren", "pyrra", "thessa", "kharon", "gloam", "aether"];
+/** Every portal world, in story order. */
+const WORLDS = ["vesh", "ashkar", "maren", "pyrra", "thessa", "kharon", "gloam", "aether"];
 
 function paces(a: PaceAssumptions): WorldPace[] {
   return WORLDS.map((id) => {
@@ -134,6 +134,14 @@ describe("portal world pacing", () => {
     for (const [prev, next] of steps(paces(BASELINE))) {
       expect(next.seconds / prev.seconds, `${next.id} vs ${prev.id}`).toBeCloseTo(1.08, 1);
     }
+  });
+
+  // Worlds are side trips off the facility (EXPANSION_DESIGN.md, portal rooms), so they
+  // were cut by a third: the first takes about 26 minutes, the last about 45.
+  it("keeps the first world a side trip of about 26 minutes", () => {
+    const first = paces(BASELINE)[0];
+    expect(first?.seconds).toBeGreaterThan(23 * 60);
+    expect(first?.seconds).toBeLessThan(29 * 60);
   });
 
   it("asks a little more of each world's own currency than the last", () => {

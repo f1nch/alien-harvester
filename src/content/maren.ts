@@ -103,7 +103,7 @@ export const MAREN_MAP: MapDef = {
       rect: gap(12, 13, -4),
       from: "jetty",
       to: "reef",
-      requirements: { quests: ["maren-crabs"], cost: { biomass: 130, pearls: 5 } },
+      requirements: { quests: ["maren-crabs"], cost: { biomass: 90, pearls: 3 } },
     },
     {
       id: "maren-door-beds",
@@ -111,7 +111,7 @@ export const MAREN_MAP: MapDef = {
       rect: gap(40, 41, 7),
       from: "reef",
       to: "beds",
-      requirements: { quests: ["maren-pearls"], cost: { biomass: 310, pearls: 12 } },
+      requirements: { quests: ["maren-pearls"], cost: { biomass: 220, pearls: 8 } },
     },
     {
       id: "maren-door-deck",
@@ -119,7 +119,7 @@ export const MAREN_MAP: MapDef = {
       rect: gap(66, 67, -6),
       from: "beds",
       to: "deck",
-      requirements: { quests: ["maren-clams"], cost: { biomass: 420, pearls: 20, genetic: 20 } },
+      requirements: { quests: ["maren-clams"], cost: { biomass: 300, pearls: 13, genetic: 20 } },
     },
     {
       id: "maren-door-trench",
@@ -127,7 +127,7 @@ export const MAREN_MAP: MapDef = {
       rect: gap(90, 91, 0),
       from: "deck",
       to: "trench",
-      requirements: { quests: ["maren-eels"], cost: { biomass: 500, pearls: 30, parts: 10 } },
+      requirements: { quests: ["maren-eels"], cost: { biomass: 360, pearls: 20, parts: 10 } },
     },
   ],
   spawns: [
@@ -242,12 +242,12 @@ export const MAREN: BiomeDef = {
     z: 109.5,
     halfSize: 0.9,
     interactRadius: 3,
-    repair: { quests: ["maren-boss"], cost: { pearls: 30, parts: 14, biomass: 420 } },
+    repair: { quests: ["maren-boss"], cost: { pearls: 20, parts: 14, biomass: 300 } },
   },
   exit: { x: 0, z: 95.5, radius: 1.4, name: "Portal", action: "Step through the portal" },
   sites: { vat: { x: -13.3, z: 37 }, refinery: { x: 8.5, z: -12 }, outpost: { x: 9.5, z: 53 } },
   // In the pearl beds, halfway along.
-  outpost: { gate: "maren-open-beds", cost: { pearls: 25, biomass: 230 } },
+  outpost: { gate: "maren-open-beds", cost: { pearls: 17, biomass: 170 } },
   structureGate: "maren-open-reef",
   summon: { cost: { pearls: 8, biomass: 60 }, types: ["reefCrab", "skimmer"] },
 };

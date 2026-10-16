@@ -106,7 +106,7 @@ export const ASHKAR_MAP: MapDef = {
       rect: gap(12, 13, 5),
       from: "oasis",
       to: "dunes",
-      requirements: { quests: ["ashkar-skinks"], cost: { biomass: 120, shards: 5 } },
+      requirements: { quests: ["ashkar-skinks"], cost: { biomass: 100, shards: 3 } },
     },
     {
       id: "ashkar-door-colonnade",
@@ -114,7 +114,7 @@ export const ASHKAR_MAP: MapDef = {
       rect: gap(40, 41, -7),
       from: "dunes",
       to: "colonnade",
-      requirements: { quests: ["ashkar-shards"], cost: { biomass: 300, shards: 12 } },
+      requirements: { quests: ["ashkar-shards"], cost: { biomass: 260, shards: 8 } },
     },
     {
       id: "ashkar-door-market",
@@ -122,7 +122,7 @@ export const ASHKAR_MAP: MapDef = {
       rect: gap(66, 67, 6),
       from: "colonnade",
       to: "market",
-      requirements: { quests: ["ashkar-urns"], cost: { biomass: 400, shards: 20, genetic: 20 } },
+      requirements: { quests: ["ashkar-urns"], cost: { biomass: 340, shards: 13, genetic: 20 } },
     },
     {
       id: "ashkar-door-tomb",
@@ -130,7 +130,7 @@ export const ASHKAR_MAP: MapDef = {
       rect: gap(90, 91, 0),
       from: "market",
       to: "tomb",
-      requirements: { quests: ["ashkar-golems"], cost: { biomass: 480, shards: 30, parts: 10 } },
+      requirements: { quests: ["ashkar-golems"], cost: { biomass: 410, shards: 20, parts: 10 } },
     },
   ],
   spawns: [
@@ -245,12 +245,12 @@ export const ASHKAR: BiomeDef = {
     z: 109.5,
     halfSize: 0.9,
     interactRadius: 3,
-    repair: { quests: ["ashkar-boss"], cost: { shards: 30, parts: 14, biomass: 400 } },
+    repair: { quests: ["ashkar-boss"], cost: { shards: 20, parts: 14, biomass: 340 } },
   },
   exit: { x: 0, z: 95.5, radius: 1.4, name: "Portal", action: "Step through the portal" },
   sites: { vat: { x: -13.3, z: 37 }, refinery: { x: 8.5, z: -12 }, outpost: { x: 9.5, z: 53 } },
   // In the sheltered colonnade, halfway along.
-  outpost: { gate: "ashkar-open-colonnade", cost: { shards: 25, biomass: 220 } },
+  outpost: { gate: "ashkar-open-colonnade", cost: { shards: 17, biomass: 190 } },
   structureGate: "ashkar-open-dunes",
   summon: { cost: { shards: 8, biomass: 60 }, types: ["sandSkink", "duneRunner"] },
 };

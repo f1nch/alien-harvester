@@ -22,25 +22,25 @@ const ZONES: ZoneDef[] = [
 const DOORS: DoorDef[] = [
   {
     id: "gloam-door-mire", name: "Dock gate", rect: rect(-1.5, 1.5, 8, 9), from: "dock", to: "mire",
-    requirements: { quests: ["gloam-toads"], cost: { biomass: 180, bogiron: 5 } },
+    requirements: { quests: ["gloam-toads"], cost: { biomass: 130, bogiron: 3 } },
   },
   {
     // West, off the side of the mire.
     id: "gloam-door-reeds", name: "Reed screen", rect: rect(-16, -15, 20.5, 23.5), from: "mire", to: "reeds",
-    requirements: { quests: ["gloam-darters"], cost: { biomass: 280, bogiron: 10 } },
+    requirements: { quests: ["gloam-darters"], cost: { biomass: 200, bogiron: 7 } },
   },
   {
     // East, off the other side of the mire.
     id: "gloam-door-chapel", name: "Chapel doors", rect: rect(15, 16, 20.5, 23.5), from: "mire", to: "chapel",
-    requirements: { quests: ["gloam-pods"], cost: { biomass: 420, bogiron: 15, genetic: 26 } },
+    requirements: { quests: ["gloam-pods"], cost: { biomass: 300, bogiron: 10, genetic: 26 } },
   },
   {
     id: "gloam-door-causeway", name: "Causeway sluice", rect: rect(4.5, 7.5, 36, 37), from: "mire", to: "causeway",
-    requirements: { quests: ["gloam-brutes"], cost: { biomass: 520, bogiron: 22 } },
+    requirements: { quests: ["gloam-brutes"], cost: { biomass: 370, bogiron: 15 } },
   },
   {
     id: "gloam-door-pool", name: "Pool weir", rect: rect(-4.5, -1.5, 58, 59), from: "causeway", to: "pool",
-    requirements: { quests: ["gloam-iron"], cost: { biomass: 680, bogiron: 34, parts: 12 } },
+    requirements: { quests: ["gloam-iron"], cost: { biomass: 490, bogiron: 23, parts: 12 } },
   },
 ];
 
@@ -225,12 +225,12 @@ export const GLOAM: BiomeDef = {
     z: 79.5,
     halfSize: 0.9,
     interactRadius: 3,
-    repair: { quests: ["gloam-boss"], cost: { bogiron: 35, parts: 18, biomass: 590 } },
+    repair: { quests: ["gloam-boss"], cost: { bogiron: 23, parts: 18, biomass: 420 } },
   },
   exit: { x: 0, z: 61.5, radius: 1.4, name: "Portal", action: "Step through the portal" },
   sites: { vat: { x: -13.5, z: 12 }, refinery: { x: 8.5, z: -12 }, outpost: { x: -10, z: 40 } },
   // On the causeway, by the sluice.
-  outpost: { gate: "gloam-open-causeway", cost: { bogiron: 27, biomass: 330 } },
+  outpost: { gate: "gloam-open-causeway", cost: { bogiron: 18, biomass: 240 } },
   structureGate: "gloam-open-mire",
   summon: { cost: { bogiron: 9, biomass: 80 }, types: ["bogToad", "reedDarter"] },
 };

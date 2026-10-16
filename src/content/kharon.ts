@@ -21,20 +21,20 @@ const DOORS: DoorDef[] = [
   {
     // East, out of the side of the crater.
     id: "kharon-door-shelf", name: "Crater breach", rect: rect(11, 12, -4.5, -1.5), from: "landing", to: "shelf",
-    requirements: { quests: ["kharon-mites"], cost: { biomass: 180, moonstone: 5 } },
+    requirements: { quests: ["kharon-mites"], cost: { biomass: 130, moonstone: 3 } },
   },
   {
     id: "kharon-door-ridge", name: "Ice stair", rect: rect(23.5, 26.5, 8, 9), from: "shelf", to: "ridge",
-    requirements: { quests: ["kharon-jellies"], cost: { biomass: 280, moonstone: 10 } },
+    requirements: { quests: ["kharon-jellies"], cost: { biomass: 200, moonstone: 7 } },
   },
   {
     // West, off the side of the ridge.
     id: "kharon-door-caves", name: "Geode mouth", rect: rect(13, 14, 22.5, 25.5), from: "ridge", to: "caves",
-    requirements: { quests: ["kharon-moonstone"], cost: { biomass: 420, moonstone: 16, genetic: 24 } },
+    requirements: { quests: ["kharon-moonstone"], cost: { biomass: 300, moonstone: 11, genetic: 24 } },
   },
   {
     id: "kharon-door-spire", name: "Spire seal", rect: rect(-3.5, -0.5, 34, 35), from: "caves", to: "spire",
-    requirements: { quests: ["kharon-mantises"], cost: { biomass: 660, moonstone: 40, parts: 12 } },
+    requirements: { quests: ["kharon-mantises"], cost: { biomass: 480, moonstone: 27, parts: 12 } },
   },
 ];
 
@@ -199,12 +199,12 @@ export const KHARON: BiomeDef = {
     z: 55.5,
     halfSize: 0.9,
     interactRadius: 3,
-    repair: { quests: ["kharon-boss"], cost: { moonstone: 40, parts: 17, biomass: 590 } },
+    repair: { quests: ["kharon-boss"], cost: { moonstone: 27, parts: 17, biomass: 430 } },
   },
   exit: { x: 0, z: 38.5, radius: 1.4, name: "Portal", action: "Step through the portal" },
   sites: { vat: { x: 14, z: 6 }, refinery: { x: 8.5, z: -12 }, outpost: { x: 18, z: 30 } },
   // Up on the ridge, by a vent.
-  outpost: { gate: "kharon-open-ridge", cost: { moonstone: 32, biomass: 320 } },
+  outpost: { gate: "kharon-open-ridge", cost: { moonstone: 21, biomass: 230 } },
   structureGate: "kharon-open-shelf",
   summon: { cost: { moonstone: 8, biomass: 75 }, types: ["crystalMite", "driftJelly"] },
 };

@@ -22,29 +22,29 @@ const ZONES: ZoneDef[] = [
 const DOORS: DoorDef[] = [
   {
     id: "aether-door-bridge", name: "Bridge chain", rect: rect(-1.5, 1.5, 8, 9), from: "landing", to: "bridge",
-    requirements: { quests: ["aether-striders"], cost: { biomass: 160, silk: 5 } },
+    requirements: { quests: ["aether-striders"], cost: { biomass: 120, silk: 3 } },
   },
   {
     id: "aether-door-nest", name: "Nest gate", rect: rect(-1.5, 1.5, 26, 27), from: "bridge", to: "nest",
-    requirements: { quests: ["aether-rays"], cost: { biomass: 240, silk: 9 } },
+    requirements: { quests: ["aether-rays"], cost: { biomass: 170, silk: 6 } },
   },
   {
     // West, off the side of the nest isle.
     id: "aether-door-west", name: "West span", rect: rect(-15, -14, 36.5, 39.5), from: "nest", to: "west",
-    requirements: { quests: ["aether-eggs"], cost: { biomass: 340, silk: 14, genetic: 28 } },
+    requirements: { quests: ["aether-eggs"], cost: { biomass: 250, silk: 9, genetic: 28 } },
   },
   {
     // East, off the other side.
     id: "aether-door-east", name: "East span", rect: rect(14, 15, 36.5, 39.5), from: "nest", to: "east",
-    requirements: { quests: ["aether-harriers"], cost: { biomass: 400, silk: 18 } },
+    requirements: { quests: ["aether-harriers"], cost: { biomass: 290, silk: 12 } },
   },
   {
     id: "aether-door-skybridge", name: "Sky bridge chain", rect: rect(-1.5, 1.5, 48, 49), from: "nest", to: "skybridge",
-    requirements: { quests: ["aether-silk"], cost: { biomass: 480, silk: 24 } },
+    requirements: { quests: ["aether-silk"], cost: { biomass: 350, silk: 16 } },
   },
   {
     id: "aether-door-eyrie", name: "Eyrie gate", rect: rect(-1.5, 1.5, 62, 63), from: "skybridge", to: "eyrie",
-    requirements: { quests: ["aether-silk"], cost: { biomass: 560, silk: 28, parts: 13 } },
+    requirements: { quests: ["aether-silk"], cost: { biomass: 400, silk: 19, parts: 13 } },
   },
 ];
 
@@ -222,12 +222,12 @@ export const AETHER: BiomeDef = {
     z: 83.5,
     halfSize: 0.9,
     interactRadius: 3,
-    repair: { quests: ["aether-boss"], cost: { silk: 30, parts: 19, biomass: 480 } },
+    repair: { quests: ["aether-boss"], cost: { silk: 20, parts: 19, biomass: 350 } },
   },
   exit: { x: 0, z: 65.5, radius: 1.4, name: "Portal", action: "Step through the portal" },
   sites: { vat: { x: -9.5, z: -12 }, refinery: { x: 8.5, z: -12 }, outpost: { x: -31, z: 39 } },
   // Out on the west spire.
-  outpost: { gate: "aether-open-west", cost: { silk: 25, biomass: 280 } },
+  outpost: { gate: "aether-open-west", cost: { silk: 17, biomass: 200 } },
   structureGate: "aether-open-bridge",
   summon: { cost: { silk: 9, biomass: 85 }, types: ["cliffStrider", "skyRay"] },
 };

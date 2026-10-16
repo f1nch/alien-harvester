@@ -104,7 +104,7 @@ export const VESH_MAP: MapDef = {
       rect: gap(12, 13, -6),
       from: "glade",
       to: "canopy",
-      requirements: { quests: ["vesh-foragers"], cost: { biomass: 110, amber: 5 } },
+      requirements: { quests: ["vesh-foragers"], cost: { biomass: 80, amber: 3 } },
     },
     {
       id: "vesh-door-nursery",
@@ -112,7 +112,7 @@ export const VESH_MAP: MapDef = {
       rect: gap(40, 41, 7),
       from: "canopy",
       to: "nursery",
-      requirements: { quests: ["vesh-amber"], cost: { biomass: 280, amber: 12 } },
+      requirements: { quests: ["vesh-amber"], cost: { biomass: 200, amber: 8 } },
     },
     {
       id: "vesh-door-spires",
@@ -120,7 +120,7 @@ export const VESH_MAP: MapDef = {
       rect: gap(66, 67, -5),
       from: "nursery",
       to: "spires",
-      requirements: { quests: ["vesh-brood"], cost: { biomass: 380, amber: 20, genetic: 20 } },
+      requirements: { quests: ["vesh-brood"], cost: { biomass: 270, amber: 13, genetic: 20 } },
     },
     {
       id: "vesh-door-throne",
@@ -128,7 +128,7 @@ export const VESH_MAP: MapDef = {
       rect: gap(90, 91, 0),
       from: "spires",
       to: "throne",
-      requirements: { quests: ["vesh-warriors"], cost: { biomass: 460, amber: 30, parts: 10 } },
+      requirements: { quests: ["vesh-warriors"], cost: { biomass: 320, amber: 20, parts: 10 } },
     },
   ],
   spawns: [
@@ -243,12 +243,12 @@ export const VESH: BiomeDef = {
     z: 109.5,
     halfSize: 0.9,
     interactRadius: 3,
-    repair: { quests: ["vesh-boss"], cost: { amber: 30, parts: 14, biomass: 380 } },
+    repair: { quests: ["vesh-boss"], cost: { amber: 20, parts: 14, biomass: 270 } },
   },
   exit: { x: 0, z: 95.5, radius: 1.4, name: "Portal", action: "Step through the portal" },
   sites: { vat: { x: -13.3, z: 37 }, refinery: { x: 8.5, z: -12 }, outpost: { x: 9.5, z: 53 } },
   // In the brood nursery, halfway along.
-  outpost: { gate: "vesh-open-nursery", cost: { amber: 25, biomass: 220 } },
+  outpost: { gate: "vesh-open-nursery", cost: { amber: 17, biomass: 150 } },
   structureGate: "vesh-open-canopy",
   summon: { cost: { amber: 8, biomass: 60 }, types: ["hiveForager", "skitter"] },
 };
