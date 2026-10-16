@@ -22,24 +22,24 @@ const DOORS: DoorDef[] = [
   {
     // West, off the side of the portal grotto.
     id: "thessa-door-caps", name: "Root curtain", rect: rect(-12, -11, -3, 0), from: "grotto", to: "caps",
-    requirements: { quests: ["thessa-grazers"], cost: { biomass: 150, spores: 5 } },
+    requirements: { quests: ["thessa-grazers"], cost: { biomass: 140, spores: 5 } },
   },
   {
     id: "thessa-door-glade", name: "Gill gate", rect: rect(2.5, 5.5, 10, 11), from: "grotto", to: "glade",
-    requirements: { quests: ["thessa-puffcaps"], cost: { biomass: 230, spores: 9 } },
+    requirements: { quests: ["thessa-puffcaps"], cost: { biomass: 210, spores: 9 } },
   },
   {
     // East, off the side of the glade.
     id: "thessa-door-pits", name: "Spore veil", rect: rect(14, 15, 22.5, 25.5), from: "glade", to: "pits",
-    requirements: { quests: ["thessa-sporelings"], cost: { biomass: 350, spores: 14 } },
+    requirements: { quests: ["thessa-sporelings"], cost: { biomass: 320, spores: 14 } },
   },
   {
     id: "thessa-door-vault", name: "Hyphal knot", rect: rect(-5.5, -2.5, 38, 39), from: "glade", to: "vault",
-    requirements: { quests: ["thessa-lashers"], cost: { biomass: 440, spores: 21, genetic: 22 } },
+    requirements: { quests: ["thessa-lashers"], cost: { biomass: 400, spores: 21, genetic: 22 } },
   },
   {
     id: "thessa-door-heart", name: "Heart membrane", rect: rect(-1.5, 1.5, 60, 61), from: "vault", to: "heart",
-    requirements: { quests: ["thessa-spores"], cost: { biomass: 570, spores: 34, parts: 11 } },
+    requirements: { quests: ["thessa-spores"], cost: { biomass: 520, spores: 32, parts: 11 } },
   },
 ];
 
@@ -222,12 +222,12 @@ export const THESSA: BiomeDef = {
     z: 79.5,
     halfSize: 0.9,
     interactRadius: 3,
-    repair: { quests: ["thessa-boss"], cost: { spores: 34, parts: 16, biomass: 490 } },
+    repair: { quests: ["thessa-boss"], cost: { spores: 32, parts: 16, biomass: 440 } },
   },
   exit: { x: 0, z: 63.5, radius: 1.4, name: "Portal", action: "Step through the portal" },
   sites: { vat: { x: -32.5, z: -1.5 }, refinery: { x: 8.5, z: -12 }, outpost: { x: -10, z: 42 } },
   // In the mycelium vault, by the knot.
-  outpost: { gate: "thessa-open-vault", cost: { spores: 26, biomass: 270 } },
+  outpost: { gate: "thessa-open-vault", cost: { spores: 25, biomass: 250 } },
   structureGate: "thessa-open-caps",
   summon: { cost: { spores: 8, biomass: 70 }, types: ["capGrazer", "sporeling"] },
 };

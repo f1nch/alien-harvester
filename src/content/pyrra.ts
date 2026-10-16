@@ -22,25 +22,25 @@ const ZONES: ZoneDef[] = [
 const DOORS: DoorDef[] = [
   {
     id: "pyrra-door-fields", name: "Basalt gate", rect: rect(1.5, 4.5, 12, 13), from: "landing", to: "fields",
-    requirements: { quests: ["pyrra-beetles"], cost: { biomass: 140, glass: 5 } },
+    requirements: { quests: ["pyrra-beetles"], cost: { biomass: 130, glass: 5 } },
   },
   {
     // East, off the side of the lava fields.
     id: "pyrra-door-glassworks", name: "Glassworks arch", rect: rect(15, 16, 25.5, 28.5), from: "fields", to: "glassworks",
-    requirements: { quests: ["pyrra-moths"], cost: { biomass: 220, glass: 9 } },
+    requirements: { quests: ["pyrra-moths"], cost: { biomass: 200, glass: 9 } },
   },
   {
     id: "pyrra-door-gallery", name: "Vent stair", rect: rect(-6.5, -3.5, 40, 41), from: "fields", to: "gallery",
-    requirements: { quests: ["pyrra-geodes"], cost: { biomass: 340, glass: 14 } },
+    requirements: { quests: ["pyrra-geodes"], cost: { biomass: 300, glass: 14 } },
   },
   {
     // West, off the side of the vent gallery.
     id: "pyrra-door-forge", name: "Forge door", rect: rect(-14, -13, 51.5, 54.5), from: "gallery", to: "forge",
-    requirements: { quests: ["pyrra-glass"], cost: { biomass: 420, glass: 20, genetic: 20 } },
+    requirements: { quests: ["pyrra-glass"], cost: { biomass: 380, glass: 20, genetic: 20 } },
   },
   {
     id: "pyrra-door-crater", name: "Caldera rim", rect: rect(-1.5, 1.5, 64, 65), from: "gallery", to: "crater",
-    requirements: { quests: ["pyrra-golems"], cost: { biomass: 540, glass: 32, parts: 10 } },
+    requirements: { quests: ["pyrra-golems"], cost: { biomass: 480, glass: 30, parts: 10 } },
   },
 ];
 
@@ -222,12 +222,12 @@ export const PYRRA: BiomeDef = {
     z: 83.5,
     halfSize: 0.9,
     interactRadius: 3,
-    repair: { quests: ["pyrra-boss"], cost: { glass: 32, parts: 15, biomass: 460 } },
+    repair: { quests: ["pyrra-boss"], cost: { glass: 30, parts: 15, biomass: 410 } },
   },
   exit: { x: 0, z: 67.5, radius: 1.4, name: "Portal", action: "Step through the portal" },
   sites: { vat: { x: -13, z: 37 }, refinery: { x: 8.5, z: -12 }, outpost: { x: -11, z: 44 } },
   // In the vent gallery, by the stair.
-  outpost: { gate: "pyrra-open-gallery", cost: { glass: 25, biomass: 250 } },
+  outpost: { gate: "pyrra-open-gallery", cost: { glass: 25, biomass: 220 } },
   structureGate: "pyrra-open-fields",
   summon: { cost: { glass: 8, biomass: 65 }, types: ["cinderBeetle", "ashMoth"] },
 };
