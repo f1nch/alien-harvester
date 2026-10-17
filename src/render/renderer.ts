@@ -180,7 +180,7 @@ export class GameRenderer {
     this.resize();
 
     const initial: LoadedCreatureSource = { kind: opts.creatureModels ? "loading" : "forced" };
-    this.creatureSources = { larval: initial, evolved: initial };
+    this.creatureSources = { larval: initial, evolved: initial, adult: initial, apex: initial };
     if (opts.creatureModels) for (const form of CREATURE_FORMS) void this.loadCreatureModel(form);
   }
 
