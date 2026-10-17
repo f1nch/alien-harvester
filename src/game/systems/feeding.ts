@@ -4,6 +4,7 @@ import { recordCapture } from "../../domain/bestiary";
 import { scaleReward } from "../../domain/biome";
 import { applyCravingEvents, FULL_HOLD, type CravingEvent } from "../../domain/cravings";
 import { roundCents } from "../../content/currencies";
+import { crowdPayout } from "../../content/targets";
 import { cargoWeight } from "../../domain/progress";
 import { atPad } from "./deposit";
 import { feedingTuning } from "../../domain/mutagen";
@@ -138,7 +139,7 @@ export function onCaptured(w: World, t: TargetEntity): void {
     f.prizedLeft = 0;
     f.prizedTimer = tuning.prizedInterval;
     // The bonus is banked at once, through bankDrop like every other payout.
-    bankDrop(w, { type: t.def.id, weight: 0, reward: scaleReward(t.def.reward, PRIZED.bonusPayouts) });
+    bankDrop(w, { type: t.def.id, weight: 0, reward: scaleReward(t.def.reward, PRIZED.bonusPayouts * crowdPayout(t.def)) });
     p.banked.mutagen = roundCents(p.banked.mutagen + PRIZED.mutagen);
     w.events.push({ type: "prizedCaught", target: t });
     events.push({ kind: "prized" });

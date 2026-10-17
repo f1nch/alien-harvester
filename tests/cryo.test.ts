@@ -194,7 +194,7 @@ describe("Cryo labs play", () => {
   it("is the floor after the facility, scaled to depth 1", () => {
     const b = biomeAt(1);
     expect(b.def.id).toBe("cryo");
-    expect(b.targets.cryoScientist.reward).toEqual({ biomass: 4.8, crystals: 3.2 });
+    expect(b.targets.cryoScientist.reward).toEqual({ biomass: 4.58, crystals: 3.04 }); // crowd payouts, then 1.6x
     expect(b.targets.cryoSentinel.bossTuning!.slamChill).toBeGreaterThan(0);
   });
 

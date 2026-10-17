@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, rect, spawns, type MapDef, type Rect } from "./map";
+import { box, rect, spawns, type MapDef, type Rect, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -101,7 +101,7 @@ export const VAULTS_MAP: MapDef = {
       requirements: { quests: ["vault-chimeras"], cost: { biomass: 420, genetic: 45, parts: 8 } },
     },
   ],
-  spawns: [
+  spawns: withCrowds([
     ...spawns("vault-intake-w", "worker", [[-7, -8], [3, -7], [8, -2], [-8, 3], [1, 2]]),
     ...spawns("vault-intake-h", "handler", [[-3, -3], [6, 7], [-8, 9]], 2),
     ...spawns("vault-pens-h", "handler", [[-5, 16], [5, 21], [-4, 34]], 2),
@@ -121,7 +121,7 @@ export const VAULTS_MAP: MapDef = {
     ...spawns("vault-pod-pens", "pod", [[-12.5, 38.5]], 0),
     ...spawns("vault-pod-tanks", "pod", [[10.5, 64.5]], 0),
     ...spawns("vault-pod-surgery", "pod", [[-11.5, 68.5]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */

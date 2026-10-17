@@ -1,5 +1,5 @@
 import { WARDEN, type BossTuning } from "./reactor";
-import type { Reward } from "./currencies";
+import { roundCents, type Reward } from "./currencies";
 import { LATE_TARGETS, type LateTargetId } from "./lateTargets";
 
 export type TargetTypeId =
@@ -74,7 +74,7 @@ export interface TargetDef {
   appearance?: { like: TargetTypeId; tint: [number, number, number]; glow?: [number, number, number]; size?: number };
 }
 
-export const TARGETS: Record<TargetTypeId, TargetDef> = {
+const BASE_TARGETS: Record<TargetTypeId, TargetDef> = {
   worker: {
     id: "worker",
     name: "Worker",
@@ -710,6 +710,38 @@ export const TARGETS: Record<TargetTypeId, TargetDef> = {
   },
   ...LATE_TARGETS,
 };
+
+/**
+ * Crowds: the people and creatures that roam (wanderers, runners, guards). Floors place
+ * `density` times as many of them (content/map.ts#withCrowds) and each pays `payout` of
+ * its listed biomass and resources. Busier floors only shorten the walk to the next catch,
+ * not the capture or the trip home, so the trim is small (about 5%): floors feel busier
+ * while income stays about the same. XP is unchanged. Bosses, pods and other static
+ * targets keep their numbers.
+ */
+export const CROWD = { density: 1.3, payout: 1 / 1.05 } as const;
+
+export function isCrowd(def: Pick<TargetDef, "behavior">): boolean {
+  return def.behavior === "wander" || def.behavior === "flee" || def.behavior === "guard";
+}
+
+/**
+ * Undoes the crowd discount for payouts that don't come more often on busier floors
+ * (prized bonuses, reward waves): multiply their factor by this.
+ */
+export function crowdPayout(def: Pick<TargetDef, "behavior">): number {
+  return isCrowd(def) ? 1 / CROWD.payout : 1;
+}
+
+function crowdReward(r: Reward): Reward {
+  const out: Reward = {};
+  for (const [c, v] of Object.entries(r) as Array<[keyof Reward, number]>) out[c] = roundCents(v * CROWD.payout);
+  return out;
+}
+
+export const TARGETS: Record<TargetTypeId, TargetDef> = Object.fromEntries(
+  Object.entries(BASE_TARGETS).map(([id, def]) => [id, isCrowd(def) ? { ...def, reward: crowdReward(def.reward) } : def]),
+) as Record<TargetTypeId, TargetDef>;
 
 export function isTargetType(id: unknown): id is TargetTypeId {
   return typeof id === "string" && Object.hasOwn(TARGETS, id);

@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, carveWalls, rect, spawns, type DoorDef, type MapDef, type ZoneDef } from "./map";
+import { box, carveWalls, rect, spawns, type DoorDef, type MapDef, type ZoneDef, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -101,7 +101,7 @@ export const THESSA_MAP: MapDef = {
     { x: -4, z: 48, radius: 1.6 },
   ],
   doors: DOORS,
-  spawns: [
+  spawns: withCrowds([
     ...spawns("thessa-grotto-g", "capGrazer", [[-7, -8], [4, -7], [8, -2], [-7, 3], [2, 4], [-3, -3]]),
     ...spawns("thessa-grotto-s", "sporeling", [[7, 7], [-8, 7]], 3),
     ...spawns("thessa-caps-p", "puffcap", [[-31, -9], [-31, 5], [-15, -9], [-15, 5], [-23, -2]], 0),
@@ -122,7 +122,7 @@ export const THESSA_MAP: MapDef = {
     ...spawns("thessa-pod-caps", "pod", [[-33, 7]], 0),
     ...spawns("thessa-pod-glade", "pod", [[12.5, 36.5]], 0),
     ...spawns("thessa-pod-pits", "pod", [[36, 24]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */

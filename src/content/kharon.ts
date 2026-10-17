@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, carveWalls, rect, spawns, type DoorDef, type MapDef, type ZoneDef } from "./map";
+import { box, carveWalls, rect, spawns, type DoorDef, type MapDef, type ZoneDef, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -88,7 +88,7 @@ export const KHARON_MAP: MapDef = {
     { x: 31, z: 27, radius: 1.6 },
   ],
   doors: DOORS,
-  spawns: [
+  spawns: withCrowds([
     ...spawns("kharon-landing-m", "crystalMite", [[-7, -8], [4, -7], [8, -3], [-7, 3], [2, 6], [-3, -3]]),
     ...spawns("kharon-landing-j", "driftJelly", [[7, 7], [-8, 7]], 3),
     ...spawns("kharon-shelf-j", "driftJelly", [[16, -9], [33, -9], [27, 6], [15, 4]], 3),
@@ -106,7 +106,7 @@ export const KHARON_MAP: MapDef = {
     ...spawns("kharon-pod-shelf", "pod", [[34.5, -10.5]], 0),
     ...spawns("kharon-pod-ridge", "pod", [[15.5, 10.5]], 0),
     ...spawns("kharon-pod-caves", "pod", [[-10.5, 32.5]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CROWD, crowdPayout } from "../src/content/targets";
 import { BIOMES } from "../src/content/biomes";
 import { EVOLUTIONS, formName, MAX_TIER } from "../src/content/evolution";
 import { SUMMON } from "../src/content/feeding";
@@ -278,7 +279,7 @@ describe("objective machines summon reward waves", () => {
     const w = finished(0);
     const p = w.progress;
     const def = biomeAt(0).targets.runner;
-    const drop = () => ({ type: def.id, weight: def.weight, reward: scaleReward(def.reward, SUMMON.rewardMultiplier), summoned: true as const });
+    const drop = () => ({ type: def.id, weight: def.weight, reward: scaleReward(def.reward, SUMMON.rewardMultiplier * crowdPayout(def)), summoned: true as const });
     p.cargo.push(drop());
     p.structures.drone.built = true;
     p.structures.drone.level = 1;
@@ -293,7 +294,7 @@ describe("objective machines summon reward waves", () => {
     const before = p.banked.biomass;
     const r = leaveBiome(w);
     expect(r.ok).toBe(true);
-    expect(p.banked.biomass - before).toBeCloseTo(3 * def.reward.biomass! * SUMMON.rewardMultiplier);
+    expect(p.banked.biomass - before).toBeCloseTo(3 * def.reward.biomass! * SUMMON.rewardMultiplier * crowdPayout(def), 1); // each drop rounds to cents
     expect(p.summon).toEqual({ waves: 0, left: 0 });
   });
 
@@ -339,7 +340,7 @@ describe("objective machines summon reward waves", () => {
     for (const cd of Object.values(w.progress.spawnCooldowns)) expect(cd).toBeGreaterThan(1e6 - 100);
     const drops = w.progress.cargo.filter((d) => d.summoned);
     expect(drops.length).toBeGreaterThan(0);
-    for (const d of drops) expect(d.reward).toEqual(scaleReward(biomeAt(0).targets[d.type as "worker"].reward, SUMMON.rewardMultiplier));
+    for (const d of drops) expect(d.reward).toEqual(scaleReward(biomeAt(0).targets[d.type as "worker"].reward, SUMMON.rewardMultiplier / CROWD.payout));
   });
 
   it("a paid wave and its catches survive a save and reload", () => {

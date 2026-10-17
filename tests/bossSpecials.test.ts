@@ -268,6 +268,8 @@ describe("sand wyrm: burrow", () => {
     const { w, boss } = fight("sandWyrm", 8);
     const S = special(boss, "burrow");
     w.stats.captureRadius = 30;
+    // A reach this wide also finds the crowd around the arena; keep the tentacles on the wyrm.
+    w.targets = w.targets.filter((t) => t === boss);
     run(w, 0.2);
     expect(w.tentacles.includes(boss)).toBe(true);
     boss.progress = 0.5;

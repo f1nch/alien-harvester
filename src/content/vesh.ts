@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, rect, spawns, type MapDef, type Rect } from "./map";
+import { box, rect, spawns, type MapDef, type Rect, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -131,7 +131,7 @@ export const VESH_MAP: MapDef = {
       requirements: { quests: ["vesh-warriors"], cost: { biomass: 320, amber: 20, parts: 10 } },
     },
   ],
-  spawns: [
+  spawns: withCrowds([
     ...spawns("vesh-glade-f", "hiveForager", [[-7, -8], [3, -7], [8, -3], [-8, 2], [1, 2], [-2, -3]]),
     ...spawns("vesh-glade-s", "skitter", [[6, 5], [-8, 9]], 3),
     ...spawns("vesh-canopy-f", "hiveForager", [[-6, 16], [3, 20], [-12, 25], [12, 24]]),
@@ -150,7 +150,7 @@ export const VESH_MAP: MapDef = {
     ...spawns("vesh-pod-canopy", "pod", [[13.5, 38.5]], 0),
     ...spawns("vesh-pod-nursery", "pod", [[11.5, 65.3]], 0),
     ...spawns("vesh-pod-spires", "pod", [[-12.5, 68.5]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */

@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, rect, spawns, type MapDef, type Rect } from "./map";
+import { box, rect, spawns, type MapDef, type Rect, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -110,7 +110,7 @@ export const CRYO_MAP: MapDef = {
       requirements: { quests: ["cryo-spire-staff"], cost: { biomass: 400, parts: 8, crystals: 30 } },
     },
   ],
-  spawns: [
+  spawns: withCrowds([
     ...spawns("cryo-dock-w", "worker", [
       [-7, -7], [-2, -5], [4, -7], [8, -3],
       [-8, 2], [-1, 2], [3, 0], [8, 8],
@@ -131,7 +131,7 @@ export const CRYO_MAP: MapDef = {
     ...spawns("cryo-pod-cold", "pod", [[12.5, 14.5]], 0),
     ...spawns("cryo-pod-vault", "pod", [[-10.5, 64.5]], 0),
     ...spawns("cryo-pod-spire", "pod", [[11.5, 68.5]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */

@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, carveWalls, rect, spawns, type DoorDef, type MapDef, type ZoneDef } from "./map";
+import { box, carveWalls, rect, spawns, type DoorDef, type MapDef, type ZoneDef, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -104,7 +104,7 @@ export const GLOAM_MAP: MapDef = {
     { rect: rect(-2, 2, 40, 55), dx: 0, dz: -1.1 },
   ],
   doors: DOORS,
-  spawns: [
+  spawns: withCrowds([
     ...spawns("gloam-dock-t", "bogToad", [[-7, -8], [4, -7], [8, -2], [-7, 3], [2, 4], [-3, -3]]),
     ...spawns("gloam-dock-d", "reedDarter", [[7, 6], [-8, 6]], 3),
     ...spawns("gloam-mire-d", "reedDarter", [[-10, 12], [10, 12], [-6, 33], [5, 34]], 3),
@@ -125,7 +125,7 @@ export const GLOAM_MAP: MapDef = {
     ...spawns("gloam-pod-mire", "pod", [[13.5, 34.5]], 0),
     ...spawns("gloam-pod-reeds", "pod", [[-37, 22]], 0),
     ...spawns("gloam-pod-chapel", "pod", [[37, 27]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */

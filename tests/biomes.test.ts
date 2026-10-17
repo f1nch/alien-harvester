@@ -43,7 +43,7 @@ describe("biome scaling", () => {
   it("scales targets: resistance 1.9x, payouts and XP 1.6x, damage 1.5x per depth", () => {
     const b = biomeAt(1);
     expect(b.targets.worker.resistance).toBeCloseTo(20 * 1.9);
-    expect(b.targets.worker.reward).toEqual({ biomass: 4.8 });
+    expect(b.targets.worker.reward).toEqual({ biomass: 4.58 }); // 3 * CROWD.payout, then 1.6x
     expect(b.targets.worker.xp).toBe(8);
     expect(b.targets.guard.combat!.damage).toBe(18);
     expect(b.targets.worker.weight).toBe(TARGETS.worker.weight);

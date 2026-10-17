@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, carveWalls, rect, spawns, type DoorDef, type MapDef, type ZoneDef } from "./map";
+import { box, carveWalls, rect, spawns, type DoorDef, type MapDef, type ZoneDef, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -102,7 +102,7 @@ export const PYRRA_MAP: MapDef = {
     { x: -6, z: 58, radius: 2 },
   ],
   doors: DOORS,
-  spawns: [
+  spawns: withCrowds([
     ...spawns("pyrra-landing-b", "cinderBeetle", [[-7, -8], [3, -7], [8, -3], [-8, 2], [1, 3], [-3, -3]]),
     ...spawns("pyrra-landing-m", "ashMoth", [[7, 8], [-8, 9]], 3),
     ...spawns("pyrra-fields-b", "cinderBeetle", [[-6, 15], [5, 22], [-12, 28], [12, 24]], 2),
@@ -122,7 +122,7 @@ export const PYRRA_MAP: MapDef = {
     ...spawns("pyrra-pod-fields", "pod", [[13.5, 38.5]], 0),
     ...spawns("pyrra-pod-glass", "pod", [[36.5, 34.5]], 0),
     ...spawns("pyrra-pod-forge", "pod", [[-15.5, 46.5]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */

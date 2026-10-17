@@ -1,5 +1,5 @@
 import type { Requirements } from "../domain/requirements";
-import type { TargetTypeId } from "./targets";
+import { CROWD, isCrowd, TARGETS, type TargetTypeId } from "./targets";
 
 export interface Rect {
   minX: number;
@@ -45,6 +45,8 @@ export interface SpawnPoint {
   x: number;
   z: number;
   wanderRadius: number;
+  /** Added by withCrowds on a hand-placed point: appears a short way off it. */
+  extra?: boolean;
 }
 
 /**
@@ -109,6 +111,27 @@ export function rect(minX: number, maxX: number, minZ: number, maxZ: number): Re
 
 export function spawns(prefix: string, type: TargetTypeId, spots: Array<[number, number]>, wanderRadius = 2.5): SpawnPoint[] {
   return spots.map(([x, z], i) => ({ id: `${prefix}${i}`, type, x, z, wanderRadius }));
+}
+
+/**
+ * A floor's spawn list with its crowds thickened (content/targets.ts#CROWD): for each
+ * crowd type, `density` times as many points, counted per type over the whole floor. Each
+ * extra borrows a hand-placed point of that type, spread evenly over them, and appears a
+ * little off it (game/world.ts#spawnTarget). Extra IDs ("<type>+<k>") never collide with
+ * hand-placed ones, so existing saves keep their cooldowns.
+ */
+export function withCrowds(points: SpawnPoint[]): SpawnPoint[] {
+  const out = [...points];
+  const types = [...new Set(points.map((s) => s.type))].filter((t) => isCrowd(TARGETS[t]));
+  for (const type of types) {
+    const own = points.filter((s) => s.type === type);
+    const extra = Math.round(own.length * (CROWD.density - 1));
+    for (let k = 0; k < extra; k++) {
+      const from = own[Math.floor(((k + 0.5) * own.length) / extra)]!;
+      out.push({ ...from, id: `${type}+${k}`, extra: true });
+    }
+  }
+  return out;
 }
 
 const HALF_W = 14;
@@ -191,7 +214,7 @@ export const FACILITY: MapDef = {
       requirements: { level: 7, quests: ["q-evolve"], cost: { biomass: 600 } },
     },
   ],
-  spawns: [
+  spawns: withCrowds([
     ...spawns("containment-w", "worker", [
       [-7, -6], [-3, -4], [4, -6], [8, -3],
       [-8, 1], [-2, 2], [3, 1], [8, 4],
@@ -226,7 +249,7 @@ export const FACILITY: MapDef = {
     ...spawns("pod-service", "pod", [[-12.5, 42.5]], 0),
     ...spawns("pod-security", "pod", [[10.5, 73.5]], 0),
     ...spawns("pod-reactor", "pod", [[8.5, 86]], 0),
-  ],
+  ]),
 };
 
 /** Zones the player can walk to from the first zone through unlocked doors. */

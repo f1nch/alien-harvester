@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BIOMES } from "../src/content/biomes";
 import { SPECIMEN_VAULTS, VAULTS_MAP } from "../src/content/vaults";
-import { TARGETS } from "../src/content/targets";
+import { CROWD, TARGETS } from "../src/content/targets";
 import { SUMMON } from "../src/content/feeding";
 import { biomeAt, scaleAt, scaleCost, scaleReward } from "../src/domain/biome";
 import { fillCravings } from "../src/domain/cravings";
@@ -145,7 +145,7 @@ describe("v14 saves", () => {
     const wave = scaleCost(scaleCost(BIOMES[0]!.summon.cost, k), 1.2);
     expect(p.banked.biomass).toBe(before.biomass + outpost.biomass! + wave.biomass!);
     expect(p.banked.parts).toBe(before.parts + outpost.parts!);
-    expect(p.cargo[0]!.reward).toEqual(scaleReward(biomeAt(2).targets.runner.reward, SUMMON.rewardMultiplier));
+    expect(p.cargo[0]!.reward).toEqual(scaleReward(biomeAt(2).targets.runner.reward, SUMMON.rewardMultiplier / CROWD.payout));
     // Unchanged floors refund nothing: their base and wave are still there.
     const same = parseSave(v13At(12))!.progress;
     expect(same.banked.biomass).toBe(before.biomass);

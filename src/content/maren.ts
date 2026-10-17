@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, rect, spawns, type MapDef, type Rect } from "./map";
+import { box, rect, spawns, type MapDef, type Rect, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -130,7 +130,7 @@ export const MAREN_MAP: MapDef = {
       requirements: { quests: ["maren-eels"], cost: { biomass: 360, pearls: 20, parts: 10 } },
     },
   ],
-  spawns: [
+  spawns: withCrowds([
     ...spawns("maren-jetty-c", "reefCrab", [[-7, -8], [3, -7], [8, -3], [-8, 2], [1, 2], [-3, -3]]),
     ...spawns("maren-jetty-s", "skimmer", [[7, 6], [-9, 9]], 3),
     ...spawns("maren-reef-c", "reefCrab", [[-6, 16], [4, 20], [-12, 23], [12, 22]], 2),
@@ -149,7 +149,7 @@ export const MAREN_MAP: MapDef = {
     ...spawns("maren-pod-reef", "pod", [[13.5, 38.5]], 0),
     ...spawns("maren-pod-beds", "pod", [[11.5, 65.3]], 0),
     ...spawns("maren-pod-deck", "pod", [[-12.5, 68.5]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */

@@ -247,6 +247,8 @@ describe("warden review regressions", () => {
     boss.x = 0;
     boss.z = 79;
     b(boss).chargeCooldown = 99;
+    // Security-sector guards spawn near this doorway; keep the tentacles on the warden.
+    w.targets = w.targets.filter((t) => t === boss || Math.hypot(t.x, t.z - 75.5) > 8);
     run(w, SIM_DT * 3);
     expect(boss.held).toBe(true);
     expect(b(boss).state).not.toBe("idle");

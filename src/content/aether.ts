@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, carveWalls, rect, spawns, type DoorDef, type MapDef, type ZoneDef } from "./map";
+import { box, carveWalls, rect, spawns, type DoorDef, type MapDef, type ZoneDef, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -94,7 +94,7 @@ export const AETHER_MAP: MapDef = {
     { rect: rect(-3, 3, 51, 60), dx: -1.3, dz: 0 },
   ],
   doors: DOORS,
-  spawns: [
+  spawns: withCrowds([
     ...spawns("aether-landing-c", "cliffStrider", [[-7, -8], [4, -7], [8, -2], [-7, 3], [2, 4], [-3, -3]]),
     ...spawns("aether-landing-r", "skyRay", [[7, 6], [-8, 6]], 3),
     ...spawns("aether-bridge-r", "skyRay", [[0, 11], [0, 24.5]], 1),
@@ -115,7 +115,7 @@ export const AETHER_MAP: MapDef = {
     ...spawns("aether-pod-nest", "pod", [[12.5, 41]], 0),
     ...spawns("aether-pod-west", "pod", [[-31.5, 31.5]], 0),
     ...spawns("aether-pod-east", "pod", [[31.5, 38]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */

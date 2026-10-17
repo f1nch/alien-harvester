@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FACILITY } from "../src/content/map";
+import { TARGETS } from "../src/content/targets";
 import { newProgress } from "../src/domain/progress";
 import { createWorld } from "../src/game/world";
 import { defaultSettings, parseSave, SCHEMA_VERSION, toSaveFile } from "../src/persistence/schema";
@@ -10,7 +11,7 @@ const valid = () => {
   p.upgrades.cargoCapacity = 2;
   p.upgradeSpent.cargoCapacity = 65;
   p.mutationsBought = 2;
-  p.cargo.push({ type: "worker", weight: 2, reward: { biomass: 3 } });
+  p.cargo.push({ type: "worker", weight: 2, reward: { ...TARGETS.worker.reward } });
   p.spawnCooldowns[FACILITY.spawns[0]!.id] = 3.5;
   return toSaveFile(p, defaultSettings());
 };
@@ -66,7 +67,7 @@ describe("save schema", () => {
     const p = newProgress(FACILITY);
     const s = toSaveFile(p, defaultSettings());
     p.banked.biomass = 500;
-    p.cargo.push({ type: "worker", weight: 2, reward: { biomass: 3 } });
+    p.cargo.push({ type: "worker", weight: 2, reward: { ...TARGETS.worker.reward } });
     expect(s.progress.banked.biomass).toBe(0);
     expect(s.progress.cargo).toHaveLength(0);
   });
@@ -79,7 +80,7 @@ describe("save hardening", () => {
     const parsed = parseSave(s)!;
     const capacity = 20 + 8 * 2; // valid() has cargoCapacity level 2
     expect(parsed.progress.cargo.reduce((n, d) => n + d.weight, 0)).toBeLessThanOrEqual(capacity);
-    expect(parsed.progress.cargo.every((d) => d.reward.biomass === 3)).toBe(true);
+    expect(parsed.progress.cargo.every((d) => d.reward.biomass === TARGETS.worker.reward.biomass)).toBe(true);
   });
 
   it("returns out-of-zone positions to spawn and clamps health", () => {

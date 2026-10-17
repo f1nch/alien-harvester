@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, rect, spawns, type MapDef, type Rect } from "./map";
+import { box, rect, spawns, type MapDef, type Rect, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -133,7 +133,7 @@ export const ASHKAR_MAP: MapDef = {
       requirements: { quests: ["ashkar-golems"], cost: { biomass: 410, shards: 20, parts: 10 } },
     },
   ],
-  spawns: [
+  spawns: withCrowds([
     ...spawns("ashkar-oasis-k", "sandSkink", [[-7, -8], [3, -7], [8, -3], [-8, 2], [1, 2], [-3, -3]]),
     ...spawns("ashkar-oasis-r", "duneRunner", [[6, 6], [-9, 9]], 3),
     ...spawns("ashkar-dunes-k", "sandSkink", [[-6, 16], [3, 20], [-12, 26], [12, 24]]),
@@ -152,7 +152,7 @@ export const ASHKAR_MAP: MapDef = {
     ...spawns("ashkar-pod-dunes", "pod", [[13.5, 38.5]], 0),
     ...spawns("ashkar-pod-colonnade", "pod", [[11.5, 65.3]], 0),
     ...spawns("ashkar-pod-market", "pod", [[-12.5, 68.5]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */

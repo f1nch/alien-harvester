@@ -1,7 +1,7 @@
 import { CURRENCIES, emptyWallet, roundCents, type Reward } from "../content/currencies";
 import { reachableZones, zoneAtOrDoorway, type MapDef } from "../content/map";
 import { goalTarget } from "../content/quests";
-import { isTargetType, TARGETS } from "../content/targets";
+import { crowdPayout, isTargetType, TARGETS } from "../content/targets";
 import { isMutagenId, MUTAGEN } from "../content/mutagen";
 import { inBestiary } from "../domain/bestiary";
 import { CRAVING_KINDS, type Craving, type CravingKind } from "../domain/cravings";
@@ -258,7 +258,7 @@ function parseDrop(d: unknown, biome: ActiveBiome): CargoDrop | null {
   // A reward-wave catch keeps its multiplier, but only for creatures some floor summons
   // (cargo can come from the floor a depth used to be, before v14 added a floor).
   if (d.summoned === true && BIOMES.some((b) => b.summon.types.includes(def.id))) {
-    return { type: def.id, weight: def.weight, reward: scaleReward(def.reward, SUMMON.rewardMultiplier), summoned: true };
+    return { type: def.id, weight: def.weight, reward: scaleReward(def.reward, SUMMON.rewardMultiplier * crowdPayout(def)), summoned: true };
   }
   return { type: def.id, weight: def.weight, reward: { ...def.reward } };
 }

@@ -6,7 +6,7 @@ import type { DroneMode } from "./systems/structures";
 import type { CatcherMode } from "./systems/catcher";
 import { newBossRuntime, type BossRuntime, type Hazard } from "./systems/boss";
 import type { QuestDef } from "../content/quests";
-import type { TargetDef, TargetTypeId } from "../content/targets";
+import { crowdPayout, type TargetDef, type TargetTypeId } from "../content/targets";
 import { currentBiome, scaleReward, type ActiveBiome } from "../domain/biome";
 import { computeStats, type PlayerStats, type StatBoost } from "../domain/economy";
 import { BOOSTS, FRENZY, SUMMON, type BoostId } from "../content/feeding";
@@ -21,11 +21,14 @@ import type { CargoDrop, ProgressState } from "../domain/progress";
 import { applyQuestEvent, settleQuests, type QuestEvent, type QuestOutcome } from "../domain/quests";
 import { mulberry32 } from "../domain/rng";
 import { SpatialHash } from "./spatialHash";
+import { resolveCircle } from "./geometry";
 
 export const SIM_HZ = 30;
 export const SIM_DT = 1 / SIM_HZ;
 export const PLAYER_RADIUS = 0.6;
 export const TARGET_RADIUS = 0.3;
+/** How far a crowd extra appears from the hand-placed point it shares (content/map.ts#withCrowds). */
+const CROWD_OFFSET = 1;
 
 export interface TargetEntity {
   id: number;
@@ -276,7 +279,15 @@ export function refreshObstacles(w: World): void {
 export function spawnTarget(w: World, spawnId: string): TargetEntity | null {
   const s = w.map.spawns.find((sp) => sp.id === spawnId);
   if (!s) return null;
-  const t = makeTarget(w, w.biome.targets[s.type], spawnId, s.x, s.z, s.wanderRadius);
+  const at = { x: s.x, z: s.z };
+  if (s.extra) {
+    // Crowd extras share a hand-placed point; start a step off it, clear of walls and props.
+    const a = w.rng() * Math.PI * 2;
+    at.x += Math.cos(a) * CROWD_OFFSET;
+    at.z += Math.sin(a) * CROWD_OFFSET;
+    resolveCircle(at, TARGET_RADIUS, zoneAt(w.map, s.x, s.z)?.rect ?? w.map.bounds, w.obstacles);
+  }
+  const t = makeTarget(w, w.biome.targets[s.type], spawnId, at.x, at.z, s.wanderRadius);
   w.targets.push(t);
   w.progress.spawnCooldowns[spawnId] = 0;
   return t;
@@ -299,7 +310,7 @@ export function spawnSummoned(w: World): void {
     // Spread over the open spots; with none (never on today's maps), at the player.
     const { x, z } = spots[Math.floor((i * spots.length) / SUMMON.count)] ?? { x: w.player.x, z: w.player.z };
     const base = w.biome.targets[types[i % types.length]!];
-    const def: TargetDef = { ...base, reward: scaleReward(base.reward, SUMMON.rewardMultiplier) };
+    const def: TargetDef = { ...base, reward: scaleReward(base.reward, SUMMON.rewardMultiplier * crowdPayout(base)) };
     const t = makeTarget(w, def, SUMMON_SPAWN, x, z, SUMMON.wanderRadius);
     t.summoned = true;
     w.targets.push(t);

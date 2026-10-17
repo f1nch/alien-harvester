@@ -1,5 +1,5 @@
 import type { BiomeDef } from "./biomes";
-import { box, rect, spawns, type MapDef, type Rect } from "./map";
+import { box, rect, spawns, type MapDef, type Rect, withCrowds } from "./map";
 import type { QuestDef } from "./quests";
 
 /**
@@ -101,7 +101,7 @@ export const HANGAR_MAP: MapDef = {
       requirements: { quests: ["hangar-loaders"], cost: { biomass: 440, parts: 18, alloy: 4 } },
     },
   ],
-  spawns: [
+  spawns: withCrowds([
     ...spawns("hangar-apron-d", "dockhand", [[-7, -8], [3, -7], [8, -2], [-8, 3], [1, 2], [-3, -3]]),
     ...spawns("hangar-apron-w", "worker", [[6, 7], [-8, 9]], 2),
     ...spawns("hangar-shop-m", "mechanic", [[-5, 16], [5, 21], [-4, 34], [6, 35]], 3.5),
@@ -121,7 +121,7 @@ export const HANGAR_MAP: MapDef = {
     ...spawns("hangar-pod-shop", "pod", [[-12.5, 38.5]], 0),
     ...spawns("hangar-pod-fuel", "pod", [[10.5, 64.5]], 0),
     ...spawns("hangar-pod-bay", "pod", [[-11.5, 68.5]], 0),
-  ],
+  ]),
 };
 
 /** Persistent IDs: never rename or reuse them, saves reference them. */
