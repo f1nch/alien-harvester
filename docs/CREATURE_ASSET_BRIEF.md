@@ -1,4 +1,8 @@
+**Approved release (2026-10-18):** The four default game models now use the connected lineage with progressively larger eyes and scorpion-like forearm pincers. Sources and measured reports: [feature lineage](../art/alien/tendon-stalker/feature-lineage/README.md). Triangle counts are 7,600 / 11,596 / 11,596 / 11,596; each retains 27 bones, eight sockets and six clips. Embedded PBR maps include 2K Adult/Apex normals. Physical-device performance remains unverified.
+
 # Creature asset brief
+
+**Superseded organic-realism pass (2026-10-16):** the user requested more realism and moderately higher detail. See the [current pass](../art/alien/tendon-stalker/organic/README.md) and ImageGen concept. Current local bodies have 6,850 / 8,574 / 9,126 / 7,922 triangles, four used materials, 27 bones, eight sockets, six clips and embedded 1K albedo/normal maps. Prior shipped sources remain preserved. New budgets below replace earlier low-poly targets; real-device performance remains open. This pass is not deployed.
 
 **Refinement update (2026-10-16):** the [refined four-stage lineage](../art/alien/tendon-stalker/refined/README.md) supersedes earlier runtime geometry/animation measurements: Hatchling 3,819, Juvenile 5,015, Adult 5,567, Apex 4,363 triangles; each has 27 bones, eight sockets, five materials and six clips. The user requested smoother animation and a less busy Apex. New sibling Blender sources preserve the originals. The simpler Apex is still a single skinned mesh; modular customization remains planned.
 
@@ -80,15 +84,15 @@ The creature is the hero asset, but it shares the frame with up to 150 crowd cha
 
 | Item | Budget |
 | --- | --- |
-| Larval body + legs + eyes | **≤ 5,000 triangles** |
-| Evolved body + legs + eyes + spines | **≤ 8,000 triangles** |
-| Adult or apex body | **≤ 8,000 triangles** each; current apex 6,999 |
+| Larval body + legs + eyes | **≤ 8,000 triangles** for the moderate organic pass |
+| Evolved body + legs + eyes + spines | **≤ 12,000 triangles** |
+| Adult or apex body | **≤ 12,000 triangles** each; physical-device profiling pending |
 | One tentacle | **≤ 400 triangles** (the game shows up to 8 at once) |
 | Body skeleton | **≤ 40 bones**; at most **4 bone influences per vertex** |
 | Tentacle skeleton | **10 bones** in a single chain |
 | Materials per form | **3 to 4** (body, tentacle, tentacle tip, eyes); each material costs a draw call |
 | Textures per form | One **512 × 512** base-colour texture (1024 × 1024 at most). A normal map is optional and the same size. Everything else is plain material values. |
-| File size per form | **≤ 1.5 MB** GLB before compression (both forms together use about 20% of the 15 MB initial-download budget) |
+| File size per form | **≤ 2 MB** GLB with embedded 1K organic surface maps; four forms currently total about 6.7 MB |
 | Morph targets (shape keys) | Avoid in the first pass; use bones. |
 
 A first pass with **no textures at all** (flat material colours) is fine and fits the look; the glossy rim lighting does most of the work.

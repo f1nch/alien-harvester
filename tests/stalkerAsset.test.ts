@@ -18,7 +18,7 @@ describe("authored Stalker hatchling", () => {
       expect(source.report.problems).toEqual([]);
       expect(source.report.animations).toEqual({ capture: true, gulp: true, hurt: true, evolve: true });
       const summary = summarize(source.container);
-      expect(summary.bodyTriangles).toBeLessThanOrEqual(5000);
+      expect(summary.bodyTriangles).toBeLessThanOrEqual(8000);
       expect(summary.skeletons[0]!.length).toBeLessThanOrEqual(40);
       expect(summary.nodes.filter((name) => name.startsWith("socket.tentacle."))).toHaveLength(8);
       const gaitSpeed = source.container.transformNodes.find((node) => node.name === "Creature")!.metadata.gltf.extras.gaitSpeedMps;
@@ -26,8 +26,10 @@ describe("authored Stalker hatchling", () => {
       const fallback = new ProceduralCreature(scene, null);
       const creature = new GltfCreature(scene, fallback, null);
       creature.addForm("larval", source);
-      const relief = scene.textures.filter((texture) => /MicroRelief$/.test(texture.name));
-      expect(relief).toHaveLength(2);
+      const surfaces = scene.materials.filter((material) => material.name.startsWith("larval."));
+      expect(surfaces.length).toBeGreaterThan(0);
+      // Baked organic maps are used directly; older assets retain generated relief.
+      expect(surfaces.every((material) => material.getActiveTextures().length > 0)).toBe(true);
       creature.update(1 / 30, 4, 6, 1, 0, [new Vector3(5, 0.9, 6)]);
       expect(fallback.root.isEnabled()).toBe(false);
       expect(creature.root.position.asArray()).toEqual([4, 0, 6]);
@@ -63,7 +65,7 @@ describe("authored Stalker evolution models", () => {
       expect(source.report.problems).toEqual([]);
       expect(source.report.animations).toEqual({ capture: true, gulp: true, hurt: true, evolve: true });
       const summary = summarize(source.container);
-      expect(summary.bodyTriangles).toBeLessThanOrEqual(8000);
+      expect(summary.bodyTriangles).toBeLessThanOrEqual(12000);
       expect(summary.skeletons[0]!).toHaveLength(27);
       expect(summary.nodes.filter((name) => name.startsWith("socket.tentacle."))).toHaveLength(8);
       const gaitSpeed = source.container.transformNodes.find((node) => node.name === "Creature")!.metadata.gltf.extras.gaitSpeedMps;

@@ -10,14 +10,21 @@ from pathlib import Path
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT / 'art/alien/tendon-stalker/refined'
+variant = 'surface-lineage' if '--surface-lineage' in sys.argv else 'concept-study-v3' if '--study-v3' in sys.argv else 'concept-study-v2' if '--study-v2' in sys.argv else 'organic' if '--organic' in sys.argv else 'polished' if '--polish-v2' in sys.argv else 'refined'
+OUT = ROOT / 'art/alien/tendon-stalker' / variant
+if '--features' in sys.argv:
+    variant='feature-lineage';OUT=ROOT/'art/alien/tendon-stalker'/variant
 report_path = OUT/'animation-qa.json'
 report = json.loads(report_path.read_text()) if report_path.exists() else {}
-stages = sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else ('hatchling','juvenile','adult','apex')
+stages = [arg for arg in sys.argv[sys.argv.index('--')+1:] if not arg.startswith('--')] if '--' in sys.argv else []
+stages = stages or ('hatchling','juvenile','adult','apex')
 assert all(stage in ('hatchling','juvenile','adult','apex') for stage in stages)
 for stage in stages:
     folder = OUT / stage
     filename = 'tendon-stalker-rigged.blend' if stage=='hatchling' else 'tendon-stalker-'+stage+'.blend'
+    if variant.startswith('concept-study'):filename='apex-concept-study.blend'
+    if variant=='surface-lineage':filename='creature-study.blend'
+    if variant=='feature-lineage':filename='creature-study.blend'
     bpy.ops.wm.open_mainfile(filepath=str(folder / filename))
     scene = bpy.context.scene
     rig = bpy.data.objects['Creature']
@@ -40,12 +47,14 @@ for stage in stages:
     focus = Vector((0,-.05,1.08))
     scene.camera.rotation_euler = (focus-scene.camera.location).to_track_quat('-Z','Y').to_euler()
     scene.camera.data.ortho_scale = 5.2
-    scene.render.resolution_x = 400; scene.render.resolution_y = 400
+    scene.render.resolution_x = 512 if variant in ('organic','concept-study-v2','concept-study-v3','surface-lineage','feature-lineage') else 400
+    scene.render.resolution_y = scene.render.resolution_x
     scene.render.resolution_percentage = 100
     scene.cycles.samples = 8
     frames = folder/'motion-frames'; frames.mkdir(exist_ok=True)
-    for i in range(24):
-        frame = 1 + i*46/24
+    frame_count = 12 if variant.startswith('concept-study') or variant in ('surface-lineage','feature-lineage') else 24
+    for i in range(frame_count):
+        frame = 1 + i*46/frame_count
         scene.frame_set(math.floor(frame),subframe=frame%1)
         scene.render.filepath = str(frames/f'{i:02}.png')
         bpy.ops.render.render(write_still=True)

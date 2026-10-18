@@ -1,5 +1,5 @@
 import {
-  AnimationGroupMakeAnimationAdditive, Color3, PBRMaterial, RawTexture, StandardMaterial, Texture, TransformNode,
+  AnimationGroupMakeAnimationAdditive, Color3, HDRCubeTexture, PBRMaterial, RawTexture, StandardMaterial, Texture, TransformNode,
   type AnimationGroup, type InstantiatedEntries, type Mesh, type Scene, type ShadowGenerator, type Vector3,
 } from "@babylonjs/core";
 import type { LoadedCreatureSource } from "./creatureAssets";
@@ -13,7 +13,7 @@ interface ModelView {
   clips: Map<string, AnimationGroup>;
   sockets: TransformNode[];
   meshes: Mesh[];
-  materials: StandardMaterial[];
+  materials: Array<StandardMaterial | PBRMaterial>;
   gaitSpeed: number;
   detailTextures: RawTexture[];
 }
@@ -50,7 +50,7 @@ export class GltfCreature implements CreatureLook {
   private moveWeight = 0;
   private captureWeight = 0;
   private motionSpeed = 0;
-  private turnLean = 0;
+  private environment: HDRCubeTexture | null = null;
 
   constructor(private scene: Scene, private fallback: ProceduralCreature, private shadows: ShadowGenerator | null) {
     this.root = new TransformNode("loadedCreature", scene);
@@ -63,7 +63,7 @@ export class GltfCreature implements CreatureLook {
     root.parent = this.root;
     for (const node of entries.rootNodes) node.parent = root;
     const meshes = root.getChildMeshes() as Mesh[];
-    const replacements = new Map<PBRMaterial, StandardMaterial>();
+    const replacements = new Map<PBRMaterial, StandardMaterial | PBRMaterial>();
     const detailTextures: RawTexture[] = [];
     const detail = new Map<boolean, RawTexture>();
     for (const mesh of meshes) {
@@ -71,6 +71,19 @@ export class GltfCreature implements CreatureLook {
       if (authored instanceof PBRMaterial) {
         let mat = replacements.get(authored);
         if (!mat) {
+          if (authored.albedoTexture && authored.bumpTexture) {
+            // Organic assets carry baked surfaces: preserve roughness, normal
+            // maps and physical lighting instead of flattening them to Phong.
+            mat = authored.clone(`${form}.${authored.name}`)!;
+            mat.environmentIntensity = 0.7;
+            mat.directIntensity = 1;
+            mat.specularIntensity = 0.65;
+            if (!this.scene.environmentTexture && typeof window !== "undefined") {
+              this.environment = new HDRCubeTexture(`${import.meta.env.BASE_URL}textures/creature-studio.hdr`, this.scene, 128, false, true, false, true);
+              this.scene.environmentTexture = this.environment;
+            }
+            replacements.set(authored, mat);
+          } else {
           // Preserve the Stalker's dry authored palette in the game's direct-light scene.
           mat = new StandardMaterial(`${form}.${authored.name}`, this.scene);
           mat.diffuseColor = authored.albedoColor.scale(1.4);
@@ -93,6 +106,7 @@ export class GltfCreature implements CreatureLook {
           mat.specularPower = Math.max(8, (1 - (authored.roughness ?? 0.7)) * 45);
           mat.backFaceCulling = authored.backFaceCulling;
           replacements.set(authored, mat);
+          }
         }
         mesh.material = mat;
       }
@@ -110,7 +124,9 @@ export class GltfCreature implements CreatureLook {
     const gaitSpeed = typeof authoredSpeed === "number" && Number.isFinite(authoredSpeed) && authoredSpeed > 0
       ? authoredSpeed : 3;
     this.views.set(form, { root, entries, clips, sockets, meshes, materials: [...replacements.values()], gaitSpeed, detailTextures });
-    this.setForm(this.tier, false);
+    // An unrelated background download must not restart the visible gait.
+    if (form === formForTier(this.tier)) this.setForm(this.tier, false);
+    else root.setEnabled(false);
   }
 
   private current(): ModelView | undefined { return this.views.get(formForTier(this.tier)); }
@@ -133,6 +149,11 @@ export class GltfCreature implements CreatureLook {
     }
     const active = this.current();
     this.fallback.setBodyVisible(!active);
+    if (active) {
+      const tissue = active.materials.find((material) => /Tissue/i.test(material.name));
+      const core = active.materials.find((material) => /Core/i.test(material.name));
+      if (tissue && core) this.fallback.setCapturePalette(tissue instanceof PBRMaterial ? new Color3(0.09, 0.04, 0.07) : tissue.diffuseColor, core.emissiveColor);
+    }
     this.fallback.captureRoot = active ? (goal, out) => {
       let best = Infinity;
       for (const socket of active.sockets) {
@@ -156,21 +177,15 @@ export class GltfCreature implements CreatureLook {
     const speed = Math.hypot(vx, vz);
     const blend = 1 - Math.exp(-dt * 9);
     this.motionSpeed += (speed - this.motionSpeed) * blend;
-    let turn = 0;
     if (speed > 0.05) {
       const diff = Math.atan2(vx, vz) - this.heading;
-      turn = Math.atan2(Math.sin(diff), Math.cos(diff));
+      const turn = Math.atan2(Math.sin(diff), Math.cos(diff));
       this.heading += turn * (1 - Math.exp(-dt * 10));
     }
-    this.turnLean += (Math.max(-0.12, Math.min(0.12, -turn * this.motionSpeed * 0.07)) - this.turnLean) * blend;
     this.root.position.set(x, 0, z);
     this.root.rotation.y = this.heading;
-    // Secondary motion supplements the authored gait without moving its planted feet.
-    const active = this.current();
-    if (active) {
-      active.root.rotation.x = Math.min(this.motionSpeed * 0.012, 0.05);
-      active.root.rotation.z = this.turnLean;
-    }
+    // Torso balance is authored with foot IK. Tilting the whole model here
+    // would also lift/slide its feet and undo that planting during turns.
     this.root.computeWorldMatrix(true);
     const view = this.current();
     if (view) for (const socket of view.sockets) socket.computeWorldMatrix(true);
@@ -199,6 +214,8 @@ export class GltfCreature implements CreatureLook {
       for (const texture of view.detailTextures) texture.dispose();
       view.root.dispose();
     }
+    if (this.scene.environmentTexture === this.environment) this.scene.environmentTexture = null;
+    this.environment?.dispose();
     this.root.dispose();
   }
 }

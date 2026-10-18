@@ -91,6 +91,7 @@ export class ProceduralCreature implements CreatureLook {
   private pulse = 0;
   private skin: StandardMaterial;
   private tipMat: StandardMaterial;
+  private armSkin: StandardMaterial;
   private spines: Mesh[] = [];
   private extraEyes: Mesh[] = [];
   private form = 0;
@@ -189,7 +190,7 @@ export class ProceduralCreature implements CreatureLook {
       shadows?.addShadowCaster(leg.mesh);
     }
     // Capture arms get a brighter rim than the body so they read against it.
-    const armSkin = glossyMaterial(scene, "armSkin");
+    const armSkin = (this.armSkin = glossyMaterial(scene, "armSkin"));
     armSkin.diffuseColor = new Color3(0.14, 0.06, 0.2);
     armSkin.emissiveFresnelParameters!.leftColor = new Color3(0.75, 0.35, 1);
     armSkin.emissiveFresnelParameters!.power = 1.5;
@@ -215,6 +216,19 @@ export class ProceduralCreature implements CreatureLook {
     this.root.setEnabled(visible);
     const count = FORMS[Math.min(this.form, FORMS.length - 1)]!.legs;
     this.legs.forEach((leg, i) => leg.mesh.setEnabled(visible && i < count));
+  }
+
+  /** Match reused capture tubes to an authored body; null restores fallback art. */
+  setCapturePalette(body: Color3 | null, glow: Color3 | null): void {
+    const authored = body !== null && glow !== null;
+    this.armSkin.diffuseColor = body?.clone() ?? new Color3(0.14, 0.06, 0.2);
+    this.armSkin.specularColor = authored ? new Color3(0.18, 0.14, 0.18) : new Color3(0.85, 0.75, 1);
+    this.armSkin.specularPower = authored ? 25 : 90;
+    this.armSkin.emissiveFresnelParameters = new FresnelParameters({
+      leftColor: body?.scale(0.3) ?? new Color3(0.75, 0.35, 1),
+      rightColor: Color3.Black(), power: 1.5, bias: 0.05,
+    });
+    this.tipMat.emissiveColor = glow?.scale(0.65) ?? FORMS[Math.min(this.form, FORMS.length - 1)]!.tip.clone();
   }
 
   dispose(): void {
@@ -248,6 +262,7 @@ export class ProceduralCreature implements CreatureLook {
       leftColor: style.rim.clone(), rightColor: f.rightColor.clone(), power: f.power, bias: f.bias,
     });
     this.tipMat.emissiveColor = style.tip.clone();
+    this.setCapturePalette(null, null);
     for (const m of this.spines) m.setEnabled(style.spines);
     for (const m of this.extraEyes) m.setEnabled(style.extraEyes);
     this.legs.forEach((leg, i) => leg.mesh.setEnabled(i < style.legs));

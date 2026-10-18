@@ -88,7 +88,8 @@ const SOCKET_DUPLICATE = /^socket\.tentacle\.\d+\.\d{3}$/;
 const REQUIRED_ANIMATIONS = ["idle", "move"] as const;
 const OPTIONAL_ANIMATIONS = ["capture", "gulp", "hurt", "evolve"] as const;
 
-export const TRIANGLE_BUDGET: Record<CreatureForm, number> = { larval: 5000, evolved: 8000, adult: 8000, apex: 8000 };
+// Moderate-density organic pass requested by the user; still one hero body.
+export const TRIANGLE_BUDGET: Record<CreatureForm, number> = { larval: 8000, evolved: 12000, adult: 12000, apex: 12000 };
 export const TENTACLE_TRIANGLE_BUDGET = 400;
 
 /** Blender appends ".001" to duplicate names; point at the near miss so it's easy to fix. */

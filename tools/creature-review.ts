@@ -7,6 +7,7 @@ import { ProceduralCreature } from "../src/render/proceduralCreature";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#review")!;
 const engine = new Engine(canvas, true);
+engine.setHardwareScalingLevel(1 / Math.min(1.5, Math.max(1.25, window.devicePixelRatio || 1)));
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0.065, 0.095, 0.115, 1);
 const camera = new ArcRotateCamera("camera", Math.PI / 2 + 0.45, 0.85, 6.4, new Vector3(0, 1.05, 0), scene);
@@ -24,12 +25,24 @@ const creature = new GltfCreature(scene, new ProceduralCreature(scene, null), nu
 const status = document.querySelector<HTMLElement>("#status")!;
 const sources: Array<Extract<LoadedCreatureSource, { kind: "ready" }>> = [];
 for (const form of CREATURE_FORMS) {
-  const bytes = new Uint8Array(await (await fetch(`../${creatureModelPath(form)}`)).arrayBuffer());
+  const path = creatureModelPath(form);
+  const bytes = new Uint8Array(await (await fetch(`../${path}`)).arrayBuffer());
   const source = await loadCreatureGlb(scene, form, bytes);
   if (source.kind !== "ready") throw new Error(`${form}: ${JSON.stringify(source)}`);
   sources.push(source); creature.addForm(form, source);
 }
 status.textContent = "All four models loaded · 27 bones · 8 capture sockets · 6 clips per stage";
+{
+  camera.beta = 1.12;
+  camera.radius = canvas.clientWidth / canvas.clientHeight < 0.85 ? 8.5 : 5.8;
+  ambient.intensity = 0.6;
+  key.intensity = 1;
+  creature.setForm(3, false);
+  status.textContent = "Four approved models · evolving eyes and scorpion pincers";
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-tier]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.tier === "3"));
+  }
+}
 for (const button of document.querySelectorAll<HTMLButtonElement>("[data-tier]")) {
   button.onclick = () => {
     creature.setForm(Number(button.dataset.tier), false);
@@ -58,7 +71,10 @@ engine.runRenderLoop(() => {
   creature.update(dt, 0, 0, Math.sin(heading) * speed, Math.cos(heading) * speed, goals);
   scene.render();
 });
-window.addEventListener("resize", () => engine.resize());
+window.addEventListener("resize", () => {
+  engine.resize();
+  camera.radius = canvas.clientWidth / canvas.clientHeight < 0.85 ? 8.5 : 5.8;
+});
 window.addEventListener("pagehide", () => {
   creature.dispose(); for (const source of sources) source.container.dispose();
   scene.dispose(); engine.dispose();

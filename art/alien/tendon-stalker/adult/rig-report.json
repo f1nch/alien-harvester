@@ -1,7 +1,9 @@
 {
-  "triangles": 5567,
+  "stance_duty": 0.55,
+  "visual_pass": "organic-realism",
+  "triangles": 9126,
   "bones": 27,
-  "materials": 5,
+  "materials": 4,
   "unweighted_vertices": 0,
   "animations": [
     "idle",
@@ -14,9 +16,11 @@
   "sockets": 8,
   "rigged": true,
   "stage": "adult",
-  "gait_speed_mps": 1.0956521241561226,
-  "stride_m": 0.4199999809265137,
+  "gait_speed_mps": 1.145454493435946,
+  "stride_m": 0.4829999780654907,
   "gait_duration_s": 0.7666666666666667,
-  "max_foot_target_error_m": 1.9371509552001953e-07,
-  "tentacles": "Game procedural capture tubes; two authored resting capture limbs remain on body."
+  "max_foot_target_error_m": 2.4620758953479386e-07,
+  "tentacles": "Game procedural capture tubes; two authored resting capture limbs remain on body.",
+  "textures": "1024 albedo + tangent normal, embedded in GLB",
+  "file_bytes": 1645676
 }

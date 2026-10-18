@@ -11,7 +11,9 @@ ROOT = Path(__file__).resolve().parents[2]
 BASE = ROOT / 'art/alien/tendon-stalker'
 stage = sys.argv[sys.argv.index('--') + 1]
 assert stage in ('hatchling', 'juvenile', 'adult', 'apex')
-destination = BASE / 'refined' / stage
+POLISH_V2 = '--polish-v2' in sys.argv
+output_folder = 'polished' if POLISH_V2 else 'refined'
+destination = BASE / output_folder / stage
 destination.mkdir(parents=True, exist_ok=True)
 bpy.ops.wm.open_mainfile(filepath=str(BASE / 'tendon-stalker-rigged.blend'))
 
@@ -52,6 +54,47 @@ code = replace_once(code, "'stage':'hatchling'", "'stage':REFINED_STAGE")
 code = code.replace('scene.cycles.samples=24', 'scene.cycles.samples=16')
 code = code.replace('resolution_x=900', 'resolution_x=720').replace('resolution_y=900', 'resolution_y=720')
 
+if POLISH_V2:
+    # Longer stance overlap gives four-leg support at foot exchange. Increased
+    # stride avoids making the creature's cadence faster at a given world speed.
+    code = replace_once(code, 'stride=.4*S[1][1]', 'stride=.46*S[1][1]\nSTANCE_DUTY=.55')
+    code = replace_once(code, 'gait_speed=2*stride/gait_duration', 'gait_speed=stride/(STANCE_DUTY*gait_duration)')
+    code = replace_once(code, 'elif phase<.5:', 'elif phase<STANCE_DUTY:')
+    code = replace_once(code, 'foot.y+=stride*(2*phase-.5)', 'foot.y+=stride*(phase/STANCE_DUTY-.5)')
+    code = replace_once(code, 'swing=(phase-.5)*2', 'swing=(phase-STANCE_DUTY)/(1-STANCE_DUTY)\n        m=(1-STANCE_DUTY)/STANCE_DUTY')
+    code = replace_once(code, 'foot.y+=stride*(.5+swing-6*swing**2+4*swing**3)',
+                        'foot.y+=stride*(.5+m*swing-(3+3*m)*swing**2+(2+2*m)*swing**3)')
+    code = code.replace("'stance':phase<.5", "'stance':phase<STANCE_DUTY")
+    code = replace_once(code, 'hip=rest[0].head_local.copy()+Vector((0,0,bob))',
+                        "body_pose=rig.pose.bones['body'].matrix @ armdata.bones['body'].matrix_local.inverted()\n    hip=body_pose @ rest[0].head_local")
+    code = code.replace("raise ValueError('Unreachable foot target '+str(idx)+' '+str(phase))",
+                        "raise ValueError('Unreachable foot target '+str((idx,phase,distance,l1,l2,list(hip),list(foot))))")
+    code = replace_once(code, 'bob=.004*(1-math.cos(4*math.pi*t)); b.location.y=bob',
+                        'bob=.003*(1-math.cos(4*math.pi*t)); b.location.y=bob\n            b.location.x=.008*s\n            b.rotation_euler.x=.008*math.sin(4*math.pi*t)')
+    code = code.replace("rotation_euler.x=.04*math.sin(2*math.pi*t+(.25 if side=='L' else -.25))",
+                        "rotation_euler.x=.035*s*(1 if side=='L' else -1)")
+    # Capture moves the head/jaw and arms without rocking the planted body.
+    code = code.replace('b.rotation_euler.x=.06*pulse; jaw.rotation_euler.x=.18*pulse',
+                        'h.rotation_euler.x=.025*pulse; jaw.rotation_euler.x=.16*pulse')
+    code = code.replace('b.scale=(1+.1*pulse,1-.08*pulse,1+.06*pulse)',
+                        'b.scale=(1+.04*pulse,1-.03*pulse,1+.025*pulse)')
+    code = code.replace('b.rotation_euler.x=-.13*pulse; h.rotation_euler.x=.12*pulse',
+                        'b.rotation_euler.x=-.045*pulse; h.rotation_euler.x=.08*pulse')
+    code = code.replace('face.use_smooth = matidx in (0,2,3) and not n.startswith(\'Head\')',
+                        'face.use_smooth = True')
+    code = code.replace('bevel.width=.012; bevel.segments=1',
+                        "bevel.width=.012; bevel.segments=2 if n.startswith('Head | swept wedge skull') else 1")
+    code = replace_once(code, '    ns=candidates(n)', """    if matidx==1:
+        obj.data.set_sharp_from_angle(angle=.65)
+        bpy.context.view_layer.objects.active=obj
+        normals=obj.modifiers.new('Broad shell normals','WEIGHTED_NORMAL')
+        normals.keep_sharp=True; normals.weight=50
+        bpy.ops.object.modifier_apply(modifier=normals.name)
+    ns=candidates(n)""")
+    code = code.replace("report={'triangles':", "report={'stance_duty':STANCE_DUTY,'visual_pass':'polish-v2','triangles':")
+    code = code.replace("rig['refinement']='2026-10-16: continuous swing velocity, planted idle, delayed tail, smooth tissue'",
+                        "rig['refinement']='2026-10-16 polish-v2: stance overlap, balanced torso, stable capture, weighted shell normals'")
+
 def omit_part(name):
     # All stages lose tiny secondary teeth that disappear through the game camera.
     if name.startswith('Tooth '): return True
@@ -73,7 +116,7 @@ else:
     evolution = replace_once(evolution, "rig_source = (root/'art/blender/rig_tendon_stalker.py').read_text()", 'rig_source = refined_rig_source')
     evolution = replace_once(evolution, "for stage in ['juvenile', 'adult']:", 'for build_stage in [REFINED_STAGE]:\n    stage = build_stage')
     evolution = replace_once(evolution, "adult = stage == 'adult'", "adult = stage in ('adult','apex')")
-    evolution = replace_once(evolution, "destination = root/'art/alien/tendon-stalker'/stage", "destination = root/'art/alien/tendon-stalker/refined'/stage")
+    evolution = replace_once(evolution, "destination = root/'art/alien/tendon-stalker'/stage", "destination = root/'art/alien/tendon-stalker'/output_folder/stage")
     evolution = replace_once(evolution, "    # Rise the thorax", """    if stage == 'apex':
         # Increase arm cross-section around the existing joint centerline so
         # the proven rig, reach and skin deformation stay aligned.
@@ -134,6 +177,7 @@ else:
     if stage == 'apex':
         evolution = evolution.replace("code = code.replace('cam.data.ortho_scale=3.5', 'cam.data.ortho_scale=4.4')",
                                       "code = code.replace('cam.data.ortho_scale=3.5', 'cam.data.ortho_scale=5.5')")
+    evolution = evolution.replace("root = Path('D:/Projects/alien-evolve')", 'root = Path('+repr(str(ROOT))+')')
     exec(compile(evolution, 'refined_evolution', 'exec'), globals())
 
 print('REFINED_STAGE_COMPLETE', REFINED_STAGE)

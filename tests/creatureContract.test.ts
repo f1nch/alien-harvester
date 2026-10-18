@@ -146,10 +146,10 @@ describe("creature model files", () => {
   it("budgets the apex like the adult", () => {
     const s = valid();
     s.bodyTriangles = TRIANGLE_BUDGET.apex;
-    expect(TRIANGLE_BUDGET.apex).toBe(8000);
+    expect(TRIANGLE_BUDGET.apex).toBe(12000);
     expect(checkCreatureGlb("apex", s).warnings).toEqual([]);
     s.bodyTriangles += 1;
-    expect(checkCreatureGlb("apex", s).warnings.join()).toMatch(/budget 8000/);
+    expect(checkCreatureGlb("apex", s).warnings.join()).toMatch(/budget 12000/);
   });
 
   it("budgets the adult like the evolved form", () => {
@@ -157,7 +157,7 @@ describe("creature model files", () => {
     s.bodyTriangles = TRIANGLE_BUDGET.adult;
     expect(checkCreatureGlb("adult", s).warnings).toEqual([]);
     s.bodyTriangles += 1;
-    expect(checkCreatureGlb("adult", s).warnings.join()).toMatch(/budget 8000/);
+    expect(checkCreatureGlb("adult", s).warnings.join()).toMatch(/budget 12000/);
   });
 
   it("recognises GLB bytes and rejects the HTML a dev server serves for missing files", () => {

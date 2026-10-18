@@ -8,7 +8,7 @@ import { GltfCreature } from "../src/render/gltfCreature";
 import { ProceduralCreature } from "../src/render/proceduralCreature";
 
 /** The adult's Blender export; public/models holds the copy the game fetches. */
-const ADULT_SOURCE = new URL("../art/alien/tendon-stalker/adult/creature_adult.glb", import.meta.url);
+const ADULT_SOURCE = new URL("../art/alien/tendon-stalker/feature-lineage/adult/creature_adult.glb", import.meta.url);
 /** The apex has its own suite (apexCreature.test.ts); these tests run without it. */
 const FILES = {
   larval: new URL(`../public/${creatureModelPath("larval")}`, import.meta.url),

@@ -1,0 +1,39 @@
+{
+  "status": "adult anatomical surface study; local only",
+  "stage": "adult",
+  "sculpt_triangles": 114500,
+  "game_triangles": 11596,
+  "bones": 27,
+  "unweighted_vertices": 0,
+  "textures": {
+    "albedo": 1024,
+    "normal": 2048,
+    "roughness": 1024,
+    "occlusion": 1024
+  },
+  "removed_tiny_tissue_islands": 0,
+  "tissue_components": 1,
+  "largest_tissue_component_fraction": 1.0,
+  "exported_triangles": 11596,
+  "exported_meshes": 1,
+  "exported_clips": [
+    "capture",
+    "evolve",
+    "gulp",
+    "hurt",
+    "idle",
+    "move"
+  ],
+  "exported_materials": 4,
+  "exported_capture_sockets": 8,
+  "loop_matrix_error": {
+    "idle": 6.123233849335533e-18,
+    "move": 8.57252763722393e-18,
+    "capture": 0.0
+  },
+  "file_bytes": 4343908,
+  "game_geometry": "unchanged from connected anatomy study",
+  "sculpt_relief_vertices": 16484,
+  "textured_roughness_materials": 4,
+  "occlusion_materials": 4
+}

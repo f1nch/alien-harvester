@@ -1,14 +1,14 @@
 // @ts-expect-error Vitest runs in Node; the browser project's types omit Node APIs.
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { NullEngine, Scene, VertexBuffer, type AnimationGroup } from "@babylonjs/core";
+import { NullEngine, Scene, StandardMaterial, VertexBuffer, type AnimationGroup } from "@babylonjs/core";
 import { loadCreatureGlb, type LoadedCreatureSource } from "../src/render/creatureAssets";
 import { CREATURE_FORMS, creatureModelPath, formForTier, isGlb, type CreatureForm } from "../src/render/creatureContract";
 import { GltfCreature } from "../src/render/gltfCreature";
 import { ProceduralCreature } from "../src/render/proceduralCreature";
 
 /** The apex's Blender export; public/models holds the copy the game fetches. */
-const APEX_SOURCE = new URL("../art/alien/tendon-stalker/apex/creature_apex.glb", import.meta.url);
+const APEX_SOURCE = new URL("../art/alien/tendon-stalker/feature-lineage/apex/creature_apex.glb", import.meta.url);
 const FILES: Record<CreatureForm, URL> = {
   larval: new URL(`../public/${creatureModelPath("larval")}`, import.meta.url),
   evolved: new URL(`../public/${creatureModelPath("evolved")}`, import.meta.url),
@@ -166,6 +166,43 @@ describe("apex creature model", () => {
       for (const s of [...c.sources, apex]) s.container.dispose();
     });
   }, 40000);
+
+  it("matches capture tubes to authored colors and restores the fallback appearance", async () => {
+    await withScene(async (scene) => {
+      const c = await build(scene, ["adult"]);
+      c.creature.setForm(2, false);
+      const arms = scene.getMaterialByName("armSkin") as StandardMaterial;
+      const tips = scene.getMaterialByName("tipMat") as StandardMaterial;
+      expect(arms.specularPower).toBe(25);
+      expect(tips.emissiveColor.g).toBeGreaterThan(tips.emissiveColor.r);
+      c.creature.setForm(3, false); // Missing Apex: original procedural fallback.
+      expect(arms.specularPower).toBe(90);
+      expect(tips.emissiveColor.r).toBeGreaterThan(tips.emissiveColor.g);
+      c.creature.dispose();
+      for (const source of c.sources) source.container.dispose();
+    });
+  }, 30000);
+
+  it("preserves the visible gait when an unrelated form finishes downloading", async () => {
+    await withScene(async (scene) => {
+      const c = await build(scene, ["adult"]);
+      c.creature.setForm(2, false);
+      c.creature.update(0.2, 0, 0, 1, 0, [null]);
+      const move = c.clips.get("adult")!.find((clip) => clip.name === "move")!;
+      move.goToFrame((move.from + move.to) / 2);
+      const running = [...move.animatables];
+      expect(running.length).toBeGreaterThan(0);
+      const weights = running.map((animation) => animation.weight);
+      const apex = await load(scene, "apex");
+      c.creature.addForm("apex", apex);
+      expect(c.shown()).toEqual(["adult"]);
+      // Restarting a clip replaces its animatables and loses its phase/weight.
+      expect(move.animatables).toEqual(running);
+      expect(move.animatables.map((animation) => animation.weight)).toEqual(weights);
+      c.creature.dispose();
+      for (const source of [...c.sources, apex]) source.container.dispose();
+    });
+  }, 30000);
 
   it("disposes every form's instances, materials and textures, apex included", async () => {
     await withScene(async (scene) => {
