@@ -145,6 +145,10 @@ export type GameEvent =
   | { type: "hazardLanded"; hazard: Hazard; hit: boolean }
   | { type: "broodCalled"; count: number }
   | { type: "broodScattered"; count: number }
+  /** The player stepped into a living boss's hall: its doors closed behind them. */
+  | { type: "arenaSealed"; name: string }
+  /** The hall's doors opened again: the boss was caught, or the player left (died). */
+  | { type: "arenaOpened"; defeated: boolean }
   | { type: "died"; lost: CargoDrop[]; forgiven: boolean };
 
 export interface World {
@@ -167,6 +171,8 @@ export interface World {
   /** The catcher's prey and its grip (0..1). Transient: a reload starts the hunt over. */
   catcher: { target: TargetEntity | null; progress: number; mode: CatcherMode };
   catcherPrev: { x: number; z: number };
+  /** A boss fight in progress: the hall's doors stay closed until it ends. Transient. */
+  arena: { boss: TargetEntity; doors: string[] } | null;
   player: {
     x: number; z: number; prevX: number; prevZ: number; vx: number; vz: number;
     /** Seconds of post-respawn invulnerability remaining. */
@@ -216,6 +222,7 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
     dronePrev: { x: progress.structures.drone.x, z: progress.structures.drone.z },
     refineryCollectTimer: 0,
     catcher: { target: null, progress: 0, mode: "idle" },
+    arena: null,
     catcherPrev: { x: progress.structures.catcher.x, z: progress.structures.catcher.z },
     player: {
       x: progress.player.x, z: progress.player.z,
@@ -260,7 +267,9 @@ export function createWorld(map: MapDef, progress: ProgressState, seed = 1): Wor
 
 export function refreshObstacles(w: World): void {
   const open = new Set(w.progress.unlockedDoors);
-  const lockedDoors = w.map.doors.filter((d) => !open.has(d.id)).map((d) => d.rect);
+  // A boss fight closes its hall's doors too (game/systems/arena.ts).
+  const sealed = new Set(w.arena?.doors ?? []);
+  const lockedDoors = w.map.doors.filter((d) => !open.has(d.id) || sealed.has(d.id)).map((d) => d.rect);
   const built: Rect[] = [];
   if (w.progress.structures.vat.built) {
     const { x, z } = w.biome.def.sites.vat;

@@ -1,5 +1,5 @@
 import { cargoWeight, type CargoDrop } from "../../domain/progress";
-import { dist2, hasLineOfSight } from "../geometry";
+import { dist2, hasLineOfSight, pointInRect } from "../geometry";
 import { gainXp, questEvent, retireTarget, type TargetEntity, type World } from "../world";
 import { bossStunned, bossTuning, bossUntargetable, disperseBrood } from "./boss";
 import { onCaptured, onHelperCaptured } from "./feeding";
@@ -28,7 +28,17 @@ export function holderPower(count: number): number {
 function inReach(w: World, t: TargetEntity): boolean {
   const p = w.player;
   const r = w.stats.captureRadius;
-  return dist2(p.x, p.z, t.x, t.z) <= r * r && hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles);
+  return dist2(p.x, p.z, t.x, t.z) <= r * r && canGrab(w, t);
+}
+
+/**
+ * Sight, and for a boss, standing in its hall: no grabbing it from the doorway or
+ * through a wall, where it can't fight back. A burrowed boss is out of reach entirely.
+ */
+function canGrab(w: World, t: TargetEntity): boolean {
+  const p = w.player;
+  if (t.def.behavior === "boss" && (bossUntargetable(t) || !pointInRect(p.x, p.z, t.zoneRect))) return false;
+  return hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles);
 }
 
 /** Free every tentacle holding `t`, and reset its capture state. */
@@ -70,7 +80,7 @@ export function updateCapture(w: World, dt: number): void {
       continue;
     }
     // A burrowed boss is out of reach wherever it is: its progress decays as usual.
-    if (!bossUntargetable(t) && inReach(w, t)) {
+    if (inReach(w, t)) {
       t.held = true;
       t.outOfReach = 0;
       const bonus = bossStunned(t) ? bossTuning(t).stunnedCaptureBonus : 1;
@@ -118,7 +128,7 @@ function assignTentacles(w: World): void {
   for (const t of w.targets) w.hash.insert(t);
   const inRange = w.hash
     .query(p.x, p.z, stats.captureRadius)
-    .filter((t) => !bossUntargetable(t) && hasLineOfSight(p.x, p.z, t.x, t.z, w.obstacles))
+    .filter((t) => canGrab(w, t))
     .sort((a, b) => dist2(p.x, p.z, a.x, a.z) - dist2(p.x, p.z, b.x, b.z));
 
   // Reserve cargo on assignment so simultaneous completions can never overflow.

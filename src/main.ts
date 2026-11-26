@@ -511,6 +511,8 @@ async function boot(): Promise<void> {
         } else if (e.type === "bossDefeated") {
           hud.toast(`${e.name} is down! Bank its parts, then ${world.biome.objective.task.toLowerCase()}.`, 4);
           saveNow = true;
+        } else if (e.type === "arenaSealed") {
+          hud.toast(`The way out seals behind you. Catch the ${e.name.toLowerCase()} to get out!`, 3.5);
         } else if (e.type === "reactorRepaired") {
           showCompletion();
           saveNow = true;

@@ -13,6 +13,7 @@ import { CrowdView } from "./crowd";
 import { Effects } from "./effects";
 import { buildDressing, type Dressing } from "./dressing";
 import { StructuresView } from "./structures";
+import { openDoors } from "../game/systems/arena";
 import { buildEnvironment, updateDoors, type Environment } from "./environment";
 
 const CAMERA_OFFSET = new Vector3(0, 16, -11.5);
@@ -347,7 +348,7 @@ export class GameRenderer {
     const s = 1 + this.depositPulse * 0.08 + Math.sin(this.time * 2) * 0.015;
     this.env.baseRing.scaling.set(s, 1, s);
 
-    updateDoors(this.env, w.progress.unlockedDoors, dt);
+    updateDoors(this.env, openDoors(w), dt);
 
     this.updateCamera(x, z, this.snapNext ? 0 : dt);
     this.snapNext = false;
@@ -377,7 +378,7 @@ export class GameRenderer {
 
   /** Snap the camera and doors to the current state (used after loading). */
   snapCamera(w: World): void {
-    updateDoors(this.env, w.progress.unlockedDoors, 0, true);
+    updateDoors(this.env, openDoors(w), 0, true);
     this.cameraZone = zoneAt(this.map, w.player.x, w.player.z)?.rect ?? this.map.bounds;
     this.updateCamera(w.player.x, w.player.z, 0);
   }

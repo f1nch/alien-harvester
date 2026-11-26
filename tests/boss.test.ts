@@ -241,17 +241,17 @@ describe("play time and saves", () => {
 });
 
 describe("warden review regressions", () => {
-  it("fights back against a captor standing in the doorway", () => {
+  it("can't be grabbed from the doorway: the fight happens inside the hall", () => {
     const { w, boss } = arena(0, 75.5, { capture: true });
     w.stats.captureRadius = 6;
     boss.x = 0;
     boss.z = 79;
     b(boss).chargeCooldown = 99;
-    // Security-sector guards spawn near this doorway; keep the tentacles on the warden.
+    // Security-sector guards spawn near this doorway; keep the tentacles free for the warden.
     w.targets = w.targets.filter((t) => t === boss || Math.hypot(t.x, t.z - 75.5) > 8);
     run(w, SIM_DT * 3);
-    expect(boss.held).toBe(true);
-    expect(b(boss).state).not.toBe("idle");
+    expect(boss.held).toBe(false);
+    expect(w.tentacles).not.toContain(boss);
   });
 
   it("frees all but one tentacle once out of reach past grace", () => {

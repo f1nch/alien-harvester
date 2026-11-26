@@ -1,3 +1,4 @@
+import { updateArena } from "./systems/arena";
 import { updateCapture } from "./systems/capture";
 import { updateCatcher } from "./systems/catcher";
 import { updatePlayerHealth } from "./systems/combat";
@@ -20,6 +21,8 @@ export function stepWorld(w: World, dt = SIM_DT): void {
   updateTargets(w, dt);
   updateSpawns(w, dt);
   updateCapture(w, dt);
+  // After capture, so catching the boss opens its hall the same tick.
+  updateArena(w);
   updateFeeding(w, dt);
   updateDeposit(w, dt);
   updateStructures(w, dt);
